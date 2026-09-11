@@ -1,0 +1,21 @@
+{
+  "name": "ai-director",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.base.json --noEmit",
+    "score": "tsx apps/backend/src/cli/score.ts",
+    "agree": "tsx apps/backend/src/cli/agree.ts"
+  },
+  "dependencies": {
+    "zod": "^4.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  }
+}

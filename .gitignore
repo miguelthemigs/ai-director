@@ -3,3 +3,6 @@ dist
 .env
 data/runs
 .superpowers/
+coverage
+apps/frontend/dist
+.DS_Store
