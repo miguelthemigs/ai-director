@@ -4377,6 +4377,20 @@ statistics on it.
 
 ### Task 21: Live smoke test against the real API
 
+**Carried here from Task 20's review: observe a real failing run end to end.** Task 20's live
+verification passed on its first try, so the product's most safety-critical rule — that
+`improved_still_failing` and `no_improvement` must never read as success — has only ever been
+exercised against fixtures. The event shapes are now identical and `VerdictBanner` keys off a
+transport-agnostic `status`, so fixture coverage is reasonable interim evidence, but it is not
+observation.
+
+Add a live test, gated on `RUN_LIVE_API=1` like the rest of this task, that runs a description
+engineered to still fail after three passes — one carrying several unrepairable problems at once, for
+instance a named public figure, a brand name, and pure mood words with nothing drawable. Assert the
+run reaches a failing terminal state, and record in the report what the screen actually showed: the
+verdict word, the headline numeral, and whether any success language or tick glyph appeared anywhere.
+That is the one claim in this product that should rest on having watched it, not on having mocked it.
+
 **Carried here from Task 6's review, which could not verify it from a diff.** Task 6 passes the
 non-beta `zodOutputFormat()` helper to `client.beta.messages.parse`. The implementer's justification is
 a structural-typing argument confirmed only by `tsc`; no unit test can check it, because unit tests are
