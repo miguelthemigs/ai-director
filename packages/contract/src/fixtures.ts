@@ -408,6 +408,19 @@ function groupStarted(pass: number, step: number, at: string, group: CheckGroup)
   return { id: eventId(pass, step), name: "evaluator.group.started", at, pass, group };
 }
 
+/**
+ * A live `evaluator.group.completed` always carries empty `spans`/`unverified` (see the contract's
+ * own doc comment on that event): verification is pass-wide and cannot have run yet at group-settle
+ * time. This fixture's `pass.results` already carries the pass's fully-verified spans -- that's what
+ * `pass.completed` gets, unchanged -- so a group's slice of it is stripped back down to what a real
+ * group-settle event would actually contain before it's used here. Without this, the fixture would
+ * be more generous than the wire and every screen built against it would look right in every replay
+ * and quietly lie about a real run.
+ */
+function stripSpans(results: CheckResultView[]): CheckResultView[] {
+  return results.map((r) => (r.status === "scored" ? { ...r, spans: [], unverified: [] } : r));
+}
+
 function groupCompleted(
   pass: number,
   step: number,
@@ -416,7 +429,15 @@ function groupCompleted(
   results: CheckResultView[],
   cost: StepCost,
 ): RunEvent {
-  return { id: eventId(pass, step), name: "evaluator.group.completed", at, pass, group, results, cost };
+  return {
+    id: eventId(pass, step),
+    name: "evaluator.group.completed",
+    at,
+    pass,
+    group,
+    results: stripSpans(results),
+    cost,
+  };
 }
 
 function repairerStarted(pass: number, step: number, at: string, spanIds: string[]): RunEvent {
@@ -427,8 +448,15 @@ function repairerCompleted(pass: number, step: number, at: string, replacements:
   return { id: eventId(pass, step), name: "repairer.completed", at, pass, replacements, cost };
 }
 
-function passCompleted(pass: number, step: number, at: string, repairedDescription: string | undefined, failing: CheckId[]): RunEvent {
-  return { id: eventId(pass, step), name: "pass.completed", at, pass, repairedDescription, failing };
+function passCompleted(
+  pass: number,
+  step: number,
+  at: string,
+  repairedDescription: string | undefined,
+  failing: CheckId[],
+  results: CheckResultView[],
+): RunEvent {
+  return { id: eventId(pass, step), name: "pass.completed", at, pass, repairedDescription, failing, results };
 }
 
 function runCompleted(step: number, at: string, status: RunStatus, run: RunView): RunEvent {
@@ -450,7 +478,7 @@ function eventsForPass(pass: PassView): RunEvent[] {
     groupCompleted(pass.pass, 6, tick(), "drawable", drawable, COST),
     repairerStarted(pass.pass, 7, tick(), spanIds),
     repairerCompleted(pass.pass, 8, tick(), pass.replacements, COST),
-    passCompleted(pass.pass, 9, tick(), pass.repairedDescription, pass.failing),
+    passCompleted(pass.pass, 9, tick(), pass.repairedDescription, pass.failing, pass.results),
   ];
 }
 

@@ -5,6 +5,7 @@ import {
   CHECK_IDS,
   isScoredCheck,
   isSuccess,
+  type RunEvent,
   type RunView,
 } from "../src/index.js";
 
@@ -107,5 +108,63 @@ describe("fixture event log", () => {
     const completed = FIXTURE_EVENT_LOG.filter((e) => e.name === "evaluator.group.completed");
     expect(started.length).toBe(completed.length);
     expect(started.length % 3).toBe(0);
+  });
+
+  // Fix round 1: the fixture previously handed evaluator.group.completed real, non-empty spans
+  // (pulled from the finished RunView), which no live run can produce at group-settle time --
+  // verification is pass-wide and hasn't run yet. That made the fixture more generous than the
+  // wire: every screen built against it looked right and would have quietly gone dark against a
+  // real server. This is the test that would have caught it.
+  it("never gives evaluator.group.completed a verified span -- only pass.completed does", () => {
+    const groupCompleted = FIXTURE_EVENT_LOG.filter(
+      (e): e is Extract<RunEvent, { name: "evaluator.group.completed" }> =>
+        e.name === "evaluator.group.completed",
+    );
+    expect(groupCompleted.length).toBeGreaterThan(0);
+    for (const event of groupCompleted) {
+      for (const result of event.results.filter(isScoredCheck)) {
+        expect(result.spans).toEqual([]);
+        expect(result.unverified).toEqual([]);
+      }
+    }
+  });
+
+  it("gives pass.completed the pass's verified results, with clickable spans for a failing check", () => {
+    const passCompleted = FIXTURE_EVENT_LOG.filter(
+      (e): e is Extract<RunEvent, { name: "pass.completed" }> => e.name === "pass.completed",
+    );
+    const pass1 = passCompleted.find((e) => e.pass === 1);
+    if (!pass1) throw new Error("no pass.completed event for pass 1 in FIXTURE_EVENT_LOG");
+
+    const failing = pass1.results.filter(isScoredCheck).filter((r) => !r.passed);
+    expect(failing.length).toBeGreaterThan(0);
+    // "Clickable" means it carries something to click: a verified span or, failing that, an
+    // unverified quote the UI can still explain.
+    for (const r of failing) {
+      expect(r.spans.length + r.unverified.length).toBeGreaterThan(0);
+    }
+    // At least one real, non-empty span -- not just unverified quotes -- so the coverage gutter
+    // has something to actually render, not only "not found" placeholders.
+    expect(failing.some((r) => r.spans.length > 0)).toBe(true);
+  });
+
+  it("reconstructs a run with clickable spans after replaying only through pass 1's pass.completed", () => {
+    const throughPass1 = FIXTURE_EVENT_LOG.slice(
+      0,
+      FIXTURE_EVENT_LOG.findIndex((e) => e.name === "pass.completed" && e.pass === 1) + 1,
+    );
+    const pass1Completed = throughPass1.at(-1);
+    if (!pass1Completed || pass1Completed.name !== "pass.completed") {
+      throw new Error("expected the replayed log to end on pass 1's pass.completed");
+    }
+    // This is exactly the payload a live-streaming client has in hand at that point in a real
+    // run -- no run.completed, no fetch, nothing else.
+    const clickable = pass1Completed.results
+      .filter(isScoredCheck)
+      .flatMap((r) => r.spans);
+    expect(clickable.length).toBeGreaterThan(0);
+    for (const span of clickable) {
+      expect(pass1Completed.results.find((r) => r.checkId === span.checkId)).toBeDefined();
+    }
   });
 });

@@ -7,6 +7,7 @@ import {
   type CheckDelta,
   type CheckGroup,
   type CheckId,
+  type CheckResultView,
   type PassView,
   type Percent,
   type ReplacementView,
@@ -39,6 +40,18 @@ function bandForCheck(profile: Record<CheckId, Percent> | null, checkId: CheckId
   return profile === null ? null : BAND_BY_PERCENT[profile[checkId]];
 }
 
+/**
+ * A live `evaluator.group.completed` always carries empty `spans`/`unverified` -- verification is
+ * pass-wide and cannot have run yet at group-settle time (see the contract's own doc comment on
+ * that event, and Task 18's fix round 1). Stripped here so this rebuilt log stays exactly as
+ * live-accurate as the contract's own hand-built `FIXTURE_EVENT_LOG` -- a fixture more generous
+ * than the wire is worse than no fixture at all, since it would make every screen look right
+ * against canned data and then quietly lie about a real run.
+ */
+function stripSpans(results: CheckResultView[]): CheckResultView[] {
+  return results.map((r) => (r.status === "scored" ? { ...r, spans: [], unverified: [] } : r));
+}
+
 /** Rebuilds one pass's events in the same shape and order as the contract's own fixture log. */
 function eventsForPass(pass: PassView): RunEvent[] {
   const at = new Date().toISOString();
@@ -49,13 +62,13 @@ function eventsForPass(pass: PassView): RunEvent[] {
     { id: eventId(pass.pass, 0), name: "pass.started", at, pass: pass.pass, description: pass.description },
     { id: eventId(pass.pass, 1), name: "evaluator.group.started", at, pass: pass.pass, group: "look" },
     { id: eventId(pass.pass, 2), name: "evaluator.group.started", at, pass: pass.pass, group: "safety" },
-    { id: eventId(pass.pass, 3), name: "evaluator.group.completed", at, pass: pass.pass, group: "look", results: look ?? [], cost: STEP_COST },
+    { id: eventId(pass.pass, 3), name: "evaluator.group.completed", at, pass: pass.pass, group: "look", results: stripSpans(look ?? []), cost: STEP_COST },
     { id: eventId(pass.pass, 4), name: "evaluator.group.started", at, pass: pass.pass, group: "drawable" },
-    { id: eventId(pass.pass, 5), name: "evaluator.group.completed", at, pass: pass.pass, group: "safety", results: safety ?? [], cost: STEP_COST },
-    { id: eventId(pass.pass, 6), name: "evaluator.group.completed", at, pass: pass.pass, group: "drawable", results: drawable ?? [], cost: STEP_COST },
+    { id: eventId(pass.pass, 5), name: "evaluator.group.completed", at, pass: pass.pass, group: "safety", results: stripSpans(safety ?? []), cost: STEP_COST },
+    { id: eventId(pass.pass, 6), name: "evaluator.group.completed", at, pass: pass.pass, group: "drawable", results: stripSpans(drawable ?? []), cost: STEP_COST },
     { id: eventId(pass.pass, 7), name: "repairer.started", at, pass: pass.pass, spanIds },
     { id: eventId(pass.pass, 8), name: "repairer.completed", at, pass: pass.pass, replacements: pass.replacements as ReplacementView[], cost: STEP_COST },
-    { id: eventId(pass.pass, 9), name: "pass.completed", at, pass: pass.pass, repairedDescription: pass.repairedDescription, failing: pass.failing },
+    { id: eventId(pass.pass, 9), name: "pass.completed", at, pass: pass.pass, repairedDescription: pass.repairedDescription, failing: pass.failing, results: pass.results },
   ];
 }
 

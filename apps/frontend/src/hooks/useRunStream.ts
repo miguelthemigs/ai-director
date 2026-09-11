@@ -130,8 +130,16 @@ function reduce(state: State, event: Action): State {
     }
     case "pass.completed": {
       if (!state.current) return state;
+      // `pass.completed` carries this pass's fully-verified results (real spans, not the empty
+      // ones `evaluator.group.completed` necessarily carries -- see the contract's own comment on
+      // why). Merge them in the same never-replace way as a group's results, rather than
+      // discarding the map and rebuilding it wholesale: cheap insurance against `event.results`
+      // someday not covering every check on some code path.
+      const results = new Map(state.current.results);
+      for (const r of event.results) results.set(r.checkId, r);
       const finished: InProgressPass = {
         ...state.current,
+        results,
         repairedDescription: event.repairedDescription,
         failing: event.failing as CheckId[],
       };

@@ -66,9 +66,9 @@ function now(): string {
  * Spans are deliberately not verified here: verification is a pass-wide step
  * that runs once, after every group (and any retry) has settled, so at
  * group-settle time there is nothing honest to put in `spans`/`unverified`
- * yet. Those only arrive verified in the final `run.completed` view --
- * flagged in this task's report as a real gap for a frontend trying to
- * rebuild the coverage gutter progressively.
+ * yet. Those arrive verified on `pass.completed` instead (fix round 1: it now
+ * carries the pass's fully-verified `results`), which is the earliest point
+ * in a live run they honestly can.
  */
 function wrapEvaluate(
   evaluate: EvaluateFn,
@@ -245,6 +245,13 @@ export async function runToCompletion(
       }
 
       if (emit) {
+        // `pass.completed` fires after `runPass` has already fully resolved verification
+        // (including the one verbatim retry, if it ran) -- see `runPass.ts`'s own body -- so unlike
+        // `evaluator.group.completed`, these results carry real, verified spans. This is the
+        // earliest point in a live run a frontend can show a clickable fragment.
+        const passResults = result.results.map((check) =>
+          toCheckResultView(check, result.spans, result.unverified),
+        );
         emit(
           result.repairedDescription !== undefined
             ? {
@@ -254,8 +261,16 @@ export async function runToCompletion(
                 pass,
                 repairedDescription: result.repairedDescription,
                 failing: result.failing,
+                results: passResults,
               }
-            : { id: nextId(pass), name: "pass.completed", at: now(), pass, failing: result.failing },
+            : {
+                id: nextId(pass),
+                name: "pass.completed",
+                at: now(),
+                pass,
+                failing: result.failing,
+                results: passResults,
+              },
         );
       }
 

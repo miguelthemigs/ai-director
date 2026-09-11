@@ -589,6 +589,41 @@ describe("runToCompletion: event emission", () => {
     expect(passCompleted[1]).toMatchObject({ pass: 2, failing: [] });
   });
 
+  // Fix round 1: pass.completed now carries the pass's fully-verified results (real spans, not
+  // the always-empty ones evaluator.group.completed necessarily carries), since verification has
+  // already fully resolved by the time runPass returns. This is the earliest a live run can hand
+  // a frontend a clickable fragment.
+  it("gives pass.completed's results a verified, non-empty span for the failing check", async () => {
+    const rubric = await loadRubric("v1");
+    const evaluate: EvaluateFn = vi.fn().mockResolvedValue(failDrawable(rubric));
+    const repair: RepairFn = vi.fn().mockResolvedValue({ replacements: [], rejected: [] });
+    const { emit, events } = collectEmit();
+    await runToCompletion(
+      { evaluate, retryVerbatim: noRetry, repair, store: await store(), emit },
+      { rubric, description, runId: "run-events-6", maxPasses: 1 },
+    );
+
+    const passCompleted = events.find((e) => e.name === "pass.completed");
+    if (!passCompleted || passCompleted.name !== "pass.completed") {
+      throw new Error("expected a pass.completed event");
+    }
+    const drawable = passCompleted.results.find((r) => r.checkId === "drawable_only");
+    if (!drawable || drawable.status !== "scored") {
+      throw new Error("expected drawable_only to be scored in pass.completed's results");
+    }
+    expect(drawable.spans.length).toBeGreaterThan(0);
+    expect(drawable.spans[0]?.quote).toBe("very cinematic presence");
+
+    // Meanwhile the group event for the same check, earlier in the same pass, carries no span at
+    // all -- verification hadn't happened yet when it fired.
+    const groupCompleted = events.filter((e) => e.name === "evaluator.group.completed");
+    for (const g of groupCompleted) {
+      for (const r of g.results) {
+        if (r.status === "scored") expect(r.spans).toEqual([]);
+      }
+    }
+  });
+
   it("emits evaluator.group.completed in real settle order, not the order groups were issued", async () => {
     const rubric = await loadRubric("v1");
     const evaluate: EvaluateFn = vi.fn(async ({ rubric: r, onGroupEvent }) => {

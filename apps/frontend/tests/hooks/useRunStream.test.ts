@@ -67,6 +67,51 @@ describe("useRunStream", () => {
     expect(finalResults.filter(isScoredCheck)).toHaveLength(finalResults.length);
   });
 
+  // Fix round 1: pass.completed now carries the pass's verified results (real spans), since the
+  // fixture previously handed evaluator.group.completed spans no live run can produce that early
+  // -- this is the test that would have caught the fixture being more generous than the wire.
+  it("has a clickable span for a failing check right after pass 1's pass.completed, well before run.completed", async () => {
+    const client = new FixtureRunClient({ speedMs: 1, scenario: "improvedStillFailing" });
+
+    const { result, rerender } = renderHook(({ runId }) => useRunStream(client, runId), {
+      initialProps: { runId: null as string | null },
+    });
+
+    let runId = "";
+    await act(async () => {
+      const started = await client.startRun("a description");
+      runId = started.runId;
+    });
+    rerender({ runId });
+
+    // Event index 4 is "look"'s evaluator.group.completed (run.started=0, pass.started=1, two
+    // group.started=2,3, then this) -- 5 events at 1ms each. age_build (a failing "look" check)
+    // has a band by now, but must NOT yet have a span: verification hasn't run yet at this point
+    // in a live pipeline, so a fixture that hands one out here is lying about what the wire gives.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5);
+    });
+    const afterGroup = result.current.run?.passes.at(-1)?.results.find((r) => r.checkId === "age_build");
+    expect(afterGroup).toBeDefined();
+    if (afterGroup && isScoredCheck(afterGroup)) {
+      expect(afterGroup.spans).toEqual([]);
+    }
+
+    // Event index 10 is pass 1's pass.completed. 6 more events (11 total) reaches it -- the run
+    // is still streaming, nowhere near run.completed.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6);
+    });
+
+    expect(result.current.status).toBe("streaming");
+    const pass1 = result.current.run?.passes[0];
+    expect(pass1).toBeDefined();
+    const failing = pass1?.results.filter(isScoredCheck).filter((r) => !r.passed) ?? [];
+    expect(failing.length).toBeGreaterThan(0);
+    // The check this whole product exists to make clickable: a verified span, not merely a band.
+    expect(failing.some((r) => r.spans.length > 0)).toBe(true);
+  });
+
   it("sets status failed with the error string, without throwing", async () => {
     const client = new FixtureRunClient({ speedMs: 1, scenario: "failed" });
 
