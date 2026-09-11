@@ -95,7 +95,7 @@
       "bands": {
         "1": "A brand or franchise name appears as the subject.",
         "2": "A brand name appears on wardrobe or a prop.",
-        "3": "A brand is strongly implied by a distinctive logo description.",
+        "3": "A trademarked product-line, model, or franchise-specific proper noun names the item, without the parent brand or franchise name itself (\"Air Max\", \"the Batmobile\").",
         "4": "No brand or franchise reference.",
         "5": "No brand reference, and garments are described generically enough to be re-renderable."
       },
