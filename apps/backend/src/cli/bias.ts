@@ -8,9 +8,21 @@ import { loadRubric, type Rubric } from "../rubric/load.js";
 
 const OUTPUT_DIR = "data/agreement";
 
+// `kappa`/`degenerate`/`n` mirror `KappaResult` (agreement/kappa.ts) field
+// for field, deliberately: this is the same "no variance to measure
+// agreement over" case agree.ts's KappaResult already carries a flag for
+// (both raters trivially agree on every item, so `expected` is 1 and kappa
+// is defined as 1 by convention -- see kappa.ts's own docstring). `agree`
+// and `disagree` are additional counts kappa.ts's shape doesn't need
+// (bias.ts's `AgreementReport` equivalent has no gold-set-shaped table),
+// `excluded` is this task's own addition for provider-parse failures.
 export type ProviderComparison = {
-  perCheck: Record<string, { agree: number; disagree: number; excluded: number; kappa: number }>;
+  perCheck: Record<
+    string,
+    { agree: number; disagree: number; excluded: number; kappa: number; degenerate: boolean; n: number }
+  >;
   overall: number;
+  overallDegenerate: boolean;
   n: number;
   excluded: number;
 };
@@ -86,11 +98,14 @@ export async function compareProviders(
     const pairs = pairsByCheck.get(id) ?? [];
     if (pairs.length === 0) continue; // unmeasured -- never fabricated as agree/disagree/kappa
     const agree = pairs.filter((pair) => pair.human === pair.agent).length;
+    const result = cohensKappa(pairs);
     perCheck[id] = {
       agree,
       disagree: pairs.length - agree,
       excluded: excludedByCheck.get(id) ?? 0,
-      kappa: cohensKappa(pairs).kappa,
+      kappa: result.kappa,
+      degenerate: result.degenerate,
+      n: result.n,
     };
     allPairs.push(...pairs);
   }
@@ -98,7 +113,43 @@ export async function compareProviders(
   // Same degenerate-input contract as buildAgreementReport (Task 22): if
   // literally nothing was comparable across the whole run, cohensKappa
   // throws rather than this function inventing an overall number.
-  return { perCheck, overall: cohensKappa(allPairs).kappa, n: allPairs.length, excluded };
+  const overallResult = cohensKappa(allPairs);
+  return {
+    perCheck,
+    overall: overallResult.kappa,
+    overallDegenerate: overallResult.degenerate,
+    n: allPairs.length,
+    excluded,
+  };
+}
+
+// Mirrors agree.ts's formatOverallLine/formatCheckLine conventions exactly
+// (same "always print n", same "degenerate" wording) so the two CLIs read
+// as one system rather than two ad hoc ones -- see that file's own comment
+// for why a degenerate kappa must never be allowed to look like an
+// ordinary, well-powered result. bias.ts additionally reports agree/
+// disagree/excluded counts per check, which agree.ts's gold-set shape has
+// no equivalent of.
+export function formatOverallLine(comparison: ProviderComparison): string {
+  const degeneracy = comparison.overallDegenerate
+    ? " -- degenerate: no variance to measure agreement over"
+    : "";
+  return `overall kappa: ${comparison.overall.toFixed(3)} (n=${comparison.n})${degeneracy}`;
+}
+
+export function formatCheckLine(
+  checkId: string,
+  result: ProviderComparison["perCheck"][string] | undefined,
+): string {
+  if (!result) return `  ${checkId}: unmeasured (no comparable pairs)`;
+  const degeneracy = result.degenerate
+    ? ` -- degenerate: no variance across n=${result.n} pairs`
+    : ` (n=${result.n})`;
+  const excludedNote = result.excluded > 0 ? `, excluded ${result.excluded}` : "";
+  return (
+    `  ${checkId}: kappa ${result.kappa.toFixed(3)}, agree ${result.agree}, ` +
+    `disagree ${result.disagree}${excludedNote}${degeneracy}`
+  );
 }
 
 /**
@@ -187,24 +238,19 @@ export async function main(argv: string[]): Promise<number> {
   );
 
   console.log(`\ncross-provider bias check: ${DEFAULT_MODEL} (Anthropic) vs ${DEFAULT_OPENAI_MODEL} (OpenAI)`);
-  console.log(
-    `descriptions: ${descriptions.length}   comparable pairs (n): ${comparison.n}   excluded: ${comparison.excluded}`,
-  );
-  console.log(`overall kappa: ${comparison.overall.toFixed(3)}`);
+  console.log(`descriptions: ${descriptions.length}   excluded pairs: ${comparison.excluded}`);
+  console.log(formatOverallLine(comparison));
   console.log("");
   for (const check of rubric.checks) {
-    const result = comparison.perCheck[check.id];
-    if (!result) {
-      console.log(`  ${check.id}: unmeasured (no comparable pairs)`);
-      continue;
-    }
-    const excludedNote = result.excluded > 0 ? `  excluded ${result.excluded}` : "";
-    console.log(
-      `  ${check.id}: kappa ${result.kappa.toFixed(3)}  agree ${result.agree}  disagree ${result.disagree}${excludedNote}`,
-    );
+    console.log(formatCheckLine(check.id, comparison.perCheck[check.id]));
   }
   console.log(
-    "\nA low or negative kappa here is a finding about self-preference risk between the " +
+    "\nA degenerate line above (no variance to measure agreement over) is not a good result --\n" +
+      "it means the pairs behind it were too few or too one-sided for kappa to say anything,\n" +
+      "even though the number printed is 1.000. Check `n` before trusting any kappa here,\n" +
+      "the same way the agreement study's own output warns.\n" +
+      "\n" +
+      "A low or negative kappa here is a finding about self-preference risk between the " +
       "Evaluator's model family and an independent one -- it is not a bug in the evaluator " +
       "prompt. Do not tune that prompt to raise this number: doing so would make this " +
       "instrument measure the tuning instead of the bias it exists to check. See spec §4 and " +

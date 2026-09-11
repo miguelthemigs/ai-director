@@ -16,7 +16,9 @@ vi.mock("../../src/agents/evaluator/run.js", () => ({
   evaluateAllGroups: (...args: unknown[]) => mockEvaluateAllGroups(...args),
 }));
 
-const { compareProviders, parseDescriptions, main } = await import("../../src/cli/bias.js");
+const { compareProviders, formatCheckLine, formatOverallLine, parseDescriptions, main } = await import(
+  "../../src/cli/bias.js"
+);
 
 // Two distinct no-op transports, used only as identity tokens: the mocked
 // `evaluateAllGroups` below switches its returned results on which of these
@@ -50,10 +52,22 @@ describe("compareProviders", () => {
     );
 
     expect(result.overall).toBe(1);
+    expect(result.overallDegenerate).toBe(true);
     expect(result.n).toBe(rubric.checks.length * 2);
     expect(result.excluded).toBe(0);
     for (const check of rubric.checks) {
-      expect(result.perCheck[check.id]).toEqual({ agree: 2, disagree: 0, excluded: 0, kappa: 1 });
+      // Trivial agreement across the board: expected is 1 (both raters
+      // pass every item), so this is the degenerate case -- kappa is 1 by
+      // kappa.ts's own convention, but it must be flagged as such, not read
+      // as a well-powered, informative result.
+      expect(result.perCheck[check.id]).toEqual({
+        agree: 2,
+        disagree: 0,
+        excluded: 0,
+        kappa: 1,
+        degenerate: true,
+        n: 2,
+      });
     }
   });
 
@@ -78,9 +92,20 @@ describe("compareProviders", () => {
     expect(wardrobe?.agree).toBe(0);
     expect(wardrobe?.disagree).toBe(3);
     expect(wardrobe?.kappa).toBeLessThan(1);
-    // Every other check still agrees fully.
-    expect(result.perCheck.age_build).toEqual({ agree: 3, disagree: 0, excluded: 0, kappa: 1 });
+    // A real split (both pass rates are 0 and 1, not equal), so this is not
+    // the degenerate case, unlike the full-agreement checks below.
+    expect(wardrobe?.degenerate).toBe(false);
+    // Every other check still agrees fully (and is degenerate, same as above).
+    expect(result.perCheck.age_build).toEqual({
+      agree: 3,
+      disagree: 0,
+      excluded: 0,
+      kappa: 1,
+      degenerate: true,
+      n: 3,
+    });
     expect(result.overall).toBeLessThan(1);
+    expect(result.overallDegenerate).toBe(false);
   });
 
   it("treats an ordinal band difference on the same side of the pass threshold as agreement, not disagreement", async () => {
@@ -99,6 +124,7 @@ describe("compareProviders", () => {
     );
 
     expect(result.overall).toBe(1);
+    expect(result.overallDegenerate).toBe(true); // one description, both pass everything -- no variance
     for (const check of rubric.checks) {
       expect(result.perCheck[check.id]?.disagree).toBe(0);
     }
@@ -129,7 +155,14 @@ describe("compareProviders", () => {
     }
     // The checks outside "look" were unaffected and still fully agree.
     for (const check of rubric.checks.filter((c) => c.group !== "look")) {
-      expect(result.perCheck[check.id]).toEqual({ agree: 1, disagree: 0, excluded: 0, kappa: 1 });
+      expect(result.perCheck[check.id]).toEqual({
+        agree: 1,
+        disagree: 0,
+        excluded: 0,
+        kappa: 1,
+        degenerate: true,
+        n: 1,
+      });
     }
   });
 
@@ -149,6 +182,56 @@ describe("compareProviders", () => {
     expect(result.perCheck.wardrobe).toBeUndefined();
     expect(result.excluded).toBe(2);
     expect(result.perCheck.age_build).toBeDefined();
+  });
+});
+
+describe("formatOverallLine / formatCheckLine", () => {
+  it("marks a degenerate result distinctly, so trivial agreement can never read as a well-powered one", async () => {
+    const rubric = await loadRubric("v1");
+    mockEvaluateAllGroups.mockImplementation(async () => rubric.checks.map((c) => scored(c.id, 5)));
+
+    const result = await compareProviders(
+      { a: transportA, b: transportB },
+      { rubric, descriptions: ["d1", "d2"] },
+    );
+
+    expect(result.overallDegenerate).toBe(true);
+    const wardrobe = result.perCheck.wardrobe;
+    expect(wardrobe?.degenerate).toBe(true);
+    expect(wardrobe?.n).toBe(2);
+
+    const overallLine = formatOverallLine(result);
+    expect(overallLine).toMatch(/degenerate/i);
+    expect(overallLine).toContain(`n=${result.n}`); // overall n spans every check, not one check's n
+
+    const checkLine = formatCheckLine("wardrobe", wardrobe);
+    expect(checkLine).toMatch(/degenerate/i);
+    expect(checkLine).toContain("n=2");
+  });
+
+  it("does not mark a genuine disagreement as degenerate", async () => {
+    const rubric = await loadRubric("v1");
+    mockEvaluateAllGroups.mockImplementation(async (deps: { transport: ParseTransport }) => {
+      const isA = deps.transport === transportA;
+      return rubric.checks.map((c) =>
+        c.id === "wardrobe" ? scored(c.id, isA ? 3 : 4) : scored(c.id, 5),
+      );
+    });
+
+    const result = await compareProviders(
+      { a: transportA, b: transportB },
+      { rubric, descriptions: ["d1", "d2", "d3"] },
+    );
+
+    const wardrobe = result.perCheck.wardrobe;
+    expect(wardrobe?.degenerate).toBe(false);
+    expect(formatCheckLine("wardrobe", wardrobe)).not.toMatch(/degenerate/i);
+    expect(formatOverallLine(result)).not.toMatch(/degenerate/i);
+  });
+
+  it("reports a missing check as unmeasured, never as degenerate", () => {
+    expect(formatCheckLine("wardrobe", undefined)).toMatch(/unmeasured/i);
+    expect(formatCheckLine("wardrobe", undefined)).not.toMatch(/degenerate/i);
   });
 });
 
