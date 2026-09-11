@@ -48,48 +48,55 @@ test.describe("real-browser render and layout", () => {
   });
 
   /**
-   * A REAL DEFECT, found by this suite, not fixed per the task brief: a real (un-forced) click on
-   * a screen tab times out. Chromium's own actionability check reports why --
-   * `<span aria-hidden="true" class="pass-step__pill">` (motion/react's one `layoutId` shared
-   * element, in `PassStep.tsx`) intercepts the pointer event, at every point on the page, because
-   * it is absolutely positioned with no positioned ancestor.
+   * FIXED DEFECT, originally found by this suite: a real (un-forced) click on a screen tab timed
+   * out. Chromium's own actionability check reported why -- `<span aria-hidden="true"
+   * class="pass-step__pill">` (motion/react's one `layoutId` shared element, in `PassStep.tsx`)
+   * intercepted the pointer event at every point on the page, because it was absolutely
+   * positioned with no positioned ancestor.
    *
-   * Root cause, confirmed via `getComputedStyle`: `.pass-step` (`run-screen.css`) declares
-   * `position: relative` and, three lines later in the same rule, `all: unset` -- which resets
-   * EVERY property, `position` included, back to its initial value. The later declaration wins,
-   * so `.pass-step` computes to `position: static`, not `relative`. `.pass-step__pill` is
-   * `position: absolute; inset: 0`, so with no positioned ancestor it resolves against the
-   * viewport instead of the button: measured at x:0, y:0, width:1280, height:720 in an 800px-tall
-   * viewport -- covering the entire page, header included, at all times (a pass is always
-   * "selected" from first paint, even before a run starts).
+   * Root cause, confirmed via `getComputedStyle`: `.pass-step` (`run-screen.css`) declared
+   * `position: relative` and, a few lines later in the *same* rule, `all: unset` -- which resets
+   * EVERY property, `position` included, back to its initial value. `all` reaches back over
+   * earlier declarations in its own rule, not only the ones written after it, so the later
+   * declaration won and `.pass-step` computed to `position: static`. `.pass-step__pill`'s
+   * `position: absolute; inset: 0` then resolved against the viewport instead of the button:
+   * measured at x:0, y:0, width:1280, height:720 -- covering the entire page, header included, at
+   * all times (a pass is always "selected" from first paint, even before a run starts).
    *
-   * A real mouse user cannot click ANY tab, and (see `helpers.ts`'s `startRun`) not the Run
-   * button either. Keyboard activation is unaffected -- pointer hit-testing never enters into it
-   * -- which is why every other test in this suite reaches the rest of the app at all: they use a
-   * documented `force: true` click or (for Architecture/Versions) a direct URL navigation, both
-   * noted at their call sites, to get past this same already-reported defect rather than
-   * rediscovering it.
+   * Fix: `.pass-step` no longer uses `all: unset`; it resets only the specific button-chrome
+   * properties it needs (`appearance`, `background`, `border`, `margin`, `font`, `text-align`),
+   * so its own `position: relative` survives. This test is the regression guard for that fix: it
+   * asserts real containment (the pill's box sits inside its own button's box, not merely "is
+   * smaller than some arbitrary number"), then confirms the direct, user-facing consequence -- an
+   * un-forced click on a real navigation tab now lands.
    */
-  test("REAL DEFECT: a screen tab does not receive a real click (pass-step pill covers the page)", async ({
-    page,
-  }) => {
-    const pill = page.locator(".pass-step__pill");
+  test("the pass-step pill stays inside its own button and a real tab click lands", async ({ page }) => {
+    const passStep = page.locator('[data-testid="pass-step-1"]');
+    const pill = passStep.locator(".pass-step__pill");
     await expect(pill).toBeVisible();
+
+    const stepBox = await passStep.boundingBox();
     const pillBox = await pill.boundingBox();
+    expect(stepBox).not.toBeNull();
     expect(pillBox).not.toBeNull();
+    if (!stepBox || !pillBox) return; // narrowed for TypeScript; the two expects above already fail the test otherwise
 
-    // This is the assertion that should hold in a correctly laid-out app: the pill sized to one
-    // pass-step button, not the viewport. It fails, and the failure message carries the actual
-    // measured box.
-    expect(pillBox?.width, `.pass-step__pill measured ${JSON.stringify(pillBox)}`).toBeLessThan(200);
-    expect(pillBox?.height, `.pass-step__pill measured ${JSON.stringify(pillBox)}`).toBeLessThan(200);
+    // Real containment: every edge of the pill's box lies within its own step button's box, not
+    // merely "smaller than some arbitrary number" -- the shape of assertion that would have
+    // caught the original defect (the pill measured the full 1280x720 viewport, nowhere near
+    // "inside" a ~100px-tall rail button).
+    const message = `pass-step ${JSON.stringify(stepBox)}, pill ${JSON.stringify(pillBox)}`;
+    expect(pillBox.x, message).toBeGreaterThanOrEqual(stepBox.x);
+    expect(pillBox.y, message).toBeGreaterThanOrEqual(stepBox.y);
+    expect(pillBox.x + pillBox.width, message).toBeLessThanOrEqual(stepBox.x + stepBox.width);
+    expect(pillBox.y + pillBox.height, message).toBeLessThanOrEqual(stepBox.y + stepBox.height);
 
-    // The direct, user-facing consequence: an un-forced click on a real navigation tab does not
-    // land. Bounded to 3s (rather than the suite's 30s default) since the outcome is already
-    // known from the geometry above -- this just confirms it end-to-end.
-    await expect(page.getByRole("link", { name: "Architecture" }).click({ timeout: 3_000 })).rejects.toThrow(
-      /intercepts pointer events/,
-    );
+    // The direct, user-facing consequence: an un-forced click on a real navigation tab lands.
+    // Bounded to 3s (rather than the suite's 30s default): if the pill regresses to covering the
+    // page, Chromium's actionability check will keep retrying and this fails on timeout rather
+    // than hanging for the suite's full default.
+    await page.getByRole("link", { name: "Architecture" }).click({ timeout: 3_000 });
+    await expect(page.getByRole("heading", { name: "Architecture", level: 1 })).toBeVisible();
   });
 
   test("the description composer sits left of the checks panel (the two-column layout)", async ({ page }) => {

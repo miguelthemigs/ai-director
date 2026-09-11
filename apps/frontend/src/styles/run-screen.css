@@ -72,8 +72,17 @@
 }
 
 .pass-step {
+  /* Not `all: unset`: on a `position: relative` container that resets the very declaration that
+   * makes `.pass-step__pill`'s `position: absolute` resolve against this button rather than the
+   * viewport — `all` reaches back and clears properties set earlier in the same rule, it is not
+   * only a shorthand for "everything below this line". Reset just the button chrome instead. */
   position: relative;
-  all: unset;
+  appearance: none;
+  background: none;
+  border: none;
+  margin: 0;
+  font: inherit;
+  text-align: inherit;
   display: flex;
   flex-direction: column;
   align-items: center;
