@@ -2551,17 +2551,38 @@ export type UnverifiedQuoteView = {
   reason: "not_found" | "ambiguous";
 };
 
-export type CheckResultView = {
-  checkId: CheckId;
-  group: CheckGroup;
-  band: Band;
-  /** Always bandToPercent(band). Sent by the server so no client recomputes it. */
-  percent: Percent;
-  passed: boolean;
-  reason: string;
-  spans: SpanView[];
-  unverified: UnverifiedQuoteView[];
-};
+/**
+ * A check as the wire carries it. This is a discriminated union, mirroring the engine's
+ * `EvaluatedCheck`, and it is deliberately NOT a flat shape with an optional band.
+ *
+ * The failure this project fears is a consumer treating an unevaluated check as passing. With a flat
+ * optional `band`, a naive read of `passed` compiles fine and goes through undetected. With the union,
+ * `band`, `percent` and `passed` exist only inside the `scored` branch, so any code path reading them
+ * without narrowing on `status` fails to compile. The engine already has that guarantee; this carries
+ * it across the network instead of silently downgrading it.
+ */
+export type CheckResultView =
+  | {
+      status: "scored";
+      checkId: CheckId;
+      group: CheckGroup;
+      band: Band;
+      /** Always bandToPercent(band). Sent by the server so no client recomputes it. */
+      percent: Percent;
+      passed: boolean;
+      reason: string;
+      spans: SpanView[];
+      unverified: UnverifiedQuoteView[];
+      /** True when the check scored below band 4 but returned no quotes to back it. */
+      missingEvidence: boolean;
+    }
+  | {
+      status: "not_evaluated";
+      checkId: CheckId;
+      group: CheckGroup;
+      /** Why the group call failed. Never a band, never a percent. */
+      reason: string;
+    };
 
 /** One fragment the Repairer rewrote, as the Run screen's diff renders it. */
 export type ReplacementView = {
@@ -2820,11 +2841,23 @@ describe("fixture runs", () => {
     ]);
   });
 
-  it("scores all nine checks in every pass of every run", () => {
+  it("covers all nine checks in every pass of every run, scored or not", () => {
     for (const run of everyRun) {
       for (const pass of run.passes) {
         expect(pass.results.map((r) => r.checkId).sort()).toEqual(CHECK_IDS.slice().sort());
       }
+    }
+  });
+
+  it("gives the failed run a partial pass carrying not_evaluated checks", () => {
+    const pass = FIXTURE_RUNS.failed.passes[0];
+    expect(pass).toBeDefined();
+    const notEvaluated = pass!.results.filter((r) => r.status === "not_evaluated");
+    expect(notEvaluated.length).toBeGreaterThan(0);
+    for (const result of notEvaluated) {
+      expect(result).not.toHaveProperty("band");
+      expect(result).not.toHaveProperty("percent");
+      expect(result).not.toHaveProperty("passed");
     }
   });
 
@@ -3013,7 +3046,7 @@ Complete the file to export:
 - `FIXTURE_RUNS.passed` — a one-pass run over `STRONG` where all nine checks are band 4 or 5, `status: "passed"`, `finalDescription === originalDescription`, and `replacements: []`.
 - `FIXTURE_RUNS.improvedStillFailing` — three passes starting from `WEAK` where the count in `failing` shrinks each pass but is non-empty at pass 3, `status: "improved_still_failing"`.
 - `FIXTURE_RUNS.noImprovement` — two passes where `failing` is identical in both, `status: "no_improvement"`, and the pass-2 `replacements` array is empty.
-- `FIXTURE_RUNS.failed` — a run that emits `run.started`, `pass.started`, one `evaluator.group.started`, then stops with `status: "failed"` and an `error` string. Its `passes` array holds one partial pass.
+- `FIXTURE_RUNS.failed` — a run that emits `run.started`, `pass.started`, one `evaluator.group.started`, then stops with `status: "failed"` and an `error` string. Its `passes` array holds **one partial pass**: the groups that completed are `scored`, and the group that did not is present as `not_evaluated` entries, one per check id in that group. All nine check ids appear; none is omitted. This is the fixture that makes the UI build a "not evaluated" state at all, so it is not optional.
 - `FIXTURE_EVENT_LOG` — the full `RunEvent[]` for `improvedStillFailing`, in wall-clock order, ids from `eventId(pass, step)`, the three groups of each pass interleaved rather than strictly sequential so the UI's out-of-order arrival is exercised.
 
 Every offset must come from `spanFor`. Every percent must come from `PERCENT`. No fixture may contain the word "kappa" or any agreement number: the gold set is not marked yet and `PRODUCT.md` forbids inventing one.
