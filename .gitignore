@@ -6,3 +6,7 @@ data/runs
 coverage
 apps/frontend/dist
 .DS_Store
+test-results
+playwright-report
+blob-report
+playwright/.cache

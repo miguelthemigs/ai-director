@@ -8,6 +8,7 @@
     "dev": "npm run dev:server & npm run dev:web",
     "dev:web": "vite --config apps/frontend/vite.config.ts",
     "test:web": "vitest run --config apps/frontend/vitest.config.ts",
+    "test:e2e": "playwright test --config apps/frontend/playwright.config.ts",
     "build:web": "vite build --config apps/frontend/vite.config.ts",
     "typecheck": "tsc -p tsconfig.base.json --noEmit && npm run typecheck:web",
     "typecheck:web": "tsc -p apps/frontend/tsconfig.json --noEmit",
@@ -19,6 +20,7 @@
     "zod": "^4.6.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^22.20.2",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
