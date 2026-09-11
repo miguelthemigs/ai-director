@@ -58,7 +58,11 @@ export function VersionCompare({ compare, onSwap, onClose }: VersionCompareProps
       </div>
 
       <div className="version-compare__panes">
-        <PromptDiff lines={compare.promptDiff} title={diffTitle(compare)} />
+        <PromptDiff
+          lines={compare.promptDiff}
+          title={diffTitle(compare)}
+          sameVersion={compare.a.id === compare.b.id}
+        />
         <CheckDeltaTable perCheck={compare.perCheck} />
       </div>
     </motion.section>
