@@ -5,6 +5,7 @@ import { failingCount } from "./domain/derive.js";
 import { useRunStream } from "./hooks/useRunStream.js";
 import { T } from "./motion/tokens.js";
 import { AppShell } from "./components/AppShell.js";
+import { FixtureNotice } from "./components/FixtureNotice.js";
 import { TopBar } from "./components/TopBar.js";
 import { ArchitectureScreen } from "./screens/ArchitectureScreen.js";
 import { RunScreen } from "./screens/RunScreen.js";
@@ -70,6 +71,7 @@ export function App({ client }: { client: RunClient }): React.JSX.Element {
           failingCount={failing}
           badgeTone={badgeTone}
           onScreenChange={navigate}
+          right={client.isFixture ? <FixtureNotice /> : null}
         />
         <main className="screen-body">
           {screen === "run" ? (

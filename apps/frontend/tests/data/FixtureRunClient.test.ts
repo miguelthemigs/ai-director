@@ -54,4 +54,33 @@ describe("FixtureRunClient", () => {
       expect(run.status).toBe(FIXTURE_RUNS[scenario].status);
     }
   });
+
+  // Fix round 1 (task 16): the shared chrome's sample-data marker is driven off this flag, not a
+  // build-time constant, so it disappears on its own once `main.tsx` swaps in `HttpRunClient`.
+  it("marks itself as fixture data", () => {
+    const client = new FixtureRunClient();
+    expect(client.isFixture).toBe(true);
+  });
+
+  it("lists the version history, oldest sealed first", async () => {
+    const client = new FixtureRunClient();
+    const versions = await client.listVersions();
+    expect(versions.length).toBeGreaterThan(0);
+    for (const version of versions) {
+      expect(version.why.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it("rejects comparing an id that is not on record, rather than silently returning nothing", async () => {
+    const client = new FixtureRunClient();
+    const versions = await client.listVersions();
+    const realId = versions[0]?.id;
+    expect(realId).toBeDefined();
+    await expect(client.compareVersions("not-a-real-version", realId ?? "")).rejects.toThrow(
+      /unknown version id/i,
+    );
+    await expect(client.compareVersions(realId ?? "", "also-not-real")).rejects.toThrow(
+      /unknown version id/i,
+    );
+  });
 });

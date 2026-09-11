@@ -1,8 +1,39 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
+import type { RunEvent, RunView, VersionCompare, VersionRow } from "@ai-director/contract";
 import { App } from "../src/App.js";
+import type { RunClient } from "../src/data/RunClient.js";
 import { FixtureRunClient } from "../src/data/FixtureRunClient.js";
+
+/**
+ * A stub of a future `HttpRunClient`: `isFixture` is the only thing under test here, so every
+ * method beyond that is an unreached no-op — `App`'s default Run screen at `runId === null` never
+ * calls any of them. Proves the sample-data marker (fix round 1, task 16) is driven off the
+ * client's own flag, not a build-time constant that would keep showing it after Phase C's swap.
+ */
+class NonFixtureStubClient implements RunClient {
+  readonly isFixture = false;
+
+  async startRun(): Promise<{ runId: string }> {
+    throw new Error("NonFixtureStubClient: not exercised by this test");
+  }
+  async getRun(): Promise<RunView> {
+    throw new Error("NonFixtureStubClient: not exercised by this test");
+  }
+  async listRuns(): Promise<RunView[]> {
+    return [];
+  }
+  subscribe(_runId: string, _from: string | undefined, _sink: (event: RunEvent) => void): () => void {
+    return () => {};
+  }
+  async listVersions(): Promise<VersionRow[]> {
+    return [];
+  }
+  async compareVersions(): Promise<VersionCompare> {
+    throw new Error("NonFixtureStubClient: not exercised by this test");
+  }
+}
 
 // `App` reads its initial screen from `window.location.pathname`, and jsdom does not reset
 // `window.location`/`window.history` between tests in the same file — an earlier test's
@@ -54,6 +85,22 @@ describe("App shell", () => {
     render(<App client={new FixtureRunClient()} />);
     await user.click(screen.getByRole("link", { name: /versions/i }));
     expect(await screen.findByText(/first frozen rubric/i)).toBeInTheDocument();
+  });
+
+  // Fix round 1 (task 16): a screenshot of this product's own invented version history could read
+  // as evidence of a research feedback cycle that never happened, so every screen carries a
+  // sample-data marker whenever the client behind it is a fixture.
+  it("shows a sample-data marker when running against FixtureRunClient", () => {
+    render(<App client={new FixtureRunClient()} />);
+    expect(screen.getByText(/sample data/i)).toBeInTheDocument();
+  });
+
+  // The half of the contract that actually matters: the marker must vanish on its own once
+  // `main.tsx` swaps in a real (non-fixture) client in Phase C, with nobody having to remember to
+  // remove it by hand.
+  it("shows no sample-data marker when the client is not a fixture", () => {
+    render(<App client={new NonFixtureStubClient()} />);
+    expect(screen.queryByText(/sample data/i)).not.toBeInTheDocument();
   });
 });
 

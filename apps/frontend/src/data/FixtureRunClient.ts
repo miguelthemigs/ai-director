@@ -115,6 +115,8 @@ type RunRecord = {
  * a finished run in one tick would hide every streaming bug the design exists to handle.
  */
 export class FixtureRunClient implements RunClient {
+  readonly isFixture = true;
+
   private readonly speedMs: number;
   private readonly scenario: Scenario;
   private readonly runs = new Map<string, RunRecord>();

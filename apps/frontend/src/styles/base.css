@@ -168,6 +168,22 @@ a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; 
   letter-spacing: 0;
 }
 
+/* Sample-data marker (fix round 1, task 16). Never the alarm tokens — this names provenance, not a
+ * failure — and never conveyed by colour alone: the text itself is the signal. */
+.fixture-notice {
+  font-family: var(--ff-ui);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-med);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--mark);
+  border-radius: var(--r-1);
+  padding: var(--sp-1) var(--sp-3);
+  white-space: nowrap;
+}
+
 .theme-toggle {
   font-family: var(--ff-ui);
   font-size: var(--fs-label);

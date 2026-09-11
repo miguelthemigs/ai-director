@@ -10,6 +10,13 @@ import type { RunEvent, RunView, VersionCompare, VersionRow } from "@ai-director
  * implementation needs to import the other.
  */
 export interface RunClient {
+  /**
+   * `true` for `FixtureRunClient`, `false` for `HttpRunClient`. Drives the shared chrome's sample
+   * data marker (fix round 1, task 16) — read from the client itself rather than a build flag, so
+   * the marker cannot outlive the swap `main.tsx` makes in Phase C: the day nothing constructs
+   * `FixtureRunClient` any more, nothing renders the marker either.
+   */
+  readonly isFixture: boolean;
   /** Kick off a new run. Resolves once the server (or fixture) has accepted it. */
   startRun(description: string): Promise<{ runId: string }>;
   /** Fetch a run's current state as a snapshot, e.g. for the Versions screen's history. */
