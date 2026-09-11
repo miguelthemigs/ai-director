@@ -31,6 +31,21 @@ a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; 
 /* Every numeric readout in the product. */
 .tnum { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
 
+/* Visually hidden but still reachable by assistive tech — a screen's own landmark heading, a live
+ * region's text. Never use `display: none`/`visibility: hidden` for these; both remove the content
+ * from the accessibility tree along with the viewport. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /*
  * Belt-and-suspenders backstop for anyone whose OS asks for reduced motion but whose browser
  * runs a component before React mounts (or a component that, in error, animates outside

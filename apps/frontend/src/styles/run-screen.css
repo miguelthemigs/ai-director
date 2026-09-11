@@ -1,0 +1,409 @@
+/*
+ * The Run screen (design doc §4.1, §5 "Run screen"). Scoped to this screen and imported only by
+ * `RunScreen.tsx`; the shared chrome in `base.css` is untouched.
+ *
+ * The pass rail (`PassStepper`, the mockup's left-hand 88px column) is not built in this task —
+ * see the task report — so this is a two-column layout (field, checks) rather than the mockup's
+ * three. Extending `--w-rail` back in is a matter of adding the third grid column when that
+ * component exists.
+ */
+
+.run {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--w-checks);
+  gap: 0;
+  min-height: 0;
+  height: 100%;
+}
+.run > * + * {
+  border-inline-start: var(--bd-hair) solid var(--ln);
+}
+
+@media (max-width: 1024px) {
+  .run {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+}
+
+@media (max-width: 720px) {
+  .run {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .run > * + * {
+    border-inline-start: none;
+    border-top: var(--bd-hair) solid var(--ln);
+  }
+}
+
+/* ── Field column ──────────────────────────────────────────── */
+
+.run__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-5);
+  background: var(--sf-field);
+}
+.run__field-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-4);
+}
+.run__field-meta {
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: var(--tr-caps);
+}
+
+/* ── Description composer ─────────────────────────────────── */
+
+.description-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.description-composer__label {
+  font-size: var(--fs-label);
+  color: var(--ink-3);
+}
+.description-composer__input {
+  min-height: 220px;
+  padding: var(--sp-4);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  color: var(--ink);
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-specimen);
+  line-height: var(--lh-spec);
+  resize: vertical;
+}
+.description-composer__input:disabled {
+  opacity: 0.6;
+}
+.description-composer__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.description-composer__count {
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+}
+.description-composer__count[data-over] {
+  color: var(--sig-alarm-edge);
+}
+.description-composer__submit {
+  font-family: var(--ff-ui);
+  font-size: var(--fs-ui);
+  font-weight: var(--fw-semi);
+  color: var(--ink);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln-strong);
+  border-radius: var(--r-1);
+  padding: var(--sp-2) var(--sp-5);
+  cursor: pointer;
+}
+.description-composer__submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* ── Specimen (the script field itself) ───────────────────── */
+
+.specimen {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--w-linenum) calc(var(--w-lane) * var(--lane-count, 0)) minmax(0, var(--measure));
+  column-gap: var(--sp-3);
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-specimen);
+  line-height: var(--lh-spec);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  color: var(--ink);
+}
+@media (max-width: 1024px) {
+  .specimen { font-size: 0.875rem; }
+}
+
+.spec-line {
+  display: contents;
+}
+.spec-line__num {
+  grid-column: 1;
+  color: var(--ink-3);
+  text-align: right;
+  align-self: start;
+}
+.spec-line__lane-space {
+  grid-column: 2;
+}
+.spec-line__text {
+  grid-column: 3;
+}
+
+.coverage-gutter {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: var(--w-linenum);
+  width: calc(var(--w-lane) * var(--lane-count, 0));
+  height: 100%;
+  pointer-events: none;
+}
+.coverage-rule {
+  /* `left` is set inline per-rule from its measured `lane` index — dynamic geometry, not a token
+   * (same exception `SkeletonRows` documents for its own inline `height`). */
+  position: absolute;
+  width: var(--w-lane);
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  color: var(--ink-3);
+}
+.coverage-rule[data-selected] {
+  color: var(--mark);
+}
+.coverage-rule[data-band="1"] { color: var(--band-1); }
+.coverage-rule[data-band="2"] { color: var(--band-2); }
+.coverage-rule[data-band="3"] { color: var(--band-3); }
+.coverage-rule[data-band="4"] { color: var(--band-4); }
+.coverage-rule[data-band="5"] { color: var(--band-5); }
+.coverage-rule__tab {
+  position: absolute;
+  inset-block-end: 100%;
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ── Span highlight ────────────────────────────────────────── */
+
+.span-mark {
+  border-radius: var(--r-1);
+  box-shadow: inset 0 -2px 0 var(--ln-strong);
+  /* 0.12s, plain CSS — motion spec §5. No Motion component in this moment at all. */
+  transition:
+    background-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+.span-mark[data-lane="0"] { background-color: var(--span-1); }
+.span-mark[data-lane="1"] { background-color: var(--span-2); }
+.span-mark[data-lane="2"] { background-color: var(--span-3); }
+.span-mark[data-band="1"] { box-shadow: inset 0 -2px 0 var(--band-1); }
+.span-mark[data-band="2"] { box-shadow: inset 0 -2px 0 var(--band-2); }
+.span-mark[data-band="3"] { box-shadow: inset 0 -2px 0 var(--band-3); }
+.span-mark[data-band="4"] { box-shadow: inset 0 -2px 0 var(--band-4); }
+.span-mark[data-band="5"] { box-shadow: inset 0 -2px 0 var(--band-5); }
+.span-mark[data-selected] {
+  background-color: var(--mark-soft);
+  box-shadow: inset 0 -2px 0 var(--mark);
+}
+@media (prefers-reduced-motion: reduce) {
+  .span-mark { transition: none; }
+}
+.span-mark__hit {
+  all: unset;
+  cursor: pointer;
+  color: inherit;
+  padding-block: 1px;
+}
+.span-mark__hit:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--r-1);
+}
+
+/* ── Check panel ───────────────────────────────────────────── */
+
+.check-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--sf-panel);
+}
+.check-panel__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--sp-5);
+  border-bottom: var(--bd-hair) solid var(--ln);
+}
+.check-panel__summary {
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+}
+.check-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.check-panel__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.check-group-header__letter {
+  color: var(--ink-3);
+  margin-inline-end: var(--sp-2);
+}
+.check-group-header__count {
+  margin-inline-start: auto;
+}
+.section-label.check-group-header,
+h3.section-label {
+  display: flex;
+  align-items: baseline;
+  padding: var(--sp-3) var(--sp-5);
+}
+
+/* ── Check row ─────────────────────────────────────────────── */
+
+.check-row {
+  list-style: none;
+  border-bottom: var(--bd-hair) solid var(--ln-faint);
+  padding: var(--sp-3) var(--sp-5);
+}
+.check-row[data-selected] {
+  background: var(--mark-soft);
+}
+.check-row:focus-visible,
+.check-row:focus {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.check-row__hit {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  width: 100%;
+  cursor: pointer;
+  color: var(--ink);
+}
+.check-row__title {
+  flex: 1;
+  font-size: var(--fs-ui);
+}
+.check-row__body {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.check-row__not-evaluated {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.check-row__reason {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+}
+.check-row__reason--not-evaluated {
+  color: var(--ink-3);
+}
+.check-row__detail {
+  margin-top: var(--sp-2);
+}
+
+/* ── Band meter ────────────────────────────────────────────── */
+
+.band-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.band-meter__track {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: var(--r-1);
+  background: var(--sf-panel-raised);
+  overflow: hidden;
+}
+.band-meter__tick {
+  position: absolute;
+  inset-block: 0;
+  width: 1px;
+  background: var(--ln-strong);
+}
+.band-meter__tick[data-tick="20"] { inset-inline-start: 20%; }
+.band-meter__tick[data-tick="40"] { inset-inline-start: 40%; }
+.band-meter__tick[data-tick="60"] { inset-inline-start: 60%; }
+.band-meter__tick[data-tick="80"] { inset-inline-start: 80%; }
+.band-meter__tick[data-tick="100"] { inset-inline-start: calc(100% - 1px); }
+.band-meter__tick[data-threshold] {
+  width: 2px;
+  background: var(--ink);
+}
+.band-meter__fill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: var(--r-0);
+  background: var(--ink-3);
+}
+.band-meter[data-band="1"] .band-meter__fill { background: var(--band-1); }
+.band-meter[data-band="2"] .band-meter__fill { background: var(--band-2); }
+.band-meter[data-band="3"] .band-meter__fill { background: var(--band-3); }
+.band-meter[data-band="4"] .band-meter__fill { background: var(--band-4); }
+.band-meter[data-band="5"] .band-meter__fill { background: var(--band-5); }
+.band-meter__percent {
+  min-width: 3ch;
+  text-align: right;
+  color: var(--ink-2);
+}
+
+/* ── Quotes ────────────────────────────────────────────────── */
+
+.quote-list {
+  list-style: none;
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.quote-list__quote {
+  all: unset;
+  cursor: pointer;
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+}
+.quote-list__quote[data-active] {
+  color: var(--ink);
+}
+.quote-list__quote:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.unverified-quote-notice {
+  border: var(--bd-mark) solid var(--sig-alarm-edge);
+  background: var(--span-unverified);
+  border-radius: var(--r-2);
+  padding: var(--sp-3);
+}
+.unverified-quote-notice__quote {
+  font-family: var(--ff-specimen);
+  color: var(--ink);
+  margin: 0 0 var(--sp-2);
+}
+.unverified-quote-notice__text {
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+  margin: 0;
+}

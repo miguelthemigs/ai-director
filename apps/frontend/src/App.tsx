@@ -4,6 +4,7 @@ import type { RunClient } from "./data/RunClient.js";
 import { T } from "./motion/tokens.js";
 import { AppShell } from "./components/AppShell.js";
 import { TopBar } from "./components/TopBar.js";
+import { RunScreen } from "./screens/RunScreen.js";
 
 export type Screen = "run" | "architecture" | "versions";
 
@@ -24,12 +25,8 @@ function readInitialScreen(): Screen {
   return screenFromPath(window.location.pathname);
 }
 
-// The three screens themselves are built in Tasks 13-16; this task builds only the chrome they
-// stand inside. Each stub carries the level-1 heading App.test.tsx asserts on and nothing else.
-function RunScreenStub(): React.JSX.Element {
-  return <h1 className="screen-title">Run</h1>;
-}
-
+// The other two screens are built in Tasks 14-16; this task builds only the chrome they stand
+// inside. Each stub carries the level-1 heading App.test.tsx asserts on and nothing else.
 function ArchitectureScreenStub(): React.JSX.Element {
   return <h1 className="screen-title">Architecture</h1>;
 }
@@ -44,11 +41,6 @@ function VersionsScreenStub(): React.JSX.Element {
  */
 export function App({ client }: { client: RunClient }): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>(readInitialScreen);
-
-  // `client` is the seam every screen will use once Tasks 13-16 build real bodies for these
-  // stubs; accepting it here (rather than only in main.tsx) is what lets every later test inject
-  // a FixtureRunClient and never touch the network.
-  void client;
 
   useEffect(() => {
     const onPopState = () => setScreen(screenFromPath(window.location.pathname));
@@ -69,7 +61,7 @@ export function App({ client }: { client: RunClient }): React.JSX.Element {
       <AppShell>
         <TopBar screen={screen} run={null} failingCount={0} onScreenChange={navigate} />
         <main className="screen-body">
-          {screen === "run" ? <RunScreenStub /> : null}
+          {screen === "run" ? <RunScreen client={client} /> : null}
           {screen === "architecture" ? <ArchitectureScreenStub /> : null}
           {screen === "versions" ? <VersionsScreenStub /> : null}
         </main>
