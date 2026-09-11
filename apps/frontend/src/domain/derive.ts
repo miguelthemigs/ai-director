@@ -7,6 +7,7 @@ import {
   type PipelineNode,
   type RunEvent,
   type SpanView,
+  type StepCost,
 } from "@ai-director/contract";
 
 /** One line of the description, plus the spans (or partial spans) that fall on it. */
@@ -171,6 +172,11 @@ type Bookkeeping = {
   evalTokensOut: number;
   evalCostUsd: number;
   evalLatencyMs: number;
+  /** True once at least one `evaluator.group.completed` event this pass carried any measured cost
+   *  field. An accumulator that starts at 0 cannot itself tell "summed several real zeros" apart
+   *  from "never saw a number" -- this flag is what lets the node say "not measured" instead of a
+   *  fabricated $0.00 when nothing was ever measured (see `costFields` below). */
+  evalCostSeen: boolean;
   passResults: CheckResultView[];
 };
 
@@ -183,8 +189,36 @@ function emptyBookkeeping(): Bookkeeping {
     evalTokensOut: 0,
     evalCostUsd: 0,
     evalLatencyMs: 0,
+    evalCostSeen: false,
     passResults: [],
   };
+}
+
+/** True if any of `StepCost`'s independently-optional fields was actually measured. */
+function anyCostMeasured(cost: StepCost): boolean {
+  return (
+    cost.inputTokens !== undefined ||
+    cost.outputTokens !== undefined ||
+    cost.usd !== undefined ||
+    cost.latencyMs !== undefined
+  );
+}
+
+/**
+ * The evaluator node's cost-shaped fields, attached only if something was actually measured this
+ * pass. Omitting them (rather than sending `0`) is what makes `formatCost`/`formatTokens`/
+ * `formatLatency` render "not measured" -- the same rule `PipelineNode`'s own optional cost fields
+ * already carry, now honoured by this derivation too instead of quietly re-fabricating a zero one
+ * layer up from where `server.ts` was fixed to stop sending one.
+ */
+function costFields(
+  seen: boolean,
+  tokensIn: number,
+  tokensOut: number,
+  costUsd: number,
+  latencyMs: number,
+): Partial<Pick<PipelineNode, "tokensIn" | "tokensOut" | "costUsd" | "latencyMs">> {
+  return seen ? { tokensIn, tokensOut, costUsd, latencyMs } : {};
 }
 
 function countSpans(results: CheckResultView[]): { verified: number; unverified: number } {
@@ -258,6 +292,7 @@ export function nodesFromEvents(events: RunEvent[]): PipelineNode[] {
           bk.evalTokensOut = 0;
           bk.evalCostUsd = 0;
           bk.evalLatencyMs = 0;
+          bk.evalCostSeen = false;
           bk.passResults = [];
           patch("evaluator", {
             state: "running",
@@ -276,13 +311,13 @@ export function nodesFromEvents(events: RunEvent[]): PipelineNode[] {
         bk.groupsCompletedThisPass += 1;
         // `StepCost`'s fields are each independently optional now (a real run's cost may be
         // partially or wholly unmeasured); a running total still needs a concrete number to
-        // accumulate, so an unmeasured figure contributes 0 to it rather than leaving the sum
-        // itself `undefined`. This differs from `PipelineNode`'s own cost fields, which stay
-        // genuinely unset when nothing was measured -- see this function's own doc comment.
+        // accumulate, so an unmeasured figure contributes 0 to the sum. `evalCostSeen` is the
+        // separate signal for whether to show that sum at all -- see `costFields` above.
         bk.evalTokensIn += event.cost.inputTokens ?? 0;
         bk.evalTokensOut += event.cost.outputTokens ?? 0;
         bk.evalCostUsd = Math.round((bk.evalCostUsd + (event.cost.usd ?? 0)) * 100) / 100;
         bk.evalLatencyMs += event.cost.latencyMs ?? 0;
+        bk.evalCostSeen = bk.evalCostSeen || anyCostMeasured(event.cost);
         bk.passResults = [...bk.passResults, ...event.results];
 
         const progress = bk.groupsCompletedThisPass / 3;
@@ -291,10 +326,7 @@ export function nodesFromEvents(events: RunEvent[]): PipelineNode[] {
           state: done ? "done" : "running",
           cueId: event.id,
           progress,
-          tokensIn: bk.evalTokensIn,
-          tokensOut: bk.evalTokensOut,
-          costUsd: bk.evalCostUsd,
-          latencyMs: bk.evalLatencyMs,
+          ...costFields(bk.evalCostSeen, bk.evalTokensIn, bk.evalTokensOut, bk.evalCostUsd, bk.evalLatencyMs),
           payload: bk.passResults,
           note: `${bk.groupsCompletedThisPass}/3 groups`,
         });
