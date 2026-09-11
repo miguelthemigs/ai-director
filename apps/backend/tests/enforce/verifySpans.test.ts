@@ -45,4 +45,25 @@ describe("verifySpans", () => {
     const { unverified } = verifySpans(description, [{ checkId: "wardrobe", quote: "  " }]);
     expect(unverified[0]!.reason).toBe("not_found");
   });
+
+  it("verifies nested quotes from different checks instead of discarding one", () => {
+    const nested = "A lean man in a Nike hoodie and black jeans.";
+    const { spans, unverified } = verifySpans(nested, [
+      { checkId: "wardrobe", quote: "Nike hoodie" },
+      { checkId: "no_brand_name", quote: "Nike" },
+    ]);
+    expect(unverified).toEqual([]);
+    expect(spans).toHaveLength(2);
+    for (const span of spans) {
+      expect(nested.slice(span.start, span.end)).toBe(span.quote);
+    }
+  });
+
+  it("still reports a genuinely repeated quote as ambiguous", () => {
+    const { spans, unverified } = verifySpans("black shoes and black jeans", [
+      { checkId: "wardrobe", quote: "black" },
+    ]);
+    expect(spans).toEqual([]);
+    expect(unverified).toEqual([{ checkId: "wardrobe", quote: "black", reason: "ambiguous" }]);
+  });
 });

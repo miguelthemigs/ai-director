@@ -18,8 +18,10 @@ export type UnverifiedQuote = {
  *
  * A quote is unverified when it does not appear in the description
  * (`not_found`) or appears more than once, so no single location can be
- * spliced safely (`ambiguous`). Spans that would overlap another kept span
- * are likewise demoted to `ambiguous` rather than silently dropped.
+ * spliced safely (`ambiguous`). Two checks quoting overlapping or nested text
+ * are two independent, individually-verified findings — each is kept as its
+ * own span. Resolving any resulting overlap (e.g. before a splice) is the
+ * caller's responsibility, not this function's.
  */
 export function verifySpans(
   description: string,
@@ -56,14 +58,5 @@ export function verifySpans(
   }
 
   spans.sort((a, b) => a.start - b.start);
-  const kept: Span[] = [];
-  for (const span of spans) {
-    const previous = kept[kept.length - 1];
-    if (previous !== undefined && span.start < previous.end) {
-      unverified.push({ checkId: span.checkId, quote: span.quote, reason: "ambiguous" });
-      continue;
-    }
-    kept.push(span);
-  }
-  return { spans: kept, unverified };
+  return { spans, unverified };
 }
