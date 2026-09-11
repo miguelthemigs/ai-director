@@ -64,6 +64,8 @@ packages/contract/                            # the only definition of wire type
   src/checks.ts                               # CheckId, CheckGroup, Band, CHECK_IDS, group membership
   src/run.ts                                  # RunView, PassView, CheckResultView, SpanView
   src/events.ts                               # RunEvent union, event names, event ids
+  src/pipeline.ts                             # PipelineNode, NodeState, the v1 graph incl. planned
+  src/versions.ts                             # VersionRow, VersionCompare, CheckDelta
   src/fixtures.ts                             # canned runs the UI and tests render
   tests/*.test.ts
 
@@ -825,11 +827,65 @@ git commit -m "feat: verify quoted spans verbatim and compute offsets in code"
 
 ---
 
-### Task 4: Splice with byte-identity assertion
+### Task 4: Splice with byte-identity assertion, and the two code-checked invariants
 
 **Files:**
-- Create: `apps/backend/src/enforce/splice.ts`
-- Test: `apps/backend/tests/enforce/splice.test.ts`
+- Create: `apps/backend/src/enforce/splice.ts`, `apps/backend/src/enforce/invariants.ts`
+- Test: `apps/backend/tests/enforce/splice.test.ts`, `apps/backend/tests/enforce/invariants.test.ts`
+
+**Added to this task to close a spec gap.** Spec §3 names two invariants that are "checked by code,
+not by a model, because code compares strings exactly": `byte_identical` and
+`negative_constraint_present`. The splice below is the first. The second has no other home in this
+plan, and it belongs beside the splice because both are string comparisons the model never sees.
+
+`negative_constraint_present` checks that the identity-drift negative line is present, following
+Higgsfield's "Continuity: Characters, props, environment identical across every cut. No identity
+drift." It is not one of the nine rubric checks and must never be scored as a band — it is a boolean
+invariant reported alongside them. Spec §11 records it as an open question whether this line belongs
+to the character block or the stage prompt; v1 checks it on the block, and that open question is why
+it is a separate boolean rather than a tenth check.
+
+Write `apps/backend/tests/enforce/invariants.test.ts` first:
+
+```typescript
+import { describe, expect, it } from "vitest";
+import { hasNegativeConstraint, NEGATIVE_CONSTRAINT_PATTERNS } from "../../src/enforce/invariants.js";
+
+describe("hasNegativeConstraint", () => {
+  it("accepts the canonical continuity line", () => {
+    expect(
+      hasNegativeConstraint(
+        "Male, 30, lean. Continuity: characters, props, environment identical across every cut. No identity drift.",
+      ),
+    ).toBe(true);
+  });
+
+  it("accepts the shorter form that names identity drift alone", () => {
+    expect(hasNegativeConstraint("Male, 30, lean. No identity drift between shots.")).toBe(true);
+  });
+
+  it("is case and whitespace insensitive, because writers do not retype it exactly", () => {
+    expect(hasNegativeConstraint("male, 30.  NO   IDENTITY   DRIFT.")).toBe(true);
+  });
+
+  it("rejects a description with no negative constraint at all", () => {
+    expect(hasNegativeConstraint("Male, Latino, around 30, lean and tall.")).toBe(false);
+  });
+
+  it("does not accept the mere word continuity without the constraint", () => {
+    expect(hasNegativeConstraint("He has continuity of style across his wardrobe.")).toBe(false);
+  });
+
+  it("exposes the patterns it matched on, so the UI can say which form it found", () => {
+    expect(NEGATIVE_CONSTRAINT_PATTERNS.length).toBeGreaterThan(0);
+  });
+});
+```
+
+Then implement `hasNegativeConstraint(description: string): boolean` over a small, exported array of
+regular expressions, normalising whitespace and case before testing. Keep the patterns few and
+literal; a clever regex that matches paraphrases would be exactly the model-judgement this invariant
+exists to avoid.
 
 **Interfaces:**
 - Consumes: `Span` from Task 3.
@@ -1666,7 +1722,44 @@ git commit -m "feat: file-backed run store behind a swappable interface"
 
 **Interfaces:**
 - Consumes: Tasks 2, 3, 4, 6, 7, 8.
-- Produces: `type PassResult = { pass: number; description: string; results: EvaluatorCheckResult[]; failing: string[]; unverified: UnverifiedQuote[]; repairedDescription?: string }`, `runPass(deps, args): Promise<PassResult>`, `runToCompletion(deps, args: { rubric: Rubric; description: string; runId: string; maxPasses?: number }): Promise<{ status: RunStatus; passes: PassResult[]; finalDescription: string }>`.
+- Produces: `type PassResult = { pass: number; description: string; results: EvaluatorCheckResult[]; failing: string[]; unverified: UnverifiedQuote[]; negativeConstraintPresent: boolean; repairedDescription?: string }`, `runPass(deps, args): Promise<PassResult>`, `runToCompletion(deps, args: { rubric: Rubric; description: string; runId: string; maxPasses?: number }): Promise<{ status: RunStatus; passes: PassResult[]; finalDescription: string }>`.
+
+**Added to this task to close a spec gap: the quote-exactly retry.** Spec §5 specifies the full path,
+and the plan previously stopped halfway through it:
+
+> A quote that does not match verbatim gets one retry with an instruction to quote exactly, then is
+> marked `unverified`, excluded from repair, and logged as prompt-tuning signal.
+
+Task 3's `verifySpans` is pure and does the marking. The retry needs a second model call, so it lives
+here, in `runPass`, which is the only place that holds both the transport and the verifier. Implement
+it as: run the group call, verify the quotes, and if any came back unverified, make **exactly one**
+re-ask for those checks only, with an instruction to quote verbatim from the description; verify the
+new quotes; anything still unverified after that one retry stays unverified and is excluded from
+repair. One retry, never a loop — a retry loop against a model that cannot quote would burn tokens
+indefinitely, and the unverified count is itself the signal the spec wants logged.
+
+Add these tests to `apps/backend/tests/orchestrate/runToCompletion.test.ts`, with a fake transport:
+
+```typescript
+it("re-asks once when a quote does not match verbatim", async () => {
+  // transport returns a paraphrased quote on call 1 and an exact quote on call 2
+  // assert the transport was called twice for that group, and the span is verified
+});
+
+it("gives up after exactly one retry and marks the quote unverified", async () => {
+  // transport returns a paraphrase both times
+  // assert exactly two calls for that group, the quote is in `unverified`,
+  // and the repairer never receives it
+});
+
+it("does not retry a group whose quotes all verified first time", async () => {
+  // assert exactly one call for that group
+});
+
+it("reports the negative-constraint invariant on every pass", async () => {
+  // assert PassResult.negativeConstraintPresent is false for a description without the line
+});
+```
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2378,6 +2471,109 @@ export type RunEvent =
 export type EventOf<N extends EventName> = Extract<RunEvent, { name: N }>;
 ```
 
+- [ ] **Step 5b: Write the pipeline and version modules**
+
+These two also cross the network, so they belong here rather than in the screens that render them.
+`packages/contract/src/pipeline.ts`:
+
+```typescript
+export const NODE_STATES = ["planned", "queued", "running", "done", "failed"] as const;
+export type NodeState = (typeof NODE_STATES)[number];
+
+export type NodeKind = "intake" | "agent" | "enforce" | "gate";
+
+export type PipelineNode = {
+  id: string;
+  label: string;
+  kind: NodeKind;
+  state: NodeState;
+  /** `<pass>-<step>` of the event that last moved this node. */
+  cueId?: string;
+  latencyMs?: number;
+  tokensIn?: number;
+  tokensOut?: number;
+  costUsd?: number;
+  payload?: unknown;
+  error?: string;
+  /** Short human line, e.g. "11 verified, 1 unverified". */
+  note?: string;
+};
+
+export type PipelineEdge = { from: string; to: string };
+
+/**
+ * The v1 pipeline, including the three agents the spec designs but does not build.
+ * A `planned` node is never given a state by any event; it is planned for the life of v1.
+ */
+export const PIPELINE_NODES: readonly PipelineNode[] = [
+  { id: "intake", label: "Description", kind: "intake", state: "queued" },
+  { id: "interrogator", label: "Interrogator", kind: "agent", state: "planned" },
+  { id: "evaluator", label: "Evaluator", kind: "agent", state: "queued" },
+  { id: "verify", label: "Span verification", kind: "enforce", state: "queued" },
+  { id: "repairer", label: "Repairer", kind: "agent", state: "queued" },
+  { id: "splice", label: "Splice", kind: "enforce", state: "queued" },
+  { id: "gate", label: "Pass gate", kind: "gate", state: "queued" },
+  { id: "director", label: "Director", kind: "agent", state: "planned" },
+  { id: "identity", label: "Identity Meter", kind: "agent", state: "planned" },
+];
+
+export const PIPELINE_EDGES: readonly PipelineEdge[] = [
+  { from: "intake", to: "evaluator" },
+  { from: "evaluator", to: "verify" },
+  { from: "verify", to: "repairer" },
+  { from: "repairer", to: "splice" },
+  { from: "splice", to: "gate" },
+  { from: "gate", to: "evaluator" },
+  { from: "gate", to: "director" },
+  { from: "director", to: "identity" },
+];
+```
+
+`packages/contract/src/versions.ts`:
+
+```typescript
+import type { Band, CheckId, Percent } from "./checks.js";
+
+export type VersionKind = "rubric" | "evaluator_prompt" | "repairer_prompt";
+
+export type VersionRow = {
+  id: string;
+  kind: VersionKind;
+  version: string;
+  sealedAt: string;
+  /** Required by spec §7. Never optional, never empty. */
+  why: string;
+  meanPercent: number | null;
+  deltaPercent: number | null;
+  /** Nine points in rubric order. Null until a run has scored against this version. */
+  profile: Record<CheckId, Percent> | null;
+  /** Null until the agreement study has run. Never invent a number here. */
+  kappa: number | null;
+  perCheckKappa: Record<CheckId, number> | null;
+  goldSetSize: number | null;
+};
+
+export type CheckDelta = {
+  checkId: CheckId;
+  /** Null when either side is unmeasured. Never coerce an unmeasured side to zero. */
+  deltaPercent: number | null;
+  bandA: Band | null;
+  bandB: Band | null;
+};
+
+export type VersionCompare = {
+  a: VersionRow;
+  b: VersionRow;
+  promptDiff: Array<{ kind: "same" | "added" | "removed"; text: string }>;
+  perCheck: CheckDelta[];
+};
+```
+
+Add one test per module to `packages/contract/tests/contract.test.ts`: that `PIPELINE_NODES` contains
+exactly three `planned` nodes and that their ids are `interrogator`, `director` and `identity`; that
+every edge's `from` and `to` name a real node id; and that `VersionRow`'s `kappa` and `profile` are
+allowed to be null, asserted by constructing one with nulls and type-checking it.
+
 - [ ] **Step 6: Write the barrel**
 
 `packages/contract/src/index.ts`:
@@ -2386,6 +2582,8 @@ export type EventOf<N extends EventName> = Extract<RunEvent, { name: N }>;
 export * from "./checks.js";
 export * from "./run.js";
 export * from "./events.js";
+export * from "./pipeline.js";
+export * from "./versions.js";
 export * from "./fixtures.js";
 ```
 
@@ -2633,7 +2831,8 @@ git commit -m "feat: wire contract and fixtures for runs, checks and events"
 
 **Files:**
 - Create: `apps/frontend/package.json`, `apps/frontend/index.html`, `apps/frontend/vite.config.ts`, `apps/frontend/vitest.config.ts`, `apps/frontend/tsconfig.json`
-- Create: `apps/frontend/src/main.tsx`, `apps/frontend/src/App.tsx`, `apps/frontend/src/styles/tokens.css`, `apps/frontend/src/styles/base.css`, `apps/frontend/src/motion/tokens.ts`
+- Create: `apps/frontend/src/main.tsx`, `apps/frontend/src/App.tsx`, `apps/frontend/src/styles/tokens.css`, `apps/frontend/src/styles/base.css`, `apps/frontend/src/motion/tokens.ts`, `apps/frontend/src/motion/useMotionPrefs.ts`
+- Create the shared chrome from design doc §5 "Shared": `apps/frontend/src/components/{AppShell,TopBar,ScreenTabs,RunIdentityStrip,ThemeToggle,EmptyState,ErrorPanel,SkeletonRows}.tsx`
 - Create: `apps/frontend/src/data/RunClient.ts`, `apps/frontend/src/data/FixtureRunClient.ts`
 - Modify: root `package.json` (add the `dev:web` and frontend test scripts)
 - Test: `apps/frontend/tests/data/FixtureRunClient.test.ts`, `apps/frontend/tests/App.test.tsx`
@@ -2858,6 +3057,13 @@ network. `main.tsx` is the only file that constructs one. Routing is a `useState
 unpick one.
 
 The three screens are stubs in this task: a heading and nothing else. They are built in Tasks 13-16.
+The shared chrome, however, is real: `AppShell`, `TopBar`, `ScreenTabs`, `RunIdentityStrip`,
+`ThemeToggle`, `EmptyState`, `ErrorPanel` and `SkeletonRows` are built here to the signatures in
+design doc §5 "Shared", because all three screens need them and none of them owns them.
+
+`useMotionPrefs` wraps `useReducedMotion`. Note the correction the motion spec records from reading
+Motion's type declarations: `useReducedMotion()` returns `boolean | null`, not `boolean`. Coalesce
+the `null` to `false` and say why in a comment, per motion spec §2.1.
 
 - [ ] **Step 10: Run the whole frontend suite**
 
@@ -2869,6 +3075,457 @@ Expected: PASS, 8 tests, output pristine.
 ```bash
 git add -A
 git commit -m "feat: frontend workspace, design tokens, run client seam, app shell"
+```
+
+---
+
+### Task 13: Run screen — the script page and the coverage gutter
+
+**Files:**
+- Create: `apps/frontend/src/domain/derive.ts`, `apps/frontend/src/hooks/useRunStream.ts`, `apps/frontend/src/hooks/useSelection.ts`
+- Create: `apps/frontend/src/components/{DescriptionComposer,SpecimenView,SpecimenLine,SpanMark,CoverageGutter,CoverageRule,CheckPanel,CheckGroupHeader,CheckRow,BandMeter,BandMark,QuoteList,UnverifiedQuoteNotice,SectionLabel,LiveAnnouncer}.tsx`
+- Modify: `apps/frontend/src/screens/RunScreen.tsx` (replace the Task 12 stub)
+- Test: `apps/frontend/tests/domain/derive.test.ts`, `apps/frontend/tests/hooks/useRunStream.test.ts`, `apps/frontend/tests/screens/RunScreen.test.tsx`, `apps/frontend/tests/components/BandMeter.test.tsx`
+
+**Interfaces:**
+- Consumes: `RunClient` (Task 12), the motion tokens (Task 12), and from `@ai-director/contract` — `CheckResultView`, `SpanView`, `UnverifiedQuoteView`, `PassView`, `RunView`, `RunEvent`, `CHECK_IDS`, `CHECKS_BY_GROUP`, `CHECK_GROUPS`.
+- Produces: `useRunStream(client: RunClient, runId: string | null): { run: RunView | null; status: RunStatus; events: RunEvent[]; error: string | null }`, `useSelection(): { selected: string | null; select: (checkId: string | null) => void; hoveredSpanId: string | null; hoverSpan: (spanId: string | null) => void }`, `splitLines(description: string, spans: SpanView[]): SpecimenLineModel[]`, and the components above.
+
+**Design inputs, read only these sections:**
+- `…/2026-09-11-prompt-coach-ui-design.md` §4.1 (Run screen layout and its responsive behaviour), §5 "Run screen" (every component signature you are implementing), §6.1 (empty, loading, streaming and error states), §7 "Focus order", "Keyboard, and the check to fragment link", and "Live announcements while a run streams".
+- `…/2026-09-11-prompt-coach-motion-spec.md` §3 (Moment 1, check row revealing), §4 (Moment 2, band meter), §5 (Moment 3, check ↔ fragment selection), §2 (reduced motion), §13.3 (list-key discipline for the SSE stream).
+
+**Do not create `src/domain/types.ts`.** The design doc proposes one; it is superseded. Every type comes from `@ai-director/contract`, and where the design doc's prop names disagree with the contract, the contract wins: `CheckGroup` is `"look" | "safety" | "drawable"` and never `"A" | "B" | "C"`; a span's id is `spanId`; a replacement's texts are `oldText` and `newText`. `src/domain/derive.ts` holds *functions* that compute UI-only values the server does not send (the 1-based line number of a span, the failing count, the mean percent), never type definitions.
+
+- [ ] **Step 1: Write the failing derive test**
+
+`apps/frontend/tests/domain/derive.test.ts`:
+
+```typescript
+import { describe, expect, it } from "vitest";
+import { splitLines, failingCount, meanPercent } from "../../src/domain/derive.js";
+import { FIXTURE_RUNS } from "@ai-director/contract";
+
+describe("splitLines", () => {
+  it("returns one model per line of the description", () => {
+    const lines = splitLines("one\ntwo\nthree", []);
+    expect(lines.map((l) => l.text)).toEqual(["one", "two", "three"]);
+    expect(lines.map((l) => l.line)).toEqual([1, 2, 3]);
+  });
+
+  it("assigns each span to the line its start offset falls on", () => {
+    const description = "alpha\nbravo charlie";
+    const spans = [
+      { spanId: "s1", checkId: "wardrobe" as const, quote: "bravo", start: 6, end: 11 },
+    ];
+    const lines = splitLines(description, spans);
+    expect(lines[0]?.spans).toEqual([]);
+    expect(lines[1]?.spans.map((s) => s.spanId)).toEqual(["s1"]);
+  });
+
+  it("splits a span that straddles a newline rather than dropping it", () => {
+    const description = "alpha bravo\ncharlie delta";
+    const spans = [
+      { spanId: "s1", checkId: "wardrobe" as const, quote: "bravo\ncharlie", start: 6, end: 19 },
+    ];
+    const lines = splitLines(description, spans);
+    expect(lines[0]?.spans.map((s) => s.spanId)).toEqual(["s1"]);
+    expect(lines[1]?.spans.map((s) => s.spanId)).toEqual(["s1"]);
+  });
+
+  it("leaves the text reconstructable, so nothing is lost in rendering", () => {
+    const description = FIXTURE_RUNS.improvedStillFailing.passes[0]!.description;
+    const spans = FIXTURE_RUNS.improvedStillFailing.passes[0]!.results.flatMap((r) => r.spans);
+    const lines = splitLines(description, spans);
+    expect(lines.map((l) => l.text).join("\n")).toBe(description);
+  });
+});
+
+describe("failingCount and meanPercent", () => {
+  it("counts checks below band 4", () => {
+    const pass = FIXTURE_RUNS.passed.passes[0]!;
+    expect(failingCount(pass.results)).toBe(0);
+  });
+
+  it("means the nine percentages, not the bands", () => {
+    const results = FIXTURE_RUNS.passed.passes[0]!.results;
+    const expected = results.reduce((sum, r) => sum + r.percent, 0) / results.length;
+    expect(meanPercent(results)).toBeCloseTo(expected, 10);
+  });
+});
+```
+
+- [ ] **Step 2: Run it, watch it fail, write `derive.ts`, watch it pass**
+
+Run: `npm run test:web -- derive`
+
+- [ ] **Step 3: Write the failing stream-hook test**
+
+`apps/frontend/tests/hooks/useRunStream.test.ts` renders the hook with `renderHook` and a
+`FixtureRunClient` at `speedMs: 1`, then asserts with fake timers: the hook starts at `status: "idle"`
+with `run: null`; after subscribing it moves to `"streaming"`; each `evaluator.group.completed` merges
+that group's results into `run` *without discarding groups that already arrived* — this is the bug the
+whole fixture design exists to catch, so assert that after the second group lands the first group's
+results are still present; `run.completed` sets the terminal status from the event's `run`; and
+`run.failed` sets `status: "failed"` with the error string rather than throwing.
+
+- [ ] **Step 4: Run it, watch it fail, write the two hooks, watch it pass**
+
+`useRunStream` keeps a reducer over `RunEvent`. Reduce, never replace: a group's results merge into a
+`Map` keyed by `checkId` so out-of-order arrival is safe. `useSelection` holds the selected check id
+and the hovered span id, and nothing else — it is deliberately tiny because both the gutter and the
+text need it and neither owns it.
+
+- [ ] **Step 5: Write the failing band meter test**
+
+`apps/frontend/tests/components/BandMeter.test.tsx` asserts the accessibility contract the design
+doc's §7 requires and the spec's colour-blindness measurement depends on: the meter exposes
+`role="meter"` with `aria-valuenow` equal to the percent, `aria-valuemin={0}`, `aria-valuemax={100}`;
+it renders the printed percentage as text, so the value never depends on colour; and it renders the
+band's stroke pattern via `BandMark`, so the value never depends on colour *or* on length alone. Add
+one test that a band 4 and a band 3 meter differ in their rendered `data-band` attribute — the
+pass boundary must be distinguishable in the DOM, which is what makes it testable at all.
+
+- [ ] **Step 6: Run it, watch it fail, build the components, watch it pass**
+
+Build them in dependency order: `BandMark`, `BandMeter`, `CheckRow`, `CheckGroupHeader`, `CheckPanel`,
+then `SpanMark`, `SpecimenLine`, `SpecimenView`, `CoverageRule`, `CoverageGutter`, then
+`DescriptionComposer`, `QuoteList`, `UnverifiedQuoteNotice`, `SectionLabel`, `LiveAnnouncer`.
+
+Three rules from the design and motion specs that a reviewer will check:
+
+1. A group header carries a label and a count of its checks. It must never carry an aggregate score.
+2. The check reveal uses `AnimatePresence` keyed on the *band value*, per motion spec §3, so an
+   unchanged score has an unchanged key and structurally cannot animate. Do not implement this with
+   an `if (bandChanged)` conditional; the key is the mechanism.
+3. Check ↔ fragment selection is plain CSS on `background-color` and `box-shadow` at 0.12s, with no
+   Motion component involved at all (motion spec §5). A shared-`layoutId` indicator is explicitly
+   rejected there because a wrapped inline span has several client rects and the indicator smears.
+
+- [ ] **Step 7: Write the failing screen test**
+
+`apps/frontend/tests/screens/RunScreen.test.tsx` asserts, with a `FixtureRunClient`:
+
+```typescript
+it("shows all nine checks with their own percentage once a run streams", async () => {
+  // renders nine rows, each with a percent from {20,40,60,80,100}
+});
+
+it("shows no aggregate score anywhere in a group header", () => {
+  // group headers contain no % character
+});
+
+it("highlights the quoted fragment when its check is activated from the keyboard", async () => {
+  // tab to a check row, press Enter, assert the matching SpanMark gains aria-current
+});
+
+it("selects the check when its fragment in the text is activated", async () => {
+  // click a SpanMark, assert the check row gains aria-selected
+});
+
+it("shows an explicit fragment-not-found notice for an unverified quote", async () => {
+  // the fixture carries one; assert visible text, not a silent absence
+});
+
+it("makes the description read-only once submitted", async () => {
+  // the textarea is replaced by SpecimenView, or carries readOnly
+});
+```
+
+- [ ] **Step 8: Run it, watch it fail, write `RunScreen.tsx`, watch it pass**
+
+- [ ] **Step 9: Run the whole frontend suite and commit**
+
+```bash
+npm run test:web
+git add -A
+git commit -m "feat: run screen, coverage gutter, check panel, span selection"
+```
+
+---
+
+### Task 14: Run screen — passes, the fragment diff, and the verdict
+
+**Files:**
+- Create: `apps/frontend/src/components/{PassStepper,PassStep,FragmentDiff,FragmentDiffRow,VerdictBanner,CheckStrip,CueBadge}.tsx`
+- Modify: `apps/frontend/src/screens/RunScreen.tsx`, `apps/frontend/src/components/CheckPanel.tsx`
+- Test: `apps/frontend/tests/components/{VerdictBanner,FragmentDiff,PassStepper}.test.tsx`
+
+**Interfaces:**
+- Consumes: everything from Task 13, plus `ReplacementView`, `PassView`, `TERMINAL_STATUSES`, `isSuccess` from `@ai-director/contract`.
+- Produces: the components above. `VerdictBanner` takes `{ status: RunStatus; failingCount: number; passesUsed: number; meanBefore: number; meanAfter: number }`.
+
+**Design inputs, read only these sections:**
+- `…ui-design.md` §6.2 — **the binding terminal-state table**. Everything `VerdictBanner` renders comes from that table's row for the status, and nothing outside it.
+- `…ui-design.md` §5 "Run screen" for `PassStepper`, `PassStep`, `FragmentDiff`, `FragmentDiffRow`, `CheckStrip`, `CueBadge`.
+- `…motion-spec.md` §6 (Moment 4, the fragment diff, including §6.1 on the layout shift), §7 (Moment 5, the pass stepper), §12 (Moment 10, terminal states landing).
+
+This task carries the single most important requirement in the product. The spec, `PRODUCT.md`
+principle 3, and the Global Constraints all say the same thing: **the UI must never show a success
+state for `improved_still_failing` or `no_improvement`.** Design doc §6.2 turns that into a table of
+exact words, tokens and treatments, including a list of words and tokens *forbidden* on each failing
+state. Implement the table literally.
+
+- [ ] **Step 1: Write the failing verdict test**
+
+`apps/frontend/tests/components/VerdictBanner.test.tsx`. This is the test that protects the
+requirement, so write it before the component and make it strict:
+
+```typescript
+import { describe, expect, it } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { VerdictBanner } from "../../src/components/VerdictBanner.js";
+
+const FORBIDDEN = [/\bcomplete\b/i, /\bsuccess\b/i, /\bdone\b/i, /\bfinished\b/i, /✓/, /✔/];
+
+describe("VerdictBanner", () => {
+  it("says PASSED and counts the checks at band 4 or above when the run passed", () => {
+    render(<VerdictBanner status="passed" failingCount={0} passesUsed={1} meanBefore={88} meanAfter={88} />);
+    expect(screen.getByText("PASSED")).toBeInTheDocument();
+    expect(screen.getByText(/of 9 checks at band 4 or above/i)).toBeInTheDocument();
+  });
+
+  it.each(["improved_still_failing", "no_improvement"] as const)(
+    "never uses a success word or glyph for %s",
+    (status) => {
+      const { container } = render(
+        <VerdictBanner status={status} failingCount={3} passesUsed={3} meanBefore={62} meanAfter={80} />,
+      );
+      for (const pattern of FORBIDDEN) {
+        expect(container.textContent ?? "").not.toMatch(pattern);
+      }
+    },
+  );
+
+  it("makes the failing count the headline numeral, not the score", () => {
+    render(<VerdictBanner status="improved_still_failing" failingCount={3} passesUsed={3} meanBefore={62} meanAfter={80} />);
+    expect(screen.getByTestId("verdict-numeral")).toHaveTextContent("3");
+  });
+
+  it("never renders the word improved without its qualifier on the same line", () => {
+    render(<VerdictBanner status="improved_still_failing" failingCount={3} passesUsed={3} meanBefore={62} meanAfter={80} />);
+    const line = screen.getByTestId("verdict-second-line").textContent ?? "";
+    if (/improved|rose/i.test(line)) {
+      expect(line).toMatch(/did not pass/i);
+    }
+  });
+
+  it("says STILL FAILING and NO IMPROVEMENT in the words the design table fixes", () => {
+    const { rerender } = render(<VerdictBanner status="improved_still_failing" failingCount={3} passesUsed={3} meanBefore={62} meanAfter={80} />);
+    expect(screen.getByText("STILL FAILING")).toBeInTheDocument();
+    rerender(<VerdictBanner status="no_improvement" failingCount={5} passesUsed={3} meanBefore={62} meanAfter={62} />);
+    expect(screen.getByText("NO IMPROVEMENT")).toBeInTheDocument();
+  });
+
+  it("uses no band-4 or band-5 token on either failing state", () => {
+    const { container } = render(<VerdictBanner status="no_improvement" failingCount={5} passesUsed={3} meanBefore={62} meanAfter={62} />);
+    expect(container.innerHTML).not.toMatch(/--band-4|--band-5|--diff-add/);
+  });
+});
+```
+
+- [ ] **Step 2: Run it, watch it fail, write `VerdictBanner`, watch it pass**
+
+- [ ] **Step 3: Write the failing diff test**
+
+`apps/frontend/tests/components/FragmentDiff.test.tsx` asserts: it renders only the fragments that
+changed, never the whole description — given a pass with two replacements out of a nine-check result,
+exactly two diff rows appear; each row shows `oldText` and `newText` in `<del>` and `<ins>` elements,
+so the change is semantic and not only visual; the rationale is shown; and when the pass has no
+replacements it renders an explicit "no fragment changed" line rather than an empty box, because
+`no_improvement` depends on that being visible (motion spec §12 also suppresses the diff sequence
+entirely in that state).
+
+- [ ] **Step 4: Run it, watch it fail, write `FragmentDiff` and `FragmentDiffRow`, watch it pass**
+
+Follow motion spec §6.2's sequence exactly: strike at 0.14s, one unanimated reflow at 0.14s,
+replacement at 0.18s. §6.1 explains why the reflow is not animated; do not try to improve on it with
+`layout`, which §13.2 lists as a trap for inline spans.
+
+- [ ] **Step 5: Write the failing stepper test**
+
+`apps/frontend/tests/components/PassStepper.test.tsx` asserts: three steps are always visible even
+when only one pass has run, with the unreached ones marked as not yet run; the current step has
+`aria-current="step"`; steps are reachable with the arrow keys per design §7; and the final step of a
+failed run renders the cross-bar terminator the §6.2 table requires rather than a closed frame.
+
+- [ ] **Step 6: Run it, watch it fail, write `PassStepper` and `PassStep`, watch it pass**
+
+- [ ] **Step 7: Wire them into `RunScreen` and assert the whole story**
+
+Add to `apps/frontend/tests/screens/RunScreen.test.tsx`:
+
+```typescript
+it.each(["improvedStillFailing", "noImprovement"] as const)(
+  "never shows a success state for the %s scenario, end to end",
+  async (scenario) => {
+    // stream the scenario to completion through FixtureRunClient,
+    // then assert the whole document's text contains none of the forbidden words,
+    // and that the verdict numeral is the failing count
+  },
+);
+```
+
+- [ ] **Step 8: Run the whole frontend suite and commit**
+
+```bash
+npm run test:web
+git add -A
+git commit -m "feat: pass stepper, fragment diff, and honest terminal verdicts"
+```
+
+---
+
+### Task 15: Architecture screen
+
+**Files:**
+- Create: `apps/frontend/src/components/{PipelineGraph,GraphNode,GraphEdge,NodeInspector,MetricRow,PayloadViewer,CueLog,StageList}.tsx`
+- Modify: `apps/frontend/src/screens/ArchitectureScreen.tsx` (replace the Task 12 stub)
+- Test: `apps/frontend/tests/screens/ArchitectureScreen.test.tsx`, `apps/frontend/tests/components/GraphNode.test.tsx`
+
+**Interfaces:**
+- Consumes: `useRunStream` (Task 13), and from `@ai-director/contract` — `PipelineNode`, `PipelineEdge`, `NodeState`, `PIPELINE_NODES`, `PIPELINE_EDGES`, `RunEvent`.
+- Produces: `nodesFromEvents(events: RunEvent[]): PipelineNode[]` in `src/domain/derive.ts`, and the components above.
+
+**Design inputs, read only these sections:** `…ui-design.md` §4.2, §5 "Architecture screen", §6.3.
+`…motion-spec.md` §8 (Moment 6, node states, **including §8.1 which resolves the running state
+without a loop**), §9 (Moment 7, edge flow), §10 (Moment 8, the inspector).
+
+This screen is an audit view, not decoration. Its job is that an assessor can click any step and see
+the real payload, latency and cost that step actually produced. A node that shows a plausible-looking
+number it did not receive would be worse than a node that shows nothing.
+
+- [ ] **Step 1: Write the failing node-derivation test**
+
+`apps/frontend/tests/domain/nodesFromEvents.test.ts` asserts: with no events, the built nodes are
+`queued` and the three planned ones are `planned`; `evaluator.group.started` moves `evaluator` to
+`running`; three `evaluator.group.completed` events move it to `done` and its `progress` through
+1/3, 2/3, 3/3; `run.failed` moves the currently-running node to `failed` and leaves the rest alone;
+and **no event of any kind can move a `planned` node off `planned`** — assert this by replaying the
+entire `FIXTURE_EVENT_LOG` and checking all three are still planned at the end.
+
+- [ ] **Step 2: Run it, watch it fail, write `nodesFromEvents`, watch it pass**
+
+- [ ] **Step 3: Write the failing node test**
+
+`apps/frontend/tests/components/GraphNode.test.tsx` asserts: a `planned` node renders as a plain
+element carrying the visible word "planned" and is not a Motion component — assert there is no
+`style` transform applied and that the design doc's dashed treatment class is present; a `running`
+node renders its elapsed-seconds counter as text and its progress value; every state renders its
+state as a text label, so state never depends on colour alone.
+
+- [ ] **Step 4: Run it, watch it fail, build the components, watch it pass**
+
+Motion spec §8.1 is binding: the running node animates **once** on entry and then holds a static
+state. There is no pulse, spinner, shimmer or moving dashed border anywhere in this screen. Elapsed
+time is a text node re-rendering, with no Motion component and no transition applied. If you find
+yourself adding `repeat: Infinity`, stop and re-read §8.1 — it explains why the reflex is both
+forbidden and wrong.
+
+- [ ] **Step 5: Write the failing screen test**
+
+`apps/frontend/tests/screens/ArchitectureScreen.test.tsx` asserts: all nine nodes render; the three
+planned ones are labelled planned and are visually distinguishable per §6.3; clicking a node opens
+`NodeInspector` with that node's real payload, latency and cost; a node with no cost yet shows an
+explicit "not measured" rather than `$0.00`; and the inspector is dismissible with Escape and returns
+focus to the node that opened it.
+
+- [ ] **Step 6: Run it, watch it fail, write `ArchitectureScreen.tsx`, watch it pass**
+
+- [ ] **Step 7: Run the whole frontend suite and commit**
+
+```bash
+npm run test:web
+git add -A
+git commit -m "feat: architecture screen as a live audit view of the pipeline"
+```
+
+---
+
+### Task 16: Versions screen
+
+**Files:**
+- Create: `apps/frontend/src/components/{VersionTable,VersionRow,RevisionChip,DeltaBadge,CheckProfileSparkline,VersionCompare,PromptDiff,CheckDeltaTable,AgreementReadout}.tsx`
+- Modify: `apps/frontend/src/screens/VersionsScreen.tsx` (replace the Task 12 stub), `apps/frontend/src/data/{RunClient,FixtureRunClient}.ts` (add the version methods)
+- Test: `apps/frontend/tests/screens/VersionsScreen.test.tsx`, `apps/frontend/tests/components/{CheckProfileSparkline,AgreementReadout}.test.tsx`
+
+**Interfaces:**
+- Consumes: `VersionRow`, `VersionCompare`, `CheckDelta` from `@ai-director/contract` (Task 11).
+- Produces: `RunClient` gains `listVersions(): Promise<VersionRow[]>` and `compareVersions(a: string, b: string): Promise<VersionCompare>`; `FixtureRunClient` implements both; and the components above.
+
+**Design inputs, read only these sections:** `…ui-design.md` §4.3, §5 "Versions screen", §6.4.
+`…motion-spec.md` §11 (Moment 9, the sparkline and the compare view).
+
+**Ruling already made, implement it as stated:** `CheckProfileSparkline` draws a **nine-point check
+profile in rubric order with the band-4 threshold line across it**, not a time series over versions.
+Five versions cannot make an honest time axis, and spec §9 asks this screen to make "v2 beat v1"
+legible check by check, which a profile does directly.
+
+**The honesty requirement on this screen.** The gold set is not marked yet, so no agreement number
+exists. `PRODUCT.md` says plainly that agreement numbers must not be fabricated in any screen or
+mock. Every kappa field in the contract is `number | null`, and `null` renders as an explicit "not
+measured yet" — never as `0`, never as a dash that could read as zero, never as a placeholder value.
+A delta between a measured and an unmeasured version is `null`, not the measured number.
+
+- [ ] **Step 1: Write the failing agreement-readout test**
+
+`apps/frontend/tests/components/AgreementReadout.test.tsx`:
+
+```typescript
+import { describe, expect, it } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { AgreementReadout } from "../../src/components/AgreementReadout.js";
+
+describe("AgreementReadout", () => {
+  it("says the number is not measured when kappa is null, rather than showing a zero", () => {
+    const { container } = render(<AgreementReadout kappa={null} goldSetSize={null} />);
+    expect(screen.getByText(/not measured/i)).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/\b0(\.0+)?\b/);
+  });
+
+  it("shows the kappa and the sample size it came from when it is measured", () => {
+    render(<AgreementReadout kappa={0.62} goldSetSize={40} />);
+    expect(screen.getByText(/0\.62/)).toBeInTheDocument();
+    expect(screen.getByText(/40/)).toBeInTheDocument();
+  });
+
+  it("never shows a kappa without the sample size it was computed from", () => {
+    render(<AgreementReadout kappa={0.62} goldSetSize={null} />);
+    expect(screen.getByText(/sample size not recorded/i)).toBeInTheDocument();
+  });
+});
+```
+
+- [ ] **Step 2: Run it, watch it fail, write `AgreementReadout`, watch it pass**
+
+- [ ] **Step 3: Write the failing sparkline test**
+
+`apps/frontend/tests/components/CheckProfileSparkline.test.tsx` asserts: nine points render in
+`CHECK_IDS` order; the band-4 threshold line is drawn; a `null` profile renders an explicit
+"not scored yet" state rather than a flat line at zero, which would read as nine failures; and the
+component exposes the nine values as accessible text so the profile is not conveyed by shape alone.
+
+- [ ] **Step 4: Run it, watch it fail, write the component, watch it pass**
+
+Motion spec §11.1 is binding: the sparkline **does not draw** when the data was present at first
+paint, because data you already had is not a state change. `whileInView` is banned outright.
+
+- [ ] **Step 5: Write the failing screen test**
+
+`apps/frontend/tests/screens/VersionsScreen.test.tsx` asserts: one row per version; every row shows
+its required `why` note, and a row whose `why` is empty is a test failure rather than a blank cell;
+selecting two versions opens `VersionCompare` with the prompt diff and the per-check delta table; a
+delta where either side is unmeasured renders as "not comparable" rather than a number; and the
+revision chip colours follow the design doc's revision-paper order.
+
+- [ ] **Step 6: Run it, watch it fail, write `VersionsScreen.tsx` and the fixture methods, watch it pass**
+
+- [ ] **Step 7: Run the whole suite and commit**
+
+```bash
+npm test
+git add -A
+git commit -m "feat: versions screen with check profiles and honest unmeasured agreement"
 ```
 
 ---
