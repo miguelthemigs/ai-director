@@ -2,7 +2,9 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import type { RunEvent } from "@ai-director/contract";
 import type { EvaluatedCheck } from "../../src/agents/evaluator/run.js";
+import type { EventSink } from "../../src/orchestrate/events.js";
 import { runToCompletion } from "../../src/orchestrate/runToCompletion.js";
 import type { EvaluateFn, RepairFn, RetryVerbatimFn } from "../../src/orchestrate/runPass.js";
 import { loadRubric } from "../../src/rubric/load.js";
@@ -510,5 +512,166 @@ describe("runToCompletion: quote-exactly retry", () => {
     );
 
     expect(retryVerbatim).not.toHaveBeenCalled();
+  });
+});
+
+describe("runToCompletion: event emission", () => {
+  function collectEmit(): { emit: EventSink; events: RunEvent[] } {
+    const events: RunEvent[] = [];
+    return { emit: (event) => events.push(event), events };
+  }
+
+  it("produces identical output to Task 9 when no emit is given, so the CLI is unaffected", async () => {
+    const rubric = await loadRubric("v1");
+    const evaluate: EvaluateFn = vi
+      .fn()
+      .mockResolvedValueOnce(failDrawable(rubric))
+      .mockResolvedValueOnce(allPass(rubric));
+    const repair: RepairFn = vi.fn().mockResolvedValue({
+      replacements: [
+        { spanId: "drawable_only:0", newText: "a square jaw", rationale: "swaps a mood word for a drawable feature" },
+      ],
+      rejected: [],
+    });
+    const out = await runToCompletion(
+      { evaluate, retryVerbatim: noRetry, repair, store: await store() },
+      { rubric, description, runId: "run-no-emit" },
+    );
+    // Same shape and values Task 9's own "repairs, re-scores, and passes on
+    // the second pass" test asserts -- deps carries no `emit` here, exactly
+    // like every call in this file above this describe block.
+    expect(out.status).toBe("passed");
+    expect(out.passes).toHaveLength(2);
+    expect(out.finalDescription).toContain("a square jaw");
+    expect(out.finalDescription).not.toContain("very cinematic presence");
+  });
+
+  it("emits run.started once, first, with the run's identity", async () => {
+    const rubric = await loadRubric("v1");
+    const evaluate: EvaluateFn = vi.fn().mockResolvedValue(allPass(rubric));
+    const { emit, events } = collectEmit();
+    await runToCompletion(
+      { evaluate, retryVerbatim: noRetry, repair: vi.fn(), store: await store(), emit },
+      { rubric, description, runId: "run-events-1" },
+    );
+    expect(events[0]).toMatchObject({
+      id: "0-0",
+      name: "run.started",
+      runId: "run-events-1",
+      rubricVersion: rubric.version,
+      description,
+    });
+    expect(events.filter((e) => e.name === "run.started")).toHaveLength(1);
+  });
+
+  it("emits pass.started and pass.completed with sequential ids that reset per pass", async () => {
+    const rubric = await loadRubric("v1");
+    const evaluate: EvaluateFn = vi
+      .fn()
+      .mockResolvedValueOnce(failDrawable(rubric))
+      .mockResolvedValueOnce(allPass(rubric));
+    const repair: RepairFn = vi.fn().mockResolvedValue({
+      replacements: [{ spanId: "drawable_only:0", newText: "a square jaw", rationale: "r" }],
+      rejected: [],
+    });
+    const { emit, events } = collectEmit();
+    await runToCompletion(
+      { evaluate, retryVerbatim: noRetry, repair, store: await store(), emit },
+      { rubric, description, runId: "run-events-2" },
+    );
+
+    const passStarted = events.filter((e) => e.name === "pass.started");
+    expect(passStarted.map((e) => e.id)).toEqual(["1-0", "2-0"]);
+
+    const passCompleted = events.filter((e) => e.name === "pass.completed");
+    expect(passCompleted).toHaveLength(2);
+    expect(passCompleted[0]).toMatchObject({ pass: 1, failing: ["drawable_only"] });
+    expect(passCompleted[1]).toMatchObject({ pass: 2, failing: [] });
+  });
+
+  it("emits evaluator.group.completed in real settle order, not the order groups were issued", async () => {
+    const rubric = await loadRubric("v1");
+    const evaluate: EvaluateFn = vi.fn(async ({ rubric: r, onGroupEvent }) => {
+      onGroupEvent?.({ type: "started", group: "look" });
+      onGroupEvent?.({ type: "started", group: "safety" });
+      onGroupEvent?.({ type: "started", group: "drawable" });
+      // Settles out of issue order on purpose: safety first, then drawable,
+      // then look -- a recorder keyed to array/issue order would get this
+      // wrong.
+      onGroupEvent?.({ type: "completed", group: "safety", results: [] });
+      onGroupEvent?.({ type: "completed", group: "drawable", results: [] });
+      onGroupEvent?.({ type: "completed", group: "look", results: [] });
+      return allPass(r);
+    });
+    const { emit, events } = collectEmit();
+    await runToCompletion(
+      { evaluate, retryVerbatim: noRetry, repair: vi.fn(), store: await store(), emit },
+      { rubric, description, runId: "run-events-3" },
+    );
+
+    const groupEvents = events.filter(
+      (e) => e.name === "evaluator.group.started" || e.name === "evaluator.group.completed",
+    ) as Array<{ name: string; group: string; id: string }>;
+    expect(groupEvents.map((e) => `${e.name}:${e.group}`)).toEqual([
+      "evaluator.group.started:look",
+      "evaluator.group.started:safety",
+      "evaluator.group.started:drawable",
+      "evaluator.group.completed:safety",
+      "evaluator.group.completed:drawable",
+      "evaluator.group.completed:look",
+    ]);
+    // Ids are sequential within the pass, continuing on from pass.started.
+    expect(groupEvents.map((e) => e.id)).toEqual(["1-1", "1-2", "1-3", "1-4", "1-5", "1-6"]);
+  });
+
+  it("emits repairer.started/completed only on a pass that actually repairs something", async () => {
+    const rubric = await loadRubric("v1");
+    const evaluate: EvaluateFn = vi
+      .fn()
+      .mockResolvedValueOnce(failDrawable(rubric))
+      .mockResolvedValueOnce(allPass(rubric));
+    const repair: RepairFn = vi.fn().mockResolvedValue({
+      replacements: [
+        { spanId: "drawable_only:0", newText: "a square jaw", rationale: "swaps a mood word for a drawable feature" },
+      ],
+      rejected: [],
+    });
+    const { emit, events } = collectEmit();
+    await runToCompletion(
+      { evaluate, retryVerbatim: noRetry, repair, store: await store(), emit },
+      { rubric, description, runId: "run-events-4" },
+    );
+
+    const repairerEvents = events.filter(
+      (e): e is Extract<RunEvent, { name: "repairer.started" | "repairer.completed" }> =>
+        e.name === "repairer.started" || e.name === "repairer.completed",
+    );
+    // Pass 1 repairs (one started + one completed); pass 2 is the final
+    // pass and never calls the repairer, so it contributes none.
+    expect(repairerEvents).toHaveLength(2);
+    expect(repairerEvents.every((e) => e.pass === 1)).toBe(true);
+    const completed = repairerEvents.find((e) => e.name === "repairer.completed");
+    expect(completed).toMatchObject({
+      replacements: [
+        expect.objectContaining({ spanId: "drawable_only:0", newText: "a square jaw" }),
+      ],
+    });
+  });
+
+  it("emits run.failed with the error message when a pass throws, and never emits run.completed itself", async () => {
+    const rubric = await loadRubric("v1");
+    const evaluate: EvaluateFn = vi.fn().mockResolvedValue(failDrawable(rubric));
+    const repair: RepairFn = vi.fn().mockRejectedValue(new Error("repairer exploded"));
+    const { emit, events } = collectEmit();
+    await expect(
+      runToCompletion(
+        { evaluate, retryVerbatim: noRetry, repair, store: await store(), emit },
+        { rubric, description, runId: "run-events-5" },
+      ),
+    ).rejects.toThrow("repairer exploded");
+
+    expect(events.some((e) => e.name === "run.completed")).toBe(false);
+    const failed = events.at(-1);
+    expect(failed).toMatchObject({ name: "run.failed", error: "repairer exploded" });
   });
 });

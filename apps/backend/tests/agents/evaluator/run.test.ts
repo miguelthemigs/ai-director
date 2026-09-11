@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { evaluateAllGroups, evaluateGroup } from "../../../src/agents/evaluator/run.js";
-import { loadRubric } from "../../../src/rubric/load.js";
+import { loadRubric, type CheckGroup } from "../../../src/rubric/load.js";
 
 const ok = (results: unknown) => vi.fn().mockResolvedValue({ parsed_output: { results } });
 
@@ -116,5 +116,48 @@ describe("evaluateAllGroups", () => {
     const wardrobe = results.find((r) => r.checkId === "wardrobe");
     expect(wardrobe).toMatchObject({ status: "scored", band: 3, missingEvidence: true });
     expect(results.every((r) => r.status !== "not_evaluated")).toBe(true);
+  });
+
+  it("issues all three groups' started events up front and fires completed on real settle order, not array order", async () => {
+    const rubric = await loadRubric("v1");
+    const groupOf = (system: string): CheckGroup =>
+      system.includes("Check no_real_person ")
+        ? "safety"
+        : system.includes("Check drawable_only ")
+          ? "drawable"
+          : "look";
+    // "look" is issued first (array order) but delayed to settle last, so a
+    // recorder that reflects array order rather than real completion order
+    // would get this wrong.
+    const delayFor: Record<CheckGroup, number> = { look: 30, safety: 10, drawable: 20 };
+    const transport = vi.fn(async ({ system }: { system: string }) => {
+      const group = groupOf(system);
+      await new Promise((resolve) => setTimeout(resolve, delayFor[group]));
+      return { parsed_output: { results: passingResultsFor(rubric, system) } };
+    });
+
+    const events: string[] = [];
+    await evaluateAllGroups(
+      { transport },
+      {
+        rubric,
+        description: "x",
+        onGroupEvent: (event) => events.push(`${event.type}:${event.group}`),
+      },
+    );
+
+    expect(events.slice(0, 3)).toEqual(
+      expect.arrayContaining(["started:look", "started:safety", "started:drawable"]),
+    );
+    expect(events.slice(3)).toEqual(["completed:safety", "completed:drawable", "completed:look"]);
+  });
+
+  it("never calls onGroupEvent when none is given, and behaves exactly as before", async () => {
+    const rubric = await loadRubric("v1");
+    const transport = vi.fn(async ({ system }: { system: string }) => ({
+      parsed_output: { results: passingResultsFor(rubric, system) },
+    }));
+    const results = await evaluateAllGroups({ transport }, { rubric, description: "x" });
+    expect(results).toHaveLength(9);
   });
 });

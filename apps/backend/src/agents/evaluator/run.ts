@@ -63,6 +63,20 @@ export type EvaluatedCheck =
       reason: string;
     };
 
+/**
+ * Progress signal fired around each group's own call, independent of the
+ * other two -- `evaluateAllGroups` issues all three concurrently, so
+ * "started" fires for all of them up front (in the fixed order below) and
+ * "completed" fires as each one individually settles, which is not
+ * necessarily the same order. A caller wiring this to the run event bus
+ * (Task 18) relies on that: emitting in array order instead of settle order
+ * would misrepresent what the pipeline actually did.
+ */
+export type GroupEvent =
+  | { type: "started"; group: CheckGroup }
+  | { type: "completed"; group: CheckGroup; results: EvaluatedCheck[] };
+export type GroupEventSink = (event: GroupEvent) => void;
+
 function toEvaluatedChecks(
   rubric: Rubric,
   group: CheckGroup,
@@ -86,23 +100,41 @@ function toEvaluatedChecks(
   }));
 }
 
-// Promise.allSettled, not Promise.all: one group's transport rejecting or
-// parsing to null must not lose the other two groups' scores. Each group's
-// checks land as "scored" or "not_evaluated" via toEvaluatedChecks -- never
-// omitted, and never defaulted to a passing band.
+// One group's transport rejecting or parsing to null must not lose the
+// other two groups' scores. Each group's checks land as "scored" or
+// "not_evaluated" via toEvaluatedChecks -- never omitted, and never
+// defaulted to a passing band. `settleOneGroup` never itself rejects (it
+// folds a rejection into "not_evaluated" checks via toEvaluatedChecks), so
+// Promise.all -- not allSettled -- is enough here, and it still preserves
+// [look, safety, drawable] order in its result regardless of which group's
+// underlying call actually finishes first.
 export async function evaluateAllGroups(
   deps: { transport: ParseTransport },
-  args: { rubric: Rubric; description: string },
+  args: { rubric: Rubric; description: string; onGroupEvent?: GroupEventSink },
 ): Promise<EvaluatedCheck[]> {
-  const [lookResult, safetyResult, drawableResult] = await Promise.allSettled([
-    evaluateGroup(deps, { ...args, group: "look" }),
-    evaluateGroup(deps, { ...args, group: "safety" }),
-    evaluateGroup(deps, { ...args, group: "drawable" }),
+  const { onGroupEvent } = args;
+
+  function settleOneGroup(group: CheckGroup): Promise<EvaluatedCheck[]> {
+    onGroupEvent?.({ type: "started", group });
+    return evaluateGroup(deps, { ...args, group }).then(
+      (value) => {
+        const checks = toEvaluatedChecks(args.rubric, group, { status: "fulfilled", value });
+        onGroupEvent?.({ type: "completed", group, results: checks });
+        return checks;
+      },
+      (reason) => {
+        const checks = toEvaluatedChecks(args.rubric, group, { status: "rejected", reason });
+        onGroupEvent?.({ type: "completed", group, results: checks });
+        return checks;
+      },
+    );
+  }
+
+  const [lookChecks, safetyChecks, drawableChecks] = await Promise.all([
+    settleOneGroup("look"),
+    settleOneGroup("safety"),
+    settleOneGroup("drawable"),
   ]);
 
-  return [
-    ...toEvaluatedChecks(args.rubric, "look", lookResult),
-    ...toEvaluatedChecks(args.rubric, "safety", safetyResult),
-    ...toEvaluatedChecks(args.rubric, "drawable", drawableResult),
-  ];
+  return [...lookChecks, ...safetyChecks, ...drawableChecks];
 }

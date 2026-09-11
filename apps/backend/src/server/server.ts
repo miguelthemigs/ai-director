@@ -1,3 +1,4 @@
+import { eventId } from "@ai-director/contract";
 import { evaluateAllGroups } from "../agents/evaluator/run.js";
 import { buildVerbatimRetryPrompt } from "../agents/evaluator/prompt.js";
 import { EvaluatorGroupOutputSchema } from "../agents/evaluator/schema.js";
@@ -5,6 +6,7 @@ import { repairSpans } from "../agents/repairer/run.js";
 import { createAnthropicTransport, type ParseTransport } from "../api/client.js";
 import { checksForGroup, loadRubric } from "../rubric/load.js";
 import { toPassView, toRunView } from "../present/toRunView.js";
+import { RunEventBus } from "../orchestrate/events.js";
 import type { RetryVerbatimFn } from "../orchestrate/runPass.js";
 import { runToCompletion } from "../orchestrate/runToCompletion.js";
 import { FileRunStore } from "../store/FileRunStore.js";
@@ -72,6 +74,10 @@ function buildRetryVerbatim(transport: ParseTransport): RetryVerbatimFn {
 async function main(): Promise<void> {
   const rubric = await loadRubric("v1");
   const store = new FileRunStore(RUNS_DIR);
+  // One bus for the whole process: `startRun` below publishes to it, and
+  // `GET /runs/:id/events` (Task 18) subscribes to the very same instance --
+  // that sharing is what lets a client watch a run it did not just start.
+  const bus = new RunEventBus();
 
   // KNOWN GAP, carried into this task's report rather than papered over:
   // no token counts or latency are available anywhere in this pipeline yet
@@ -87,6 +93,7 @@ async function main(): Promise<void> {
         evaluate: (args) => evaluateAllGroups({ transport }, args),
         retryVerbatim: buildRetryVerbatim(transport),
         repair: (args) => repairSpans({ transport }, args),
+        emit: (event) => bus.publish(runId, event),
       },
       { rubric, description, runId },
     );
@@ -94,10 +101,27 @@ async function main(): Promise<void> {
     const manifest = await store.getRun(runId);
     const passes = out.passes.map((pass) => toPassView(pass, pass.replacements));
     const unmeasuredCost = {};
-    return toRunView(manifest, passes, description, out.finalDescription, unmeasuredCost);
+    const view = toRunView(manifest, passes, description, out.finalDescription, unmeasuredCost);
+
+    // `runToCompletion` emits every other event itself (including
+    // `run.failed`, from its own catch block) but never this one -- it has
+    // no access to the presenter, so building the full `RunView` and closing
+    // the stream with it is this caller's job. `out.passes.length + 1`
+    // continues on from the last pass's own ids without colliding with them,
+    // since a successful `runToCompletion` only ever returns once every
+    // started pass has also been pushed to `out.passes`.
+    bus.publish(runId, {
+      id: eventId(out.passes.length + 1, 0),
+      name: "run.completed",
+      at: new Date().toISOString(),
+      status: out.status,
+      run: view,
+    });
+
+    return view;
   };
 
-  const app = buildApp({ store, rubric, startRun });
+  const app = buildApp({ store, rubric, startRun, bus });
 
   const port = Number(process.env.PORT ?? 8787);
   await app.listen({ port });

@@ -1,4 +1,4 @@
-import type { EvaluatedCheck } from "../agents/evaluator/run.js";
+import type { EvaluatedCheck, GroupEventSink } from "../agents/evaluator/run.js";
 import type { RejectedReplacement, RepairedReplacement } from "../agents/repairer/run.js";
 import { hasNegativeConstraint } from "../enforce/invariants.js";
 import { isPass } from "../enforce/score.js";
@@ -40,6 +40,12 @@ export type PassResult = {
 export type EvaluateFn = (args: {
   rubric: Rubric;
   description: string;
+  // Optional: a caller wiring up the run event bus (Task 18) passes this
+  // through to `evaluateAllGroups` so it can emit `evaluator.group.*`
+  // progress events as the three concurrent group calls are issued and
+  // settle. Absent, `evaluate` behaves exactly as it always did -- this is
+  // how the CLI (no bus) is unaffected.
+  onGroupEvent?: GroupEventSink;
 }) => Promise<EvaluatedCheck[]>;
 
 /**
@@ -133,11 +139,17 @@ function mergeGroupResults(
 
 export async function runPass(
   deps: { evaluate: EvaluateFn; retryVerbatim: RetryVerbatimFn; repair: RepairFn },
-  args: { rubric: Rubric; description: string; pass: number; isFinalPass: boolean },
+  args: {
+    rubric: Rubric;
+    description: string;
+    pass: number;
+    isFinalPass: boolean;
+    onGroupEvent?: GroupEventSink;
+  },
 ): Promise<PassResult> {
-  const { rubric, description, pass, isFinalPass } = args;
+  const { rubric, description, pass, isFinalPass, onGroupEvent } = args;
 
-  let results = await deps.evaluate({ rubric, description });
+  let results = await deps.evaluate({ rubric, description, onGroupEvent });
   let verified = verifySpans(description, quotesFromFailing(results));
 
   // Exactly one retry, scoped to whichever groups had a quote fail

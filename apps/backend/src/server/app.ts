@@ -1,5 +1,6 @@
 import cors from "@fastify/cors";
 import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
+import { RunEventBus } from "../orchestrate/events.js";
 import type { Rubric } from "../rubric/load.js";
 import type { RunStore } from "../store/RunStore.js";
 import { registerRunRoutes, type StartRun } from "./routes/runs.js";
@@ -8,6 +9,12 @@ export type AppDeps = {
   store: RunStore;
   rubric: Rubric;
   startRun: StartRun;
+  // Optional so every existing caller (including this file's own tests)
+  // that builds an app without a bus keeps working unchanged -- a fresh one
+  // is created here in that case. A real server passes its own instance so
+  // the same bus that `startRun` publishes to is the one `GET
+  // /runs/:id/events` subscribes to.
+  bus?: RunEventBus;
 };
 
 const DEV_ORIGIN = "http://localhost:5173";
@@ -28,7 +35,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     reply.code(statusCode).send({ error: message });
   });
 
-  registerRunRoutes(app, deps);
+  registerRunRoutes(app, { ...deps, bus: deps.bus ?? new RunEventBus() });
 
   return app;
 }
