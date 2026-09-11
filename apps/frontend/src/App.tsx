@@ -6,6 +6,7 @@ import { useRunStream } from "./hooks/useRunStream.js";
 import { T } from "./motion/tokens.js";
 import { AppShell } from "./components/AppShell.js";
 import { TopBar } from "./components/TopBar.js";
+import { ArchitectureScreen } from "./screens/ArchitectureScreen.js";
 import { RunScreen } from "./screens/RunScreen.js";
 
 export type Screen = "run" | "architecture" | "versions";
@@ -27,12 +28,8 @@ function readInitialScreen(): Screen {
   return screenFromPath(window.location.pathname);
 }
 
-// The other two screens are built in Tasks 14-16; this task builds only the chrome they stand
-// inside. Each stub carries the level-1 heading App.test.tsx asserts on and nothing else.
-function ArchitectureScreenStub(): React.JSX.Element {
-  return <h1 className="screen-title">Architecture</h1>;
-}
-
+// Versions is built in Task 16; this task builds only the chrome it stands inside. The stub
+// carries the level-1 heading App.test.tsx asserts on and nothing else.
 function VersionsScreenStub(): React.JSX.Element {
   return <h1 className="screen-title">Versions</h1>;
 }
@@ -90,7 +87,9 @@ export function App({ client }: { client: RunClient }): React.JSX.Element {
               onRunStarted={setRunId}
             />
           ) : null}
-          {screen === "architecture" ? <ArchitectureScreenStub /> : null}
+          {screen === "architecture" ? (
+            <ArchitectureScreen run={run} status={status} events={events} error={error} />
+          ) : null}
           {screen === "versions" ? <VersionsScreenStub /> : null}
         </main>
       </AppShell>

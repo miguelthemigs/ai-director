@@ -4,6 +4,14 @@ import userEvent from "@testing-library/user-event";
 import { App } from "../src/App.js";
 import { FixtureRunClient } from "../src/data/FixtureRunClient.js";
 
+// `App` reads its initial screen from `window.location.pathname`, and jsdom does not reset
+// `window.location`/`window.history` between tests in the same file — an earlier test's
+// navigation (e.g. to `/versions`) otherwise bleeds into the next test's initial render. Reset
+// before every test in this file, not just the ones that happened to need it first.
+beforeEach(() => {
+  window.history.pushState({}, "", "/");
+});
+
 describe("App shell", () => {
   it("opens on the Run screen", () => {
     render(<App client={new FixtureRunClient()} />);
@@ -25,6 +33,17 @@ describe("App shell", () => {
     await user.click(screen.getByRole("link", { name: /versions/i }));
     expect(screen.getByRole("link", { name: /versions/i })).toHaveAttribute("aria-current", "page");
   });
+
+  // Task 15 built `ArchitectureScreen` as its own file; wiring it into `App` (replacing the Task 12
+  // stub) is a separate change a future refactor could silently revert. Assert on something only
+  // the real screen renders — a pipeline node — not just the heading text the stub also carried.
+  it("renders the real Architecture screen, not the Task 12 stub", async () => {
+    const user = userEvent.setup();
+    render(<App client={new FixtureRunClient()} />);
+    await user.click(screen.getByRole("link", { name: /architecture/i }));
+    expect(screen.getByTestId("node-evaluator")).toBeInTheDocument();
+    expect(screen.getByTestId("node-interrogator")).toHaveTextContent(/planned/i);
+  });
 });
 
 // `useRunStream` was lifted from `RunScreen` into `App` (Task 14) specifically so `ScreenTabs`'
@@ -44,9 +63,7 @@ describe("App shell — RUN tab failing badge (design doc §6.2)", () => {
   async function runToCompletion(
     scenario: "improvedStillFailing" | "noImprovement" | "passed",
   ): Promise<void> {
-    // `App` reads its initial screen from `window.location.pathname`, which an earlier test's
-    // navigation can leave on `/versions` — reset it so every scenario here starts on Run.
-    window.history.pushState({}, "", "/");
+    // The file-level `beforeEach` above already starts every test on `/`.
     const client = new FixtureRunClient({ speedMs: 1, scenario });
     render(<App client={client} />);
     fireEvent.change(screen.getByPlaceholderText("Paste the character description."), {
