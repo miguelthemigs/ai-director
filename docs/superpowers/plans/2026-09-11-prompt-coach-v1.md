@@ -1215,6 +1215,29 @@ git commit -m "feat: evaluator output schema and per-group system prompt"
 
 **Interfaces:**
 - Consumes: Task 2 rubric, Task 5 schema and prompt.
+**Failure granularity, added after the Task 5 review.** The quotes-required-below-band-4 rule is NOT
+enforced by the schema. `zodOutputFormat()` cannot express a zod `.refine()` in the JSON Schema handed
+to the model, so a refinement fires only at parse time and turns one malformed check into a null
+`parsed_output` — losing every check in that group call, and with `Promise.all`, all nine.
+
+Enforce it here instead, per check, mirroring the pattern the spec already uses for span verification
+("marked `unverified`, excluded from repair, and logged as prompt-tuning signal"):
+
+1. After a group parse succeeds, a check with `band < 4` and an empty `quotes` array is marked as
+   having no verifiable evidence — keep its band and reason, set a `missingEvidence` boolean, and
+   exclude it from repair downstream. It is not a parse failure.
+2. `evaluateAllGroups` uses `Promise.allSettled`, never `Promise.all`. One group failing must not
+   lose the other two.
+3. A group that rejects or returns a null parse has its checks returned in an explicit
+   "not evaluated" state, distinguishable from both pass and fail. Never omit them, never default
+   them to a passing band, never return a short array. A check with no result must say so — the
+   product's claim is that every score traces to evidence, and a missing result silently reading as a
+   good one would break that claim at the one moment it matters.
+
+Test all three: a transport that rejects, a parse that returns null, and a single check returning
+band 3 with no quotes. In each case assert the other groups' results survive intact and that nothing
+reports as passed.
+
 - Produces: `type ParseTransport = (args: { system: string; user: string; schema: unknown }) => Promise<{ parsed_output: unknown }>`, `createAnthropicTransport(model?: string): ParseTransport`, `evaluateGroup(deps: { transport: ParseTransport }, args: { rubric: Rubric; group: CheckGroup; description: string }): Promise<EvaluatorGroupOutput>`, `evaluateAllGroups(deps, args: { rubric: Rubric; description: string }): Promise<EvaluatorCheckResult[]>`.
 
 - [ ] **Step 1: Write the failing test**
