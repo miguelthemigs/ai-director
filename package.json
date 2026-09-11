@@ -4,7 +4,10 @@
   "type": "module",
   "workspaces": ["packages/*", "apps/*"],
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run && npm run test:web",
+    "dev:web": "vite --config apps/frontend/vite.config.ts",
+    "test:web": "vitest run --config apps/frontend/vitest.config.ts",
+    "build:web": "vite build --config apps/frontend/vite.config.ts",
     "typecheck": "tsc -p tsconfig.base.json --noEmit",
     "score": "tsx apps/backend/src/cli/score.ts",
     "agree": "tsx apps/backend/src/cli/agree.ts"

@@ -1,0 +1,196 @@
+:root {
+  color-scheme: dark;
+
+  /* ── Surfaces ──────────────────────────────────────────────── */
+  --sf-ground:        #0e1012;  /* app ground */
+  --sf-panel:         #17191c;  /* panels, check column, tables */
+  --sf-panel-raised:  #1f2125;  /* the ONE elevation step: inspector, compare drawer, popover */
+  --sf-field:         #080a0c;  /* the script field — recessed, darker than ground */
+
+  /* ── Seams (panels divide with lines, never with shadow) ───── */
+  --ln-faint:         #272a2e;  /* row rules inside a panel */
+  --ln:               #363a3e;  /* panel seams */
+  --ln-strong:        #575b61;  /* graph edges, table head rule, active borders */
+
+  /* ── Ink ───────────────────────────────────────────────────── */
+  --ink:              #ebedef;
+  --ink-2:            #b3b6ba;  /* reasons, secondary values */
+  --ink-3:            #878b90;  /* labels, units, cue ids */
+
+  /* ── Mark (selection + focus; grease pencil) ───────────────── */
+  --mark:             #fbf3dd;
+  --mark-soft:        #332d1c;  /* selected-span ground */
+
+  /* ── Band ramp — ink values, used for numerals, rules, meters ─
+     Polarity: fail = hot + bright + wide, pass = cool + quiet.
+     The hue break between band 3 and band 4 IS the pass threshold. */
+  --band-1:           #fe7365;  /*  20 */
+  --band-2:           #ffa459;  /*  40 */
+  --band-3:           #f2d350;  /*  60 */
+  --band-4:           #169597;  /*  80  ← pass threshold */
+  --band-5:           #45adcd;  /* 100 */
+
+  /* ── Band tints — meter troughs and chip grounds. Text on these is --ink. */
+  --band-1-tint:      #4c1410;
+  --band-2-tint:      #442100;
+  --band-3-tint:      #392c01;
+  --band-4-tint:      #013132;
+  --band-5-tint:      #02323f;
+
+  /* ── Span highlight grounds — sit behind specimen text ─────── */
+  --span-1:           #450907;
+  --span-2:           #3a1b00;
+  --span-3:           #2e2401;
+  --span-unverified:  #1b1d1f;  /* quote failed verification: neutral, never a band colour */
+
+  /* ── Reserved alarm. Terminal failure and pipeline defect ONLY.
+     --sig-alarm-fill is the only solid colour fill behind text in the product. */
+  --sig-alarm-fill:   #b00c15;
+  --sig-alarm-ink:    #fef9f8;
+  --sig-alarm-edge:   #f14e46;
+  --sig-alarm-tint:   #490d0b;
+
+  /* ── Diff. Aliased to the band axis on purpose: warm = removed/contested,
+     cool = added/clear. There is no red/green pair anywhere in this product. */
+  --diff-del:         var(--band-1);
+  --diff-del-ground:  var(--span-1);
+  --diff-add:         var(--band-4);
+  --diff-add-ground:  var(--band-4-tint);
+
+  /* ── Focus ─────────────────────────────────────────────────── */
+  --focus:            #fbf3dd;
+  --focus-ring: 0 0 0 2px var(--sf-ground), 0 0 0 4px var(--focus);
+
+  /* ── Revision paper. Film's own revision order. Versions screen only.
+     Always rendered with its version number beside it; never a state signal. */
+  --rev-1-white:      #ffffff;
+  --rev-2-blue:       #bcd4e6;
+  --rev-3-pink:       #f7c8d8;
+  --rev-4-yellow:     #f7efa6;
+  --rev-5-green:      #c5e3c1;
+  --rev-6-goldenrod:  #efc75e;
+  --rev-7-buff:       #eee0c6;
+  --rev-8-salmon:     #f6bca3;
+  --rev-9-cherry:     #e78fa0;
+  --rev-ink:          #171a1e;  /* ink printed on a revision chip, both themes */
+
+  /* ── Type ──────────────────────────────────────────────────── */
+  --ff-ui: "Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --ff-specimen: "Courier Prime", "Courier New", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --fs-micro:     0.6875rem; /* 11px — cue ids, lane tabs, axis ticks, units */
+  --fs-label:     0.75rem;   /* 12px — caps labels, column heads, node labels */
+  --fs-ui:        0.8125rem; /* 13px — reasons, table cells, payload keys */
+  --fs-body:      0.875rem;  /* 14px — default UI text, notes */
+  --fs-specimen:  0.9375rem; /* 15px — the description, quotes, diffs, prompts */
+  --fs-readout:   1.125rem;  /* 18px — the band percentage numeral */
+  --fs-title:     1.25rem;   /* 20px — screen title */
+  --fs-verdict:   1.75rem;   /* 28px — terminal verdict word */
+  --fs-count:     2.5rem;    /* 40px — the single display numeral; see §6 for what it may hold */
+
+  --lh-tight:  1.15;
+  --lh-ui:     1.35;
+  --lh-spec:   1.7333;  /* 15px × 1.7333 = 26px = --pitch */
+
+  --tr-caps:   0.09em;  /* uppercase labels */
+  --tr-title:  0.01em;
+  --tr-verdict: -0.015em;
+
+  --fw-reg: 400;
+  --fw-med: 500;
+  --fw-semi: 600;
+  --fw-bold: 700;
+  --wd-narrow: 88;      /* Archivo wdth axis for dense labels */
+  --wd-normal: 100;
+
+  /* ── Space. 4px base; dense instrument. ────────────────────── */
+  --sp-1:  2px;
+  --sp-2:  4px;
+  --sp-3:  8px;
+  --sp-4: 12px;
+  --sp-5: 16px;
+  --sp-6: 24px;
+  --sp-7: 32px;
+  --sp-8: 48px;
+  --sp-9: 64px;
+
+  /* ── Pitch. The script's line rhythm. Everything in the field column
+     and every coverage rule is an integer multiple of this. ──── */
+  --pitch: 26px;
+
+  /* ── Fixed structure ───────────────────────────────────────── */
+  --h-topbar:    48px;
+  --w-rail:      88px;
+  --w-checks:   400px;
+  --w-inspect:  360px;
+  --w-linenum:   28px;
+  --w-lane:       6px;   /* one coverage lane; max 9 lanes = 54px */
+  --measure:     66ch;   /* specimen measure ≈ 71 columns of Courier Prime */
+
+  /* ── Radii. Paperwork is square. ───────────────────────────── */
+  --r-0: 0;
+  --r-1: 2px;   /* chips, band swatches, meter caps */
+  --r-2: 3px;   /* graph node corners, popovers */
+  --r-3: 6px;   /* nothing larger exists */
+
+  /* ── Borders ───────────────────────────────────────────────── */
+  --bd-hair: 1px;
+  --bd-mark: 2px;   /* selected rule, focus, alarm outline */
+
+  /* ── Shadow. Two, both with offset and blur. Neither divides a panel. */
+  --sh-raise: 0 2px 6px rgb(0 0 0 / 0.42), 0 8px 24px rgb(0 0 0 / 0.30);
+  --sh-pop:   0 4px 10px rgb(0 0 0 / 0.48), 0 16px 40px rgb(0 0 0 / 0.36);
+
+  /* ── Breakpoints (documentation; use the literals in media queries) */
+  --bp-lap:  1024px;
+  --bp-desk: 1280px;
+  --bp-wide: 1440px;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --sf-ground:        #f3f2ef;
+  --sf-panel:         #fbfaf7;
+  --sf-panel-raised:  #e9e8e3;
+  --sf-field:         #fefdfc;
+
+  --ln-faint:         #d9d7d2;
+  --ln:               #c0beb7;
+  --ln-strong:        #8f8c84;
+
+  --ink:              #171a1e;
+  --ink-2:            #494d54;
+  --ink-3:            #686c73;
+
+  --mark:             #2a2a49;   /* pencil blue-black */
+  --mark-soft:        #d9dbfc;
+
+  --band-1:           #be010c;
+  --band-2:           #a55401;
+  --band-3:           #846604;
+  --band-4:           #05585d;
+  --band-5:           #023e5b;
+
+  --band-1-tint:      #ffd4ce;
+  --band-2-tint:      #fedbc2;
+  --band-3-tint:      #f9e7b3;
+  --band-4-tint:      #c8eff1;
+  --band-5-tint:      #cdeefe;
+
+  --span-1:           #fecbc4;
+  --span-2:           #fed5b6;
+  --span-3:           #f8e4a7;
+  --span-unverified:  #e9e8e5;
+
+  --sig-alarm-fill:   #b20111;
+  --sig-alarm-ink:    #fefbfa;
+  --sig-alarm-edge:   #b91319;
+  --sig-alarm-tint:   #ffcfc9;
+
+  --focus:            #2a2a49;
+  --focus-ring: 0 0 0 2px var(--sf-ground), 0 0 0 4px var(--focus);
+
+  --sh-raise: 0 1px 3px rgb(23 26 30 / 0.14), 0 6px 18px rgb(23 26 30 / 0.10);
+  --sh-pop:   0 2px 6px rgb(23 26 30 / 0.18), 0 12px 32px rgb(23 26 30 / 0.14);
+}
