@@ -140,15 +140,32 @@ export async function main(argv: string[]): Promise<number> {
   const store = new FileRunStore(RUNS_DIR);
   const runId = `run-${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID().slice(0, 8)}`;
 
-  const out = await runToCompletion(
-    {
-      store,
-      evaluate: (args) => evaluateAllGroups({ transport }, args),
-      retryVerbatim: buildRetryVerbatim(transport),
-      repair: (args) => repairSpans({ transport }, args),
-    },
-    { rubric, description, runId },
-  );
+  // `runToCompletion` rethrows after marking the run "failed" in the store
+  // (Task 9: `finishRun(runId, "failed", passes.length)` happens before the
+  // rethrow, precisely so the run is never stranded at "running"). A caught
+  // error here therefore always has a correctly-finished manifest on disk --
+  // an API rate limit or a malformed retry response mid-run must print that
+  // manifest's path and the error's message, never an unhandled rejection's
+  // stack trace, and must exit 2 ("ran but did not pass"), not 1 ("usage or
+  // config error before any run was attempted") -- a crash mid-run is not a
+  // usage error, and conflating the two would make the exit code lie.
+  let out: Awaited<ReturnType<typeof runToCompletion>>;
+  try {
+    out = await runToCompletion(
+      {
+        store,
+        evaluate: (args) => evaluateAllGroups({ transport }, args),
+        retryVerbatim: buildRetryVerbatim(transport),
+        repair: (args) => repairSpans({ transport }, args),
+      },
+      { rubric, description, runId },
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`run failed: ${message}`);
+    console.log(`run: ${RUNS_DIR}/${runId}`);
+    return 2;
+  }
 
   for (const pass of out.passes) {
     console.log(formatPassResult(pass, rubric));
@@ -166,5 +183,14 @@ export async function main(argv: string[]): Promise<number> {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main(process.argv).then((code) => process.exit(code));
+  main(process.argv)
+    .then((code) => process.exit(code))
+    .catch((err) => {
+      // Last resort: nothing above should let a rejection reach here, but if
+      // something outside `main`'s own try/catch throws (e.g. before `file`
+      // is known), print a message, not a stack trace, and exit 1.
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`score: unexpected error: ${message}`);
+      process.exit(1);
+    });
 }

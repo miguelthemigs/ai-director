@@ -1,7 +1,24 @@
-import { describe, expect, it } from "vitest";
-import { formatPassResult, main } from "../../src/cli/score.js";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { describe, expect, it, vi } from "vitest";
 import type { PassResult } from "../../src/orchestrate/runPass.js";
 import { loadRubric } from "../../src/rubric/load.js";
+
+// The orchestrator is mocked at the module level, not injected through
+// `main`'s signature -- `main(argv: string[]): Promise<number>` is the
+// interface this task's spec fixes, so a throwing dependency has to be
+// simulated without adding a test-only parameter to it. `runToCompletion`
+// itself is never invoked by any other test in this file (the `main` tests
+// below all return before constructing it), so mocking it here does not
+// affect them. `vi.hoisted` is required because `vi.mock`'s factory runs
+// before any local `const` would otherwise be initialized.
+const { mockRunToCompletion } = vi.hoisted(() => ({ mockRunToCompletion: vi.fn() }));
+vi.mock("../../src/orchestrate/runToCompletion.js", () => ({
+  runToCompletion: (...args: unknown[]) => mockRunToCompletion(...args),
+}));
+
+const { formatPassResult, main } = await import("../../src/cli/score.js");
 
 // A base PassResult with every field the type requires, so each test only
 // overrides what it cares about instead of re-typing the whole shape.
@@ -171,6 +188,41 @@ describe("main", () => {
       expect(code).toBe(1);
       expect(errors.join("\n")).toMatch(/usage/i);
     } finally {
+      console.error = originalError;
+      if (previous === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = previous;
+    }
+  });
+
+  it("resolves to 2, prints the error message (not a stack trace), and still prints the run path, when the orchestrator throws", async () => {
+    const previous = process.env.ANTHROPIC_API_KEY;
+    process.env.ANTHROPIC_API_KEY = "test-key";
+
+    const dir = await mkdtemp(path.join(tmpdir(), "score-cli-"));
+    const file = path.join(dir, "description.txt");
+    await writeFile(file, "A lean man with a calm expression.", "utf8");
+
+    mockRunToCompletion.mockRejectedValueOnce(new Error("simulated failure: rate limited"));
+
+    const logs: string[] = [];
+    const errors: string[] = [];
+    const originalLog = console.log;
+    const originalError = console.error;
+    console.log = (msg?: unknown) => logs.push(String(msg));
+    console.error = (msg?: unknown) => errors.push(String(msg));
+
+    try {
+      const code = await main(["node", "score.ts", file]);
+      const combined = [...logs, ...errors].join("\n");
+
+      expect(code).toBe(2);
+      expect(combined).toContain("simulated failure: rate limited");
+      // No stack trace: an Error's stack carries indented "at ..." frames,
+      // which nothing we print deliberately includes.
+      expect(combined).not.toContain("\n    at ");
+      expect(combined).toMatch(/run: data\/runs\//);
+    } finally {
+      console.log = originalLog;
       console.error = originalError;
       if (previous === undefined) delete process.env.ANTHROPIC_API_KEY;
       else process.env.ANTHROPIC_API_KEY = previous;
