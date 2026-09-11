@@ -83,11 +83,32 @@ export type TerminalStatus = (typeof TERMINAL_STATUSES)[number];
 
 export type RunStatus = "running" | TerminalStatus | "failed";
 
+/**
+ * Every field is optional, and that is load-bearing. An absent field means "not measured" and the
+ * UI renders it as such; a present `0` means a real measurement of zero. A required numeric field
+ * cannot express that difference, so an unmeasured run would arrive as a confident `$0.00` -- the
+ * exact fabrication the Architecture screen's "not measured" rule (`PipelineNode`'s own optional
+ * cost fields) exists to prevent.
+ */
 export type StepCost = {
-  inputTokens: number;
-  outputTokens: number;
-  usd: number;
-  latencyMs: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  usd?: number;
+  latencyMs?: number;
+};
+
+/**
+ * What `GET /runs` can actually answer from a manifest, without reading every pass file. `listRuns`
+ * returns these; a full `RunView` requires `GET /runs/:id`.
+ */
+export type RunSummary = {
+  runId: string;
+  rubricVersion: string;
+  model: string;
+  status: RunStatus;
+  startedAt: string;
+  finishedAt?: string;
+  passes: number;
 };
 
 export type RunView = {

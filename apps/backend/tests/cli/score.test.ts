@@ -31,6 +31,7 @@ function basePassResult(overrides: Partial<PassResult> & Pick<PassResult, "resul
     spans: [],
     unverified: [],
     negativeConstraintPresent: false,
+    replacements: [],
     rejected: [],
     ...overrides,
   };

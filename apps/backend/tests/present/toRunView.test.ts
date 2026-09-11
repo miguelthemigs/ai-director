@@ -1,13 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { isScoredCheck, type StepCost } from "@ai-director/contract";
-import {
-  toCheckResultView,
-  toPassView,
-  toRunView,
-  type PresentedReplacement,
-} from "../../src/present/toRunView.js";
+import { toCheckResultView, toPassView, toRunView } from "../../src/present/toRunView.js";
 import type { EvaluatedCheck } from "../../src/agents/evaluator/run.js";
+import { repairSpans, type RepairedReplacement } from "../../src/agents/repairer/run.js";
 import type { Span, UnverifiedQuote } from "../../src/enforce/verifySpans.js";
+import { loadRubric } from "../../src/rubric/load.js";
 import type { PassResult } from "../../src/orchestrate/runPass.js";
 import type { RunManifest } from "../../src/store/RunStore.js";
 
@@ -130,6 +127,7 @@ function passResult(overrides: Partial<PassResult>): PassResult {
     spans: [],
     unverified: [],
     negativeConstraintPresent: false,
+    replacements: [],
     rejected: [],
     ...overrides,
   };
@@ -140,7 +138,7 @@ describe("toPassView", () => {
     const spans: Span[] = [
       { spanId: "no_brand_name-0", checkId: "no_brand_name", quote: "Nike", start: 25, end: 29 },
     ];
-    const replacements: PresentedReplacement[] = [
+    const replacements: RepairedReplacement[] = [
       { spanId: "no_brand_name-0", newText: "plain grey", rationale: "Removes the brand name." },
     ];
     const result = passResult({
@@ -166,7 +164,7 @@ describe("toPassView", () => {
 
   it("throws rather than silently drops a replacement whose spanId has no matching span", () => {
     const result = passResult({ spans: [] });
-    const bad: PresentedReplacement[] = [{ spanId: "no_such_span", newText: "x", rationale: "r" }];
+    const bad: RepairedReplacement[] = [{ spanId: "no_such_span", newText: "x", rationale: "r" }];
     expect(() => toPassView(result, bad)).toThrow(/no_such_span/);
   });
 
@@ -191,6 +189,52 @@ describe("toPassView", () => {
     const view = toPassView(result, []);
     expect(view.results).toEqual([
       { status: "not_evaluated", checkId: "hair_spec", group: "look", reason: "group look failed" },
+    ]);
+  });
+
+  // End to end: this is the test that would have caught fix round 1's defect
+  // -- `repairSpans`'s real output, carried onto a real `PassResult` exactly
+  // as `runPass` populates it, must reach the wire view with its rationale
+  // intact. A stub replacement object can't prove this; a real repairer call
+  // can, because it is the layer that used to throw the rationale away.
+  it("carries a real repairSpans() replacement's rationale through PassResult to the wire view", async () => {
+    const rubric = await loadRubric("v1");
+    const checks = rubric.checks.filter((c) => c.id === "drawable_only");
+    const spans: Span[] = [
+      { spanId: "drawable_only:0", checkId: "drawable_only", quote: "very cinematic presence", start: 22, end: 45 },
+    ];
+    const transport = vi.fn().mockResolvedValue({
+      parsed_output: {
+        replacements: [
+          { spanId: "drawable_only:0", newText: "square jaw", rationale: "replaces a mood word with a drawable feature" },
+        ],
+      },
+    });
+
+    const { replacements, rejected } = await repairSpans(
+      { transport },
+      { spans, checks, reasons: { "drawable_only:0": "mood word" } },
+    );
+    expect(rejected).toEqual([]);
+
+    const result = passResult({
+      results: [scored({ checkId: "drawable_only", band: 2, quotes: ["very cinematic presence"] })],
+      failing: ["drawable_only"],
+      spans,
+      replacements,
+      repairedDescription: "A lean man with a square jaw.",
+    });
+
+    const view = toPassView(result, result.replacements);
+
+    expect(view.replacements).toEqual([
+      {
+        spanId: "drawable_only:0",
+        checkId: "drawable_only",
+        oldText: "very cinematic presence",
+        newText: "square jaw",
+        rationale: "replaces a mood word with a drawable feature",
+      },
     ]);
   });
 });

@@ -1,9 +1,22 @@
 import type { ParseTransport } from "../../api/client.js";
-import type { Replacement } from "../../enforce/splice.js";
 import type { Span } from "../../enforce/verifySpans.js";
 import type { RubricCheck } from "../../rubric/load.js";
 import { buildRepairerSystemPrompt } from "./prompt.js";
 import { RepairerOutputSchema } from "./schema.js";
+
+/**
+ * A replacement as the Repairer actually produced it, rationale included.
+ * `Replacement` (Task 4, `splice.ts`) is `{spanId, newText}` only --
+ * `applyReplacements` never needed the model's rationale, so that type stays
+ * narrow. This richer shape is what a caller assembling a real run needs to
+ * carry the rationale through to `PassResult` and on to the presenter's
+ * `ReplacementView`, without widening `Replacement` itself (which would
+ * ripple into every existing `Replacement` literal in `splice.ts` and its
+ * tests for a field that module never needed). It is structurally a superset
+ * of `Replacement`, so it can be passed anywhere a `Replacement[]` is
+ * expected (e.g. `applyReplacements`) with no cast.
+ */
+export type RepairedReplacement = { spanId: string; newText: string; rationale: string };
 
 /**
  * A replacement the model returned that could not be applied, kept as
@@ -36,7 +49,7 @@ export type RejectedReplacement = {
 export async function repairSpans(
   deps: { transport: ParseTransport },
   args: { spans: Span[]; checks: RubricCheck[]; reasons: Record<string, string> },
-): Promise<{ replacements: Replacement[]; rejected: RejectedReplacement[] }> {
+): Promise<{ replacements: RepairedReplacement[]; rejected: RejectedReplacement[] }> {
   const { spans, checks, reasons } = args;
   if (spans.length === 0) return { replacements: [], rejected: [] };
 
@@ -58,7 +71,7 @@ export async function repairSpans(
   const output = RepairerOutputSchema.parse(parsed_output);
 
   const known = new Set(spans.map((span) => span.spanId));
-  const replacements: Replacement[] = [];
+  const replacements: RepairedReplacement[] = [];
   const rejected: RejectedReplacement[] = [];
 
   for (const replacement of output.replacements) {
@@ -70,7 +83,11 @@ export async function repairSpans(
       rejected.push({ spanId: replacement.spanId, reason: "empty_text" });
       continue;
     }
-    replacements.push({ spanId: replacement.spanId, newText: replacement.newText });
+    replacements.push({
+      spanId: replacement.spanId,
+      newText: replacement.newText,
+      rationale: replacement.rationale,
+    });
   }
 
   return { replacements, rejected };

@@ -11,6 +11,7 @@ import {
   type Percent,
   type ReplacementView,
   type RunEvent,
+  type RunSummary,
   type RunView,
   type StepCost,
   type VersionCompare,
@@ -163,8 +164,11 @@ export class FixtureRunClient implements RunClient {
     return this.mustGet(runId).view;
   }
 
-  async listRuns(): Promise<RunView[]> {
-    return [...this.runs.values()].map((record) => record.view);
+  async listRuns(): Promise<RunSummary[]> {
+    return [...this.runs.values()].map((record) => {
+      const { runId, rubricVersion, model, status, startedAt, finishedAt, passes } = record.view;
+      return { runId, rubricVersion, model, status, startedAt, finishedAt, passes: passes.length };
+    });
   }
 
   async listVersions(): Promise<VersionRow[]> {

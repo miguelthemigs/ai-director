@@ -11,23 +11,11 @@ import {
   type UnverifiedQuoteView,
 } from "@ai-director/contract";
 import type { EvaluatedCheck } from "../agents/evaluator/run.js";
-import type { Replacement } from "../enforce/splice.js";
+import type { RepairedReplacement } from "../agents/repairer/run.js";
 import { bandToPercent, isPass } from "../enforce/score.js";
 import type { Span, UnverifiedQuote } from "../enforce/verifySpans.js";
 import type { PassResult } from "../orchestrate/runPass.js";
 import type { RunManifest } from "../store/RunStore.js";
-
-/**
- * `Replacement` (Task 4) is `{spanId, newText}` only -- `splice.ts` never
- * needed the model's rationale, so `repairSpans` (Task 7) does not return it
- * either. The wire's `ReplacementView` needs a rationale for the Run screen's
- * diff, so this presenter accepts the richer shape a caller assembling a real
- * run actually has (the Repairer's raw output, before it is narrowed down to
- * a bare `Replacement`) rather than widening Task 4's type, which would
- * ripple into every existing `Replacement` literal in `splice.ts` and its
- * tests for a field `applyReplacements` never needed.
- */
-export type PresentedReplacement = Replacement & { rationale: string };
 
 function toSpanView(span: Span): SpanView {
   return { spanId: span.spanId, checkId: span.checkId as CheckId, quote: span.quote, start: span.start, end: span.end };
@@ -74,16 +62,17 @@ export function toCheckResultView(
 
 /**
  * Assembles one pass's wire view. `replacements` is supplied separately from
- * `result` because `PassResult` does not retain the Repairer's replacements
- * (only `repairedDescription`, the text they produced, and `rejected`, the
- * ones that failed) -- see the module comment on `PresentedReplacement`.
+ * `result` for the caller's convenience -- ordinarily it is just
+ * `result.replacements`, the applied replacements `runPass` already carries
+ * on `PassResult` -- but is taken as its own parameter so a caller never has
+ * to fight the type checker to pass something else.
  *
  * A replacement whose `spanId` has no matching span in `result.spans` is a
  * bug in whatever assembled the call, not a defect to paper over: it throws
  * rather than being silently dropped, because dropping it would show the UI
  * a repair that never happened to have applied.
  */
-export function toPassView(result: PassResult, replacements: PresentedReplacement[]): PassView {
+export function toPassView(result: PassResult, replacements: RepairedReplacement[]): PassView {
   const spanById = new Map(result.spans.map((span) => [span.spanId, span] as const));
 
   const replacementViews: ReplacementView[] = replacements.map((replacement) => {

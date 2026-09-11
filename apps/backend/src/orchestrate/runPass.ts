@@ -1,8 +1,8 @@
 import type { EvaluatedCheck } from "../agents/evaluator/run.js";
-import type { RejectedReplacement } from "../agents/repairer/run.js";
+import type { RejectedReplacement, RepairedReplacement } from "../agents/repairer/run.js";
 import { hasNegativeConstraint } from "../enforce/invariants.js";
 import { isPass } from "../enforce/score.js";
-import { applyReplacements, type Replacement } from "../enforce/splice.js";
+import { applyReplacements } from "../enforce/splice.js";
 import { verifySpans, type Span, type UnverifiedQuote } from "../enforce/verifySpans.js";
 import type { CheckGroup, Rubric, RubricCheck } from "../rubric/load.js";
 
@@ -22,6 +22,13 @@ export type PassResult = {
   unverified: UnverifiedQuote[];
   negativeConstraintPresent: boolean;
   repairedDescription?: string;
+  // The replacements that were actually spliced into `repairedDescription`,
+  // rationale included. Always [] on the final pass (never calls the
+  // Repairer) and [] on any pass where nothing was repaired. This is what a
+  // presenter needs to build the Run screen's fragment diff -- without it,
+  // every real run would render as if nothing had ever been repaired, even
+  // when it had.
+  replacements: RepairedReplacement[];
   // Replacements the Repairer returned that could not be applied. Surfaced
   // here (and written through the store by the caller) rather than logged,
   // so an invented spanId or empty replacement leaves a trace the CLI/UI can
@@ -54,7 +61,7 @@ export type RepairFn = (args: {
   spans: Span[];
   checks: RubricCheck[];
   reasons: Record<string, string>;
-}) => Promise<{ replacements: Replacement[]; rejected: RejectedReplacement[] }>;
+}) => Promise<{ replacements: RepairedReplacement[]; rejected: RejectedReplacement[] }>;
 
 type ScoredCheck = Extract<EvaluatedCheck, { status: "scored" }>;
 
@@ -165,6 +172,7 @@ export async function runPass(
     spans,
     unverified,
     negativeConstraintPresent: hasNegativeConstraint(description),
+    replacements: [],
     rejected: [],
   };
 
@@ -192,6 +200,10 @@ export async function runPass(
   return {
     ...base,
     rejected,
+    // Every item in `replacements` was validated against `selected`'s spanIds
+    // by `repairSpans` already, and `applyReplacements` just spliced all of
+    // them in -- so this is exactly the set that was actually applied.
+    replacements,
     repairedDescription: applyReplacements(description, selected, replacements),
   };
 }

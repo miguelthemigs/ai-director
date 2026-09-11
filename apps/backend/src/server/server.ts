@@ -73,19 +73,12 @@ async function main(): Promise<void> {
   const rubric = await loadRubric("v1");
   const store = new FileRunStore(RUNS_DIR);
 
-  // KNOWN GAPS, carried into this task's report rather than papered over:
-  //
-  // 1. Cost is always zero. `ParseTransport` (Task 1) returns only
-  //    `{ parsed_output }` -- no token counts, no latency -- so there is
-  //    nothing real to sum here yet. `StepCost` fields are honest zeros, not
-  //    a fabricated estimate.
-  // 2. `replacements` is always `[]`. `PassResult` (Task 9) does not retain
-  //    the Repairer's replacements, only the text they produced
-  //    (`repairedDescription`) and the ones that failed (`rejected`) -- see
-  //    `present/toRunView.ts`'s `PresentedReplacement` comment. The Run
-  //    screen's diff view will show no fragments until a future task
-  //    threads real replacements through `PassResult` (or a sibling
-  //    channel) to this call site.
+  // KNOWN GAP, carried into this task's report rather than papered over:
+  // no token counts or latency are available anywhere in this pipeline yet
+  // -- `ParseTransport` (Task 1) returns only `{ parsed_output }`. `StepCost`
+  // is fully optional for exactly this reason (see the contract's own
+  // comment on it): omitting every field here is the honest "not measured",
+  // never a fabricated `0`.
   const startRun: StartRun = async ({ runId, description }) => {
     const transport = createAnthropicTransport();
     const out = await runToCompletion(
@@ -99,9 +92,9 @@ async function main(): Promise<void> {
     );
 
     const manifest = await store.getRun(runId);
-    const passes = out.passes.map((pass) => toPassView(pass, []));
-    const zeroCost = { inputTokens: 0, outputTokens: 0, usd: 0, latencyMs: 0 };
-    return toRunView(manifest, passes, description, out.finalDescription, zeroCost);
+    const passes = out.passes.map((pass) => toPassView(pass, pass.replacements));
+    const unmeasuredCost = {};
+    return toRunView(manifest, passes, description, out.finalDescription, unmeasuredCost);
   };
 
   const app = buildApp({ store, rubric, startRun });

@@ -53,9 +53,12 @@ function failingOf(results: CheckResultView[]): CheckId[] {
   return results.filter(isScoredCheck).filter((r) => !r.passed).map((r) => r.checkId);
 }
 
-const COST: StepCost = { inputTokens: 1100, outputTokens: 600, usd: 0.02, latencyMs: 4200 };
+// Fixtures are canned, complete data -- every cost figure below is always fully measured, unlike
+// a real run's `StepCost` (optional fields, so an unmeasured run never fakes a `0`). `Required`
+// keeps that guarantee explicit here rather than re-introducing undefined checks fixtures don't need.
+const COST: Required<StepCost> = { inputTokens: 1100, outputTokens: 600, usd: 0.02, latencyMs: 4200 };
 
-function scaleCost(c: StepCost, n: number): StepCost {
+function scaleCost(c: Required<StepCost>, n: number): Required<StepCost> {
   return {
     inputTokens: c.inputTokens * n,
     outputTokens: c.outputTokens * n,

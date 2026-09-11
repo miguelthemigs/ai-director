@@ -19,7 +19,9 @@ describe("repairSpans", () => {
     });
     const out = await repairSpans({ transport }, { spans, checks, reasons: { "drawable_only:0": "mood word" } });
     expect(out).toEqual({
-      replacements: [{ spanId: "drawable_only:0", newText: "square jaw" }],
+      replacements: [
+        { spanId: "drawable_only:0", newText: "square jaw", rationale: "replaced a mood word" },
+      ],
       rejected: [],
     });
   });
@@ -52,7 +54,9 @@ describe("repairSpans", () => {
       },
     });
     const out = await repairSpans({ transport }, { spans: twoSpans, checks, reasons: {} });
-    expect(out.replacements).toEqual([{ spanId: "drawable_only:1", newText: "sharp cheekbones" }]);
+    expect(out.replacements).toEqual([
+      { spanId: "drawable_only:1", newText: "sharp cheekbones", rationale: "r" },
+    ]);
     expect(out.rejected).toEqual([{ spanId: "wardrobe:9", reason: "unknown_span" }]);
   });
 
@@ -72,7 +76,9 @@ describe("repairSpans", () => {
       },
     });
     const out = await repairSpans({ transport }, { spans: twoSpans, checks, reasons: {} });
-    expect(out.replacements).toEqual([{ spanId: "drawable_only:1", newText: "sharp cheekbones" }]);
+    expect(out.replacements).toEqual([
+      { spanId: "drawable_only:1", newText: "sharp cheekbones", rationale: "r" },
+    ]);
     expect(out.rejected).toEqual([{ spanId: "drawable_only:0", reason: "empty_text" }]);
   });
 

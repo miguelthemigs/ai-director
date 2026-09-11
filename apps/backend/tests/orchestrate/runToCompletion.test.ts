@@ -65,7 +65,9 @@ describe("runToCompletion", () => {
       .mockResolvedValueOnce(failDrawable(rubric))
       .mockResolvedValueOnce(allPass(rubric));
     const repair: RepairFn = vi.fn().mockResolvedValue({
-      replacements: [{ spanId: "drawable_only:0", newText: "a square jaw" }],
+      replacements: [
+        { spanId: "drawable_only:0", newText: "a square jaw", rationale: "swaps a mood word for a drawable feature" },
+      ],
       rejected: [],
     });
     const out = await runToCompletion(
@@ -76,6 +78,30 @@ describe("runToCompletion", () => {
     expect(out.passes).toHaveLength(2);
     expect(out.finalDescription).toContain("a square jaw");
     expect(out.finalDescription).not.toContain("very cinematic presence");
+  });
+
+  it("carries the applied replacements, rationale included, on the pass that repaired something", async () => {
+    const rubric = await loadRubric("v1");
+    const evaluate: EvaluateFn = vi
+      .fn()
+      .mockResolvedValueOnce(failDrawable(rubric))
+      .mockResolvedValueOnce(allPass(rubric));
+    const repair: RepairFn = vi.fn().mockResolvedValue({
+      replacements: [
+        { spanId: "drawable_only:0", newText: "a square jaw", rationale: "swaps a mood word for a drawable feature" },
+      ],
+      rejected: [],
+    });
+    const out = await runToCompletion(
+      { evaluate, retryVerbatim: noRetry, repair, store: await store() },
+      { rubric, description, runId: "run-2b" },
+    );
+    expect(out.passes[0]?.replacements).toEqual([
+      { spanId: "drawable_only:0", newText: "a square jaw", rationale: "swaps a mood word for a drawable feature" },
+    ]);
+    // The second pass is the final pass: it never calls the repairer, so it
+    // carries no applied replacements of its own.
+    expect(out.passes[1]?.replacements).toEqual([]);
   });
 
   it("gives up after three passes and says it still fails", async () => {
@@ -147,6 +173,7 @@ describe("runToCompletion", () => {
         spanId: s.spanId,
         newText:
           s.checkId === "wardrobe" ? "charcoal hoodie and white sneakers" : "very cinematic presence",
+        rationale: "r",
       })),
       rejected: [],
     }));

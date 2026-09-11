@@ -1,4 +1,4 @@
-import type { RunEvent, RunView, VersionCompare, VersionRow } from "@ai-director/contract";
+import type { RunEvent, RunSummary, RunView, VersionCompare, VersionRow } from "@ai-director/contract";
 
 /**
  * The seam between the three screens and wherever a run's data actually comes from.
@@ -21,8 +21,12 @@ export interface RunClient {
   startRun(description: string): Promise<{ runId: string }>;
   /** Fetch a run's current state as a snapshot, e.g. for the Versions screen's history. */
   getRun(runId: string): Promise<RunView>;
-  /** List every run this client knows about, most relevant first. */
-  listRuns(): Promise<RunView[]>;
+  /**
+   * List every run this client knows about, most relevant first. A summary only -- what the
+   * server's manifest (or the fixture's equivalent) can answer without reading every pass file.
+   * Fetch a specific run's full body with `getRun`.
+   */
+  listRuns(): Promise<RunSummary[]>;
   /**
    * Stream events for one run to `sink`, starting after event id `from` (undefined for the
    * beginning). Mirrors `EventSource` + `Last-Event-ID`. Returns an unsubscribe function that

@@ -274,10 +274,15 @@ export function nodesFromEvents(events: RunEvent[]): PipelineNode[] {
 
       case "evaluator.group.completed": {
         bk.groupsCompletedThisPass += 1;
-        bk.evalTokensIn += event.cost.inputTokens;
-        bk.evalTokensOut += event.cost.outputTokens;
-        bk.evalCostUsd = Math.round((bk.evalCostUsd + event.cost.usd) * 100) / 100;
-        bk.evalLatencyMs += event.cost.latencyMs;
+        // `StepCost`'s fields are each independently optional now (a real run's cost may be
+        // partially or wholly unmeasured); a running total still needs a concrete number to
+        // accumulate, so an unmeasured figure contributes 0 to it rather than leaving the sum
+        // itself `undefined`. This differs from `PipelineNode`'s own cost fields, which stay
+        // genuinely unset when nothing was measured -- see this function's own doc comment.
+        bk.evalTokensIn += event.cost.inputTokens ?? 0;
+        bk.evalTokensOut += event.cost.outputTokens ?? 0;
+        bk.evalCostUsd = Math.round((bk.evalCostUsd + (event.cost.usd ?? 0)) * 100) / 100;
+        bk.evalLatencyMs += event.cost.latencyMs ?? 0;
         bk.passResults = [...bk.passResults, ...event.results];
 
         const progress = bk.groupsCompletedThisPass / 3;

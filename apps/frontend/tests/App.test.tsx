@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
-import type { RunEvent, RunView, VersionCompare, VersionRow } from "@ai-director/contract";
+import type { RunEvent, RunSummary, RunView, VersionCompare, VersionRow } from "@ai-director/contract";
 import { App } from "../src/App.js";
 import type { RunClient } from "../src/data/RunClient.js";
 import { FixtureRunClient } from "../src/data/FixtureRunClient.js";
@@ -21,7 +21,7 @@ class NonFixtureStubClient implements RunClient {
   async getRun(): Promise<RunView> {
     throw new Error("NonFixtureStubClient: not exercised by this test");
   }
-  async listRuns(): Promise<RunView[]> {
+  async listRuns(): Promise<RunSummary[]> {
     return [];
   }
   subscribe(_runId: string, _from: string | undefined, _sink: (event: RunEvent) => void): () => void {
