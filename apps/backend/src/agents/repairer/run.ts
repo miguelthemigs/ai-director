@@ -5,12 +5,40 @@ import type { RubricCheck } from "../../rubric/load.js";
 import { buildRepairerSystemPrompt } from "./prompt.js";
 import { RepairerOutputSchema } from "./schema.js";
 
+/**
+ * A replacement the model returned that could not be applied, kept as
+ * prompt-tuning signal rather than discarded silently.
+ *
+ * - "unknown_span": the model named a spanId it was not given.
+ * - "empty_text": the model's newText was empty (or all whitespace).
+ */
+export type RejectedReplacement = {
+  spanId: string;
+  reason: "unknown_span" | "empty_text";
+};
+
+/**
+ * Rewrites failing fragments one-for-one, in isolation from the rest of the
+ * description (see the module-level design note in prompt.ts's caller: this
+ * function only ever sees `spans`, never the full description).
+ *
+ * A single bad replacement -- an invented spanId, an empty newText -- is
+ * dropped into `rejected` rather than thrown, matching the failure idiom used
+ * everywhere else in this pipeline (verifySpans for an unlocatable quote,
+ * evaluateGroup/evaluateAllGroups for missing evidence or a failed group):
+ * mark the bad item, exclude it, keep the rest. Throwing here would cost a
+ * whole repair pass -- one of only three -- over one hallucinated id; dropping
+ * costs one span for one pass, and the next pass re-evaluates and re-quotes it
+ * if it is still wrong. Applying the survivors is safe regardless, because
+ * `applyReplacements` (Task 4) independently validates every replacement
+ * against the known spans before splicing.
+ */
 export async function repairSpans(
   deps: { transport: ParseTransport },
   args: { spans: Span[]; checks: RubricCheck[]; reasons: Record<string, string> },
-): Promise<Replacement[]> {
+): Promise<{ replacements: Replacement[]; rejected: RejectedReplacement[] }> {
   const { spans, checks, reasons } = args;
-  if (spans.length === 0) return [];
+  if (spans.length === 0) return { replacements: [], rejected: [] };
 
   const user = spans
     .map(
@@ -30,10 +58,20 @@ export async function repairSpans(
   const output = RepairerOutputSchema.parse(parsed_output);
 
   const known = new Set(spans.map((span) => span.spanId));
+  const replacements: Replacement[] = [];
+  const rejected: RejectedReplacement[] = [];
+
   for (const replacement of output.replacements) {
     if (!known.has(replacement.spanId)) {
-      throw new Error(`unknown spanId ${replacement.spanId} from repairer`);
+      rejected.push({ spanId: replacement.spanId, reason: "unknown_span" });
+      continue;
     }
+    if (replacement.newText.trim().length === 0) {
+      rejected.push({ spanId: replacement.spanId, reason: "empty_text" });
+      continue;
+    }
+    replacements.push({ spanId: replacement.spanId, newText: replacement.newText });
   }
-  return output.replacements.map(({ spanId, newText }) => ({ spanId, newText }));
+
+  return { replacements, rejected };
 }
