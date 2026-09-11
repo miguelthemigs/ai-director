@@ -4888,6 +4888,15 @@ Do not overwrite it. This task's job is to fill in the `kappa` and `perCheckKapp
 numbers Task 22 actually produced, and to write the decision log. If Task 22 reported no number
 because the gold set is still unmarked, leave both fields `null` and say so in the log.
 
+**Also record, from the Task 15 review:** the Architecture screen reports no latency for the
+`verify`, `splice` and `gate` nodes, because those three steps emit no events of their own and a
+bracketed interval cannot honestly attribute duration to them. The review proved this is not
+theoretical — between `evaluator.group.completed` and `repairer.started` the orchestrator may run a
+full `retryVerbatim` model call, so a derived Verify latency would silently absorb an entire
+evaluator re-ask. Log the decision and its rationale, and record adding real wire events for those
+steps as a v2 improvement: it is the proper fix, and it was deliberately not taken in v1 because
+spec §6 enumerates exactly nine event names that the contract and its tests encode.
+
 - [ ] **Step 1: Write the decision log with the failure condition**
 
 `docs/decision-log.md`:
