@@ -16,8 +16,21 @@ export type PipelineNode = {
   costUsd?: number;
   payload?: unknown;
   error?: string;
-  /** Short human line, e.g. "11 verified, 1 unverified". */
+  /** Short human line, e.g. "11 verified · 1 unverified". */
   note?: string;
+  /**
+   * Real, event-driven fraction 0-1. The Evaluator's three group calls move it 1/3 → 2/3 → 3/3;
+   * a node with no sub-steps holds it at 0 until it completes, then 1. Never a decorative loop —
+   * see motion spec §8.1.
+   */
+  progress?: number;
+  /** ISO timestamp of the real event that most recently moved this node into `running`. Drives
+   *  the elapsed-seconds counter; never a client-side guess at when work "must have" started. */
+  startedAt?: string;
+  /** Set when a node completed successfully but produced a defect worth flagging — e.g. Span
+   *  verification finding unverified quotes. Rendered as text, never colour alone, and never
+   *  confused with `error` (which means the node itself failed). */
+  warning?: string;
 };
 
 export type PipelineEdge = { from: string; to: string };

@@ -1,0 +1,104 @@
+import { describe, expect, it } from "vitest";
+import {
+  FIXTURE_EVENT_LOG,
+  PIPELINE_NODES,
+  type RunEvent,
+} from "@ai-director/contract";
+import { nodesFromEvents } from "../../src/domain/derive.js";
+
+const PLANNED_IDS = ["interrogator", "director", "identity"];
+
+function nodeById(nodes: ReturnType<typeof nodesFromEvents>, id: string) {
+  const node = nodes.find((n) => n.id === id);
+  if (!node) throw new Error(`no node with id ${id} in derived output`);
+  return node;
+}
+
+describe("nodesFromEvents", () => {
+  it("with no events, returns every node queued except the three planned agents", () => {
+    const nodes = nodesFromEvents([]);
+    expect(nodes).toHaveLength(PIPELINE_NODES.length);
+    for (const node of nodes) {
+      if (PLANNED_IDS.includes(node.id)) {
+        expect(node.state).toBe("planned");
+      } else {
+        expect(node.state).toBe("queued");
+      }
+    }
+  });
+
+  it("moves the evaluator to running on evaluator.group.started", () => {
+    const events: RunEvent[] = [
+      { id: "1-0", name: "pass.started", at: "2026-01-01T00:00:00.000Z", pass: 1, description: "d" },
+      { id: "1-1", name: "evaluator.group.started", at: "2026-01-01T00:00:01.000Z", pass: 1, group: "look" },
+    ];
+    const nodes = nodesFromEvents(events);
+    expect(nodeById(nodes, "evaluator").state).toBe("running");
+  });
+
+  it("moves the evaluator through progress 1/3, 2/3, 3/3 to done across its three group completions", () => {
+    const cost = { inputTokens: 100, outputTokens: 50, usd: 0.01, latencyMs: 500 };
+    const base: RunEvent[] = [
+      { id: "1-0", name: "pass.started", at: "2026-01-01T00:00:00.000Z", pass: 1, description: "d" },
+      { id: "1-1", name: "evaluator.group.started", at: "2026-01-01T00:00:01.000Z", pass: 1, group: "look" },
+    ];
+
+    const afterFirst = nodesFromEvents([
+      ...base,
+      { id: "1-2", name: "evaluator.group.completed", at: "2026-01-01T00:00:02.000Z", pass: 1, group: "look", results: [], cost },
+    ]);
+    expect(nodeById(afterFirst, "evaluator").state).toBe("running");
+    expect(nodeById(afterFirst, "evaluator").progress).toBeCloseTo(1 / 3);
+
+    const afterSecond = nodesFromEvents([
+      ...base,
+      { id: "1-2", name: "evaluator.group.completed", at: "2026-01-01T00:00:02.000Z", pass: 1, group: "look", results: [], cost },
+      { id: "1-3", name: "evaluator.group.completed", at: "2026-01-01T00:00:03.000Z", pass: 1, group: "safety", results: [], cost },
+    ]);
+    expect(nodeById(afterSecond, "evaluator").state).toBe("running");
+    expect(nodeById(afterSecond, "evaluator").progress).toBeCloseTo(2 / 3);
+
+    const afterThird = nodesFromEvents([
+      ...base,
+      { id: "1-2", name: "evaluator.group.completed", at: "2026-01-01T00:00:02.000Z", pass: 1, group: "look", results: [], cost },
+      { id: "1-3", name: "evaluator.group.completed", at: "2026-01-01T00:00:03.000Z", pass: 1, group: "safety", results: [], cost },
+      { id: "1-4", name: "evaluator.group.completed", at: "2026-01-01T00:00:04.000Z", pass: 1, group: "drawable", results: [], cost },
+    ]);
+    expect(nodeById(afterThird, "evaluator").state).toBe("done");
+    expect(nodeById(afterThird, "evaluator").progress).toBeCloseTo(1);
+  });
+
+  it("moves only the currently-running node to failed on run.failed, leaving every other node alone", () => {
+    const cost = { inputTokens: 100, outputTokens: 50, usd: 0.01, latencyMs: 500 };
+    const events: RunEvent[] = [
+      { id: "0-0", name: "run.started", at: "2026-01-01T00:00:00.000Z", runId: "r1", rubricVersion: "1.0.0", model: "m", description: "d" },
+      { id: "1-0", name: "pass.started", at: "2026-01-01T00:00:01.000Z", pass: 1, description: "d" },
+      { id: "1-1", name: "evaluator.group.started", at: "2026-01-01T00:00:02.000Z", pass: 1, group: "look" },
+      { id: "1-2", name: "evaluator.group.completed", at: "2026-01-01T00:00:03.000Z", pass: 1, group: "look", results: [], cost },
+      { id: "1-3", name: "run.failed", at: "2026-01-01T00:00:04.000Z", error: "upstream 503" },
+    ];
+
+    const nodes = nodesFromEvents(events);
+    expect(nodeById(nodes, "evaluator").state).toBe("failed");
+    expect(nodeById(nodes, "evaluator").error).toBe("upstream 503");
+    // intake already reached `done` from run.started, and run.failed must not touch it.
+    expect(nodeById(nodes, "intake").state).toBe("done");
+    // Nodes that never started stay queued.
+    expect(nodeById(nodes, "repairer").state).toBe("queued");
+    expect(nodeById(nodes, "splice").state).toBe("queued");
+    expect(nodeById(nodes, "gate").state).toBe("queued");
+  });
+
+  it("never moves a planned node off planned, across the entire fixture event log", () => {
+    const nodes = nodesFromEvents(FIXTURE_EVENT_LOG);
+    for (const id of PLANNED_IDS) {
+      expect(nodeById(nodes, id).state).toBe("planned");
+    }
+  });
+
+  it("gives every node with no measured cost no cost fields at all, never a fabricated zero", () => {
+    const nodes = nodesFromEvents(FIXTURE_EVENT_LOG);
+    const intake = nodeById(nodes, "intake");
+    expect(intake.costUsd).toBeUndefined();
+  });
+});

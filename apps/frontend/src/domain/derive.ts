@@ -1,8 +1,11 @@
 import {
   CHECK_IDS,
   isScoredCheck,
+  PIPELINE_NODES,
   type CheckId,
   type CheckResultView,
+  type PipelineNode,
+  type RunEvent,
   type SpanView,
 } from "@ai-director/contract";
 
@@ -148,4 +151,336 @@ export function lanesOf(results: CheckResultView[]): CheckId[] {
       .map((r) => r.checkId),
   );
   return CHECK_IDS.filter((id) => withSpans.has(id)).slice(0, 9);
+}
+
+// ---------------------------------------------------------------------------
+// Architecture screen: deriving PipelineNode[] from the run's own event log.
+// ---------------------------------------------------------------------------
+
+/** Bookkeeping the derivation needs across events but that is not itself node data — never
+ *  returned, never rendered. Reset per pass, keyed off each event's own `pass` field rather than
+ *  `pass.started` order, so the derivation never depends on event arrival order beyond what the
+ *  fixture and the real server both guarantee (a group's own `pass` field is always present). */
+type Bookkeeping = {
+  /** The node currently `running`, so `run.failed` can find it without guessing. */
+  runningNodeId: string | null;
+  /** The pass the evaluator's own accumulators below belong to; `null` until its first group. */
+  evaluatorPass: number | null;
+  groupsCompletedThisPass: number;
+  evalTokensIn: number;
+  evalTokensOut: number;
+  evalCostUsd: number;
+  evalLatencyMs: number;
+  /** `at` of the most recent `evaluator.group.completed` this pass — start point for Verify's
+   *  measured latency, which is the real gap to `repairer.started`, not a guess. */
+  lastGroupCompletedAt: string | null;
+  passResults: CheckResultView[];
+  /** `at` of `repairer.completed` — start point for Splice's measured latency to `pass.completed`. */
+  repairerCompletedAt: string | null;
+};
+
+function emptyBookkeeping(): Bookkeeping {
+  return {
+    runningNodeId: null,
+    evaluatorPass: null,
+    groupsCompletedThisPass: 0,
+    evalTokensIn: 0,
+    evalTokensOut: 0,
+    evalCostUsd: 0,
+    evalLatencyMs: 0,
+    lastGroupCompletedAt: null,
+    passResults: [],
+    repairerCompletedAt: null,
+  };
+}
+
+function countSpans(results: CheckResultView[]): { verified: number; unverified: number } {
+  const scored = results.filter(isScoredCheck);
+  return {
+    verified: scored.reduce((n, r) => n + r.spans.length, 0),
+    unverified: scored.reduce((n, r) => n + r.unverified.length, 0),
+  };
+}
+
+function pluralize(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+/**
+ * Derives every pipeline node's current state, purely, by replaying a run's event log from the
+ * start. Framework-free and side-effect-free so it is testable without React (task 15 brief).
+ *
+ * Every node this function ever writes to goes through `patch`, which refuses to move a `planned`
+ * node (Interrogator, Director, Identity Meter — the three agents v1 designs but does not build)
+ * off `planned`. No case below ever names one of those three ids anyway, so the guard is
+ * belt-and-suspenders: structurally unreachable, and refused even if a future event tried.
+ *
+ * `verify`, `splice` and `gate` have no events of their own on the wire (§6, the contract's
+ * `EVENT_NAMES`) — they are enforcement steps inferred from the evaluator/repairer events that
+ * bracket them. Their latency is still real: it is the measured gap between two genuine event
+ * timestamps (e.g. Verify's latency is `repairer.started.at - lastGroupCompleted.at`), never a
+ * fabricated number. Their token/cost fields are left unset — nothing measured a model call for
+ * them — so the inspector renders "not measured" rather than a false `$0.00`.
+ */
+export function nodesFromEvents(events: RunEvent[]): PipelineNode[] {
+  const nodes = new Map<string, PipelineNode>(PIPELINE_NODES.map((n) => [n.id, { ...n }]));
+  const bk = emptyBookkeeping();
+
+  function patch(id: string, changes: Partial<PipelineNode>): void {
+    const current = nodes.get(id);
+    if (!current || current.state === "planned") return;
+    nodes.set(id, { ...current, ...changes });
+  }
+
+  for (const event of events) {
+    switch (event.name) {
+      case "run.started": {
+        patch("intake", {
+          state: "done",
+          cueId: event.id,
+          payload: {
+            runId: event.runId,
+            rubricVersion: event.rubricVersion,
+            model: event.model,
+            description: event.description,
+          },
+        });
+        break;
+      }
+
+      case "evaluator.group.started": {
+        // Only the first group call of a pass is a real state transition; the second and third
+        // group.started events of the same pass find the evaluator already running and change
+        // nothing, so its progress and elapsed-since clock are never reset mid-pass.
+        if (bk.evaluatorPass !== event.pass) {
+          bk.evaluatorPass = event.pass;
+          bk.groupsCompletedThisPass = 0;
+          bk.evalTokensIn = 0;
+          bk.evalTokensOut = 0;
+          bk.evalCostUsd = 0;
+          bk.evalLatencyMs = 0;
+          bk.lastGroupCompletedAt = null;
+          bk.passResults = [];
+          patch("evaluator", {
+            state: "running",
+            cueId: event.id,
+            startedAt: event.at,
+            progress: 0,
+            payload: undefined,
+            note: undefined,
+          });
+        }
+        bk.runningNodeId = "evaluator";
+        break;
+      }
+
+      case "evaluator.group.completed": {
+        bk.groupsCompletedThisPass += 1;
+        bk.evalTokensIn += event.cost.inputTokens;
+        bk.evalTokensOut += event.cost.outputTokens;
+        bk.evalCostUsd = Math.round((bk.evalCostUsd + event.cost.usd) * 100) / 100;
+        bk.evalLatencyMs += event.cost.latencyMs;
+        bk.lastGroupCompletedAt = event.at;
+        bk.passResults = [...bk.passResults, ...event.results];
+
+        const progress = bk.groupsCompletedThisPass / 3;
+        const done = bk.groupsCompletedThisPass >= 3;
+        patch("evaluator", {
+          state: done ? "done" : "running",
+          cueId: event.id,
+          progress,
+          tokensIn: bk.evalTokensIn,
+          tokensOut: bk.evalTokensOut,
+          costUsd: bk.evalCostUsd,
+          latencyMs: bk.evalLatencyMs,
+          payload: bk.passResults,
+          note: `${bk.groupsCompletedThisPass}/3 groups`,
+        });
+
+        if (done) {
+          const { verified, unverified } = countSpans(bk.passResults);
+          patch("verify", {
+            state: "running",
+            cueId: event.id,
+            startedAt: event.at,
+            progress: 0,
+            note: `${pluralize(verified, "verified quote")} · ${pluralize(unverified, "unverified quote")}`,
+            payload: { verified, unverified },
+            // An unverified quote is a defect inside a step that still completes successfully
+            // (design doc §6.3) — flagged as text, never a colour-only signal.
+            warning: unverified > 0 ? `${pluralize(unverified, "unverified quote")}` : undefined,
+          });
+          bk.runningNodeId = "verify";
+        } else {
+          bk.runningNodeId = "evaluator";
+        }
+        break;
+      }
+
+      case "repairer.started": {
+        if (bk.lastGroupCompletedAt) {
+          const verifyLatencyMs = Date.parse(event.at) - Date.parse(bk.lastGroupCompletedAt);
+          patch("verify", { state: "done", cueId: event.id, latencyMs: verifyLatencyMs, progress: 1 });
+        }
+        patch("repairer", {
+          state: "running",
+          cueId: event.id,
+          startedAt: event.at,
+          progress: 0,
+          payload: { spanIds: event.spanIds },
+          note: pluralize(event.spanIds.length, "fragment to repair"),
+        });
+        bk.runningNodeId = "repairer";
+        break;
+      }
+
+      case "repairer.completed": {
+        bk.repairerCompletedAt = event.at;
+        patch("repairer", {
+          state: "done",
+          cueId: event.id,
+          progress: 1,
+          latencyMs: event.cost.latencyMs,
+          tokensIn: event.cost.inputTokens,
+          tokensOut: event.cost.outputTokens,
+          costUsd: event.cost.usd,
+          payload: event.replacements,
+          note: pluralize(event.replacements.length, "replacement"),
+        });
+        patch("splice", { state: "running", cueId: event.id, startedAt: event.at, progress: 0 });
+        bk.runningNodeId = "splice";
+        break;
+      }
+
+      case "pass.completed": {
+        const spliceLatencyMs = bk.repairerCompletedAt
+          ? Date.parse(event.at) - Date.parse(bk.repairerCompletedAt)
+          : undefined;
+        patch("splice", {
+          state: "done",
+          cueId: event.id,
+          progress: 1,
+          latencyMs: spliceLatencyMs,
+          payload: { repairedDescription: event.repairedDescription },
+          note: event.repairedDescription ? "spliced into description" : "no repair to splice",
+        });
+
+        const stillFailing = event.failing.length;
+        patch("gate", {
+          state: "done",
+          cueId: event.id,
+          progress: 1,
+          payload: { pass: event.pass, failing: event.failing },
+          note: stillFailing === 0 ? "0 still failing" : `${pluralize(stillFailing, "check")} still failing`,
+        });
+        bk.runningNodeId = null;
+        break;
+      }
+
+      case "run.completed": {
+        // The Gate node's terminal state IS the run's terminal state (design doc §6.3): `passed`
+        // renders `done`, and BOTH non-passing terminal statuses (`improved_still_failing` and
+        // `no_improvement`) take the solid alarm fill this contract only has a `failed` state
+        // for — a deliberate exception to the tab badge's outline/fill split elsewhere in the app,
+        // spelled out in that section, not a contradiction of it.
+        patch("gate", {
+          state: event.status === "passed" ? "done" : "failed",
+          cueId: event.id,
+          progress: 1,
+          payload: event.run,
+          note: event.status,
+        });
+        bk.runningNodeId = null;
+        break;
+      }
+
+      case "run.failed": {
+        if (bk.runningNodeId) {
+          patch(bk.runningNodeId, { state: "failed", cueId: event.id, error: event.error });
+        }
+        bk.runningNodeId = null;
+        break;
+      }
+
+      default:
+        break;
+    }
+  }
+
+  return PIPELINE_NODES.map((n) => nodes.get(n.id) ?? n);
+}
+
+/**
+ * The most recent real handoff event id for each edge that has ever carried one, keyed
+ * `"<from>-><to>"`. Motion spec §9: a handoff is "an event that represents a genuine handoff
+ * between agents, not merely a state change." In v1 that is `repairer.started` (Verify -> Repairer
+ * actually hands off; the spec's own prose says "Evaluator -> Repairer" but the contract inserts
+ * Verify between them) and `pass.started` for pass 2 and 3 (Gate's loop back into Evaluator).
+ *
+ * Pure and event-count-only: it never clears an id back to absent, because "has this edge ever
+ * fired" is what a static replay can answer. Whether the flash has finished playing is a question
+ * about wall-clock time, not about the event log, so `GraphEdge` owns clearing its own animation
+ * state on a timer keyed by this id — see its own comment.
+ */
+export function edgeFlowTokensFromEvents(events: RunEvent[]): Record<string, string> {
+  const tokens: Record<string, string> = {};
+  for (const event of events) {
+    if (event.name === "repairer.started") {
+      tokens["verify->repairer"] = event.id;
+    } else if (event.name === "pass.started" && event.pass > 1) {
+      tokens["gate->evaluator"] = event.id;
+    }
+  }
+  return tokens;
+}
+
+/** One line of the append-only audit record `CueLog` renders — every event received, never
+ *  truncated within a run (design doc §5 "Architecture screen"). */
+export type CueEntry = {
+  cueId: string;
+  label: string;
+  state: "running" | "done" | "failed";
+  /** Present only for events that carry a real measured `StepCost.latencyMs`. */
+  ms?: number;
+  at: number;
+};
+
+/** Turns the raw event log into the human line `CueLog` shows for each one. Pure and total: every
+ *  member of `EVENT_NAMES` has a case, so a new event type is a compile error here, not a silently
+ *  dropped row in the audit trail. */
+export function cueEntriesFromEvents(events: RunEvent[]): CueEntry[] {
+  return events.map((event): CueEntry => {
+    const at = Date.parse(event.at);
+    switch (event.name) {
+      case "run.started":
+        return { cueId: event.id, label: "run started", state: "running", at };
+      case "pass.started":
+        return { cueId: event.id, label: `pass ${event.pass} started`, state: "running", at };
+      case "evaluator.group.started":
+        return { cueId: event.id, label: `evaluator · ${event.group} started`, state: "running", at };
+      case "evaluator.group.completed":
+        return {
+          cueId: event.id,
+          label: `evaluator · ${event.group} done`,
+          state: "done",
+          ms: event.cost.latencyMs,
+          at,
+        };
+      case "repairer.started":
+        return { cueId: event.id, label: "repairer started", state: "running", at };
+      case "repairer.completed":
+        return { cueId: event.id, label: "repairer done", state: "done", ms: event.cost.latencyMs, at };
+      case "pass.completed":
+        return { cueId: event.id, label: `pass ${event.pass} completed`, state: "done", at };
+      case "run.completed":
+        return {
+          cueId: event.id,
+          label: `run ${event.status}`,
+          state: event.status === "passed" ? "done" : "failed",
+          at,
+        };
+      case "run.failed":
+        return { cueId: event.id, label: `run failed: ${event.error}`, state: "failed", at };
+    }
+  });
 }
