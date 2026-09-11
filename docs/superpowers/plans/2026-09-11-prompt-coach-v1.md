@@ -686,6 +686,47 @@ git commit -m "feat: rubric v1 with nine sourced checks and validating loader"
 - Consumes: nothing.
 - Produces: `type Span = { spanId: string; checkId: string; quote: string; start: number; end: number }`, `type UnverifiedQuote = { checkId: string; quote: string; reason: "not_found" | "ambiguous" }`, `verifySpans(description: string, quotes: Array<{ checkId: string; quote: string }>): { spans: Span[]; unverified: UnverifiedQuote[] }`.
 
+**Overlap policy, corrected after review.** `verifySpans` keeps **every** individually-verifiable
+span, including spans that nest or overlap across checks. It must NOT demote an overlapping span to
+`unverified`. `ambiguous` means one thing only: the quote appears more than once in the description,
+so no single location exists. A quote that appears exactly once is verified, full stop, whatever
+other checks quoted around it.
+
+The reasoning: two checks quoting overlapping text are two true findings. On the description
+"...in a Nike hoodie", `wardrobe` quoting "Nike hoodie" and `no_brand_name` quoting "Nike" are both
+correct and both locatable. Demoting either discards real evidence, and it discards it by array
+order, which meant a *safety* check could lose its evidence to a *look* check — the wrong trade in a
+product whose safety group exists to avoid model refusals.
+
+Overlap is only ever a problem for the splice, which cannot apply two replacements to the same
+characters. That is resolved in Task 9, where the Repairer's input is chosen, and defended in Task 4,
+which throws on overlapping replacements. Verification is not the place for it.
+
+Add this test to `apps/backend/tests/enforce/verifySpans.test.ts`:
+
+```typescript
+it("verifies nested quotes from different checks instead of discarding one", () => {
+  const description = "A lean man in a Nike hoodie and black jeans.";
+  const { spans, unverified } = verifySpans(description, [
+    { checkId: "wardrobe", quote: "Nike hoodie" },
+    { checkId: "no_brand_name", quote: "Nike" },
+  ]);
+  expect(unverified).toEqual([]);
+  expect(spans).toHaveLength(2);
+  for (const span of spans) {
+    expect(description.slice(span.start, span.end)).toBe(span.quote);
+  }
+});
+
+it("still reports a genuinely repeated quote as ambiguous", () => {
+  const { spans, unverified } = verifySpans("black shoes and black jeans", [
+    { checkId: "wardrobe", quote: "black" },
+  ]);
+  expect(spans).toEqual([]);
+  expect(unverified).toEqual([{ checkId: "wardrobe", quote: "black", reason: "ambiguous" }]);
+});
+```
+
 - [ ] **Step 1: Write the failing test**
 
 `apps/backend/tests/enforce/verifySpans.test.ts`:
@@ -1723,6 +1764,41 @@ git commit -m "feat: file-backed run store behind a swappable interface"
 **Interfaces:**
 - Consumes: Tasks 2, 3, 4, 6, 7, 8.
 - Produces: `type PassResult = { pass: number; description: string; results: EvaluatorCheckResult[]; failing: string[]; unverified: UnverifiedQuote[]; negativeConstraintPresent: boolean; repairedDescription?: string }`, `runPass(deps, args): Promise<PassResult>`, `runToCompletion(deps, args: { rubric: Rubric; description: string; runId: string; maxPasses?: number }): Promise<{ status: RunStatus; passes: PassResult[]; finalDescription: string }>`.
+
+**Added to this task after review: choosing which spans the Repairer receives.** Task 3 now returns
+every verified span, including spans that nest across checks, so two of them can cover the same
+characters. The splice cannot apply both in one pass, and Task 4 throws if asked to. `runPass` is
+where the subset is chosen.
+
+Select a maximal non-overlapping set, by this order:
+
+1. **Group priority: safety, then drawable, then look.** The safety checks exist so the model does
+   not refuse the prompt, which is the product's reason to exist, so their evidence wins a collision.
+2. **Longer span first** within the same group, because the longer quote carries more context for
+   the Repairer.
+3. **Lower start offset** as the final tiebreak, so the selection is deterministic and testable.
+
+A span that loses a collision is **not** discarded and **not** marked unverified. It stays in the
+pass result as a verified span, it still highlights in the UI, and it is simply not repaired this
+pass. The next pass re-evaluates the spliced text and quotes it again if it is still a problem. That
+is what the three-pass loop is for, and it means a deferred repair costs a pass rather than a finding.
+
+Add to `apps/backend/tests/orchestrate/runToCompletion.test.ts`:
+
+```typescript
+it("sends the safety check's span to the repairer when it collides with a wardrobe span", async () => {
+  // description contains "a Nike hoodie"; wardrobe quotes "Nike hoodie", no_brand_name quotes "Nike"
+  // assert the repairer's input contains the no_brand_name span and not the wardrobe span
+});
+
+it("keeps the deferred span verified rather than marking it unverified", async () => {
+  // assert the wardrobe span is still in PassResult.results[...].spans and absent from unverified
+});
+
+it("repairs the deferred span on a later pass once the collision is gone", async () => {
+  // pass 1 repairs the brand name; pass 2's wardrobe quote no longer collides and is repaired
+});
+```
 
 **Added to this task to close a spec gap: the quote-exactly retry.** Spec §5 specifies the full path,
 and the plan previously stopped halfway through it:
