@@ -1,4 +1,4 @@
-import type { CheckGroup, CheckId } from "@ai-director/contract";
+import type { CheckGroup, CheckId, VersionKind } from "@ai-director/contract";
 
 /**
  * Human titles for the nine checks and three groups, as frozen in the v1 rubric
@@ -28,4 +28,11 @@ export const GROUP_LETTER: Record<CheckGroup, string> = {
   look: "A",
   safety: "B",
   drawable: "C",
+};
+
+/** Versions screen: the KIND column and the prompt-diff title (design doc §4.3, §5). */
+export const VERSION_KIND_TITLES: Record<VersionKind, string> = {
+  rubric: "Rubric",
+  evaluator_prompt: "Evaluator prompt",
+  repairer_prompt: "Repairer prompt",
 };

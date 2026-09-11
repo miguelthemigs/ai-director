@@ -44,6 +44,17 @@ describe("App shell", () => {
     expect(screen.getByTestId("node-evaluator")).toBeInTheDocument();
     expect(screen.getByTestId("node-interrogator")).toHaveTextContent(/planned/i);
   });
+
+  // Task 16's `VersionsScreen` replaces the Task 12 stub (`<h1 className="screen-title">Versions</h1>`
+  // and nothing else). Assert on a version row's required note — something only the real screen
+  // renders — rather than the heading text the stub also carried, for the same reason the
+  // Architecture test above does.
+  it("renders the real Versions screen, not the Task 12 stub", async () => {
+    const user = userEvent.setup();
+    render(<App client={new FixtureRunClient()} />);
+    await user.click(screen.getByRole("link", { name: /versions/i }));
+    expect(await screen.findByText(/first frozen rubric/i)).toBeInTheDocument();
+  });
 });
 
 // `useRunStream` was lifted from `RunScreen` into `App` (Task 14) specifically so `ScreenTabs`'

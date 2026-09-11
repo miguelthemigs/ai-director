@@ -1,14 +1,23 @@
 import {
+  CHECK_IDS,
   eventId,
   FIXTURE_EVENT_LOG,
   FIXTURE_RUNS,
+  type Band,
+  type CheckDelta,
   type CheckGroup,
+  type CheckId,
   type PassView,
+  type Percent,
   type ReplacementView,
   type RunEvent,
   type RunView,
   type StepCost,
+  type VersionCompare,
+  type VersionRow,
 } from "@ai-director/contract";
+import { diffLines } from "../domain/textDiff.js";
+import { FIXTURE_VERSIONS, FIXTURE_VERSION_CONTENT } from "./versionFixtures.js";
 import type { RunClient } from "./RunClient.js";
 
 type Scenario = keyof typeof FIXTURE_RUNS;
@@ -20,6 +29,14 @@ const DEFAULT_SPEED_MS = 320;
 const STEP_COST: StepCost = { inputTokens: 1100, outputTokens: 600, usd: 0.02, latencyMs: 4200 };
 
 const GROUP_ORDER: readonly CheckGroup[] = ["look", "safety", "drawable"];
+
+const BAND_BY_PERCENT: Record<Percent, Band> = { 20: 1, 40: 2, 60: 3, 80: 4, 100: 5 };
+
+/** `null` when the row itself has no profile yet — "not scored yet" (contract's own comment on
+ *  `VersionRow.profile`), never a fabricated band for a check nothing has measured. */
+function bandForCheck(profile: Record<CheckId, Percent> | null, checkId: CheckId): Band | null {
+  return profile === null ? null : BAND_BY_PERCENT[profile[checkId]];
+}
 
 /** Rebuilds one pass's events in the same shape and order as the contract's own fixture log. */
 function eventsForPass(pass: PassView): RunEvent[] {
@@ -146,6 +163,32 @@ export class FixtureRunClient implements RunClient {
 
   async listRuns(): Promise<RunView[]> {
     return [...this.runs.values()].map((record) => record.view);
+  }
+
+  async listVersions(): Promise<VersionRow[]> {
+    return [...FIXTURE_VERSIONS];
+  }
+
+  async compareVersions(a: string, b: string): Promise<VersionCompare> {
+    const rowA = FIXTURE_VERSIONS.find((version) => version.id === a);
+    const rowB = FIXTURE_VERSIONS.find((version) => version.id === b);
+    if (!rowA || !rowB) {
+      throw new Error(`FixtureRunClient: unknown version id ${rowA ? b : a}`);
+    }
+
+    const promptDiff = diffLines(FIXTURE_VERSION_CONTENT[a] ?? [], FIXTURE_VERSION_CONTENT[b] ?? []);
+
+    const perCheck: CheckDelta[] = CHECK_IDS.map((checkId) => {
+      const bandA = bandForCheck(rowA.profile, checkId);
+      const bandB = bandForCheck(rowB.profile, checkId);
+      // Null the instant either side is unmeasured — never coerce an unmeasured side to zero
+      // (contract's own comment on `CheckDelta.deltaPercent`).
+      const deltaPercent =
+        rowA.profile === null || rowB.profile === null ? null : rowB.profile[checkId] - rowA.profile[checkId];
+      return { checkId, deltaPercent, bandA, bandB };
+    });
+
+    return { a: rowA, b: rowB, promptDiff, perCheck };
   }
 
   subscribe(runId: string, from: string | undefined, sink: Listener): () => void {

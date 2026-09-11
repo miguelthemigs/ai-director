@@ -1,4 +1,4 @@
-import type { RunEvent, RunView } from "@ai-director/contract";
+import type { RunEvent, RunView, VersionCompare, VersionRow } from "@ai-director/contract";
 
 /**
  * The seam between the three screens and wherever a run's data actually comes from.
@@ -22,4 +22,16 @@ export interface RunClient {
    * stops delivery and releases any pending timer or connection.
    */
   subscribe(runId: string, from: string | undefined, sink: (event: RunEvent) => void): () => void;
+  /**
+   * Every rubric and prompt version on record, oldest sealed first — the Versions screen's own
+   * history. Read-only: sealing a new version is a build-time/backend act, not something a client
+   * of this interface does.
+   */
+  listVersions(): Promise<VersionRow[]>;
+  /**
+   * The two-version compare: prompt/rubric diff plus the nine per-check deltas. `a` and `b` are
+   * `VersionRow.id` values in either order — swapping which one is "before" is the caller's job,
+   * not this method's.
+   */
+  compareVersions(a: string, b: string): Promise<VersionCompare>;
 }

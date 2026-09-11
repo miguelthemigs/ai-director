@@ -8,6 +8,7 @@ import { AppShell } from "./components/AppShell.js";
 import { TopBar } from "./components/TopBar.js";
 import { ArchitectureScreen } from "./screens/ArchitectureScreen.js";
 import { RunScreen } from "./screens/RunScreen.js";
+import { VersionsScreen } from "./screens/VersionsScreen.js";
 
 export type Screen = "run" | "architecture" | "versions";
 
@@ -26,12 +27,6 @@ function screenFromPath(pathname: string): Screen {
 function readInitialScreen(): Screen {
   if (typeof window === "undefined") return "run";
   return screenFromPath(window.location.pathname);
-}
-
-// Versions is built in Task 16; this task builds only the chrome it stands inside. The stub
-// carries the level-1 heading App.test.tsx asserts on and nothing else.
-function VersionsScreenStub(): React.JSX.Element {
-  return <h1 className="screen-title">Versions</h1>;
 }
 
 /**
@@ -90,7 +85,7 @@ export function App({ client }: { client: RunClient }): React.JSX.Element {
           {screen === "architecture" ? (
             <ArchitectureScreen run={run} status={status} events={events} error={error} />
           ) : null}
-          {screen === "versions" ? <VersionsScreenStub /> : null}
+          {screen === "versions" ? <VersionsScreen client={client} /> : null}
         </main>
       </AppShell>
     </MotionConfig>
