@@ -1424,7 +1424,32 @@ git commit -m "feat: evaluator runs three concurrent group calls with strict res
 
 **Interfaces:**
 - Consumes: `Span` (Task 3), `Replacement` (Task 4), `ParseTransport` (Task 6), `RubricCheck` (Task 2).
-- Produces: `RepairerOutputSchema`, `buildRepairerSystemPrompt(checks: RubricCheck[]): string`, `repairSpans(deps: { transport: ParseTransport }, args: { spans: Span[]; checks: RubricCheck[]; reasons: Record<string, string> }): Promise<Replacement[]>`.
+- Produces: `RepairerOutputSchema`, `buildRepairerSystemPrompt(checks: RubricCheck[]): string`, `repairSpans(deps: { transport: ParseTransport }, args: { spans: Span[]; checks: RubricCheck[]; reasons: Record<string, string> }): Promise<{ replacements: Replacement[]; rejected: RejectedReplacement[] }>`, `type RejectedReplacement = { spanId: string; reason: "unknown_span" | "empty_text" }`.
+
+**Failure granularity, corrected after implementation.** An earlier draft of this task had
+`repairSpans` throw on an unknown `spanId` or an empty `newText`, discarding the whole batch. That is
+wrong, and it is inconsistent with every other failure path in this pipeline.
+
+The rule everywhere else is: mark the bad item, exclude it, keep the rest, log it as prompt-tuning
+signal. `verifySpans` does it for a quote it cannot locate. Task 6 does it for a check with missing
+evidence and for a whole group that fails. `repairSpans` does the same:
+
+- A replacement naming a `spanId` that was not sent is **dropped**, recorded in `rejected` with
+  reason `unknown_span`, and the remaining replacements are returned and applied. It is safe to apply
+  them: the splice validates every replacement against known spans regardless, and the dropped span is
+  simply not repaired this pass. The next pass re-evaluates and quotes it again if it is still wrong.
+- A replacement with an empty `newText` is **dropped** the same way, with reason `empty_text`. Remove
+  the `.min(1)` from the schema field so this is a code decision rather than a parse failure, for the
+  same reason the Evaluator's quotes rule moved out of its schema in Task 5.
+
+Throwing costs a whole repair pass out of only three because the model hallucinated one id. Dropping
+costs one span for one pass. The `rejected` array is what stops that being silent: the orchestrator
+logs it, and a repairer that regularly invents span ids is a prompt defect the run should surface.
+
+**Open question recorded, not decided here:** whether an empty `newText` should instead be treated as
+a legitimate *deletion* — removing "Nike " from "a Nike hoodie" is a valid repair for `no_brand_name`.
+v1 rejects it, because a deletion can leave doubled spaces and broken grammar that nothing in the
+pipeline checks. Revisit with the rubric v2 work.
 
 - [ ] **Step 1: Write the failing test**
 
