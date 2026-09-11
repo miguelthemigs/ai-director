@@ -167,4 +167,65 @@ describe("nodesFromEvents", () => {
     expect(nodeById(nodes, "splice").latencyMs).toBeUndefined();
     expect(nodeById(nodes, "gate").latencyMs).toBeUndefined();
   });
+
+  // Fix round 3: `verify` only ever reached `done` via `repairer.started`, but that event never
+  // fires on the final pass or on any pass with nothing selected for repair (runPass.ts returns
+  // before ever calling the repairer in both cases) -- exactly the path a fully successful run's
+  // last pass always takes. Found by Task 20 hand-verifying a real run, not by any test: `verify`
+  // was left reading "running... 0%" forever once such a pass landed. `pass.completed` fires on
+  // every pass without exception and, per `runToCompletion.ts`, only after verification has fully
+  // resolved -- so it is the fallback that closes the gap. This event log has no `repairer.*`
+  // events at all: a single pass with everything already passing, nothing to repair.
+  it("moves verify to done on pass.completed alone when the pass had nothing to repair, rather than leaving it stuck running", () => {
+    const cost = { inputTokens: 100, outputTokens: 50, usd: 0.01, latencyMs: 500 };
+    const events: RunEvent[] = [
+      { id: "0-0", name: "run.started", at: "2026-01-01T00:00:00.000Z", runId: "r1", rubricVersion: "1.0.0", model: "m", description: "d" },
+      { id: "1-0", name: "pass.started", at: "2026-01-01T00:00:01.000Z", pass: 1, description: "d" },
+      { id: "1-1", name: "evaluator.group.started", at: "2026-01-01T00:00:02.000Z", pass: 1, group: "look" },
+      { id: "1-2", name: "evaluator.group.completed", at: "2026-01-01T00:00:03.000Z", pass: 1, group: "look", results: [], cost },
+      { id: "1-3", name: "evaluator.group.completed", at: "2026-01-01T00:00:04.000Z", pass: 1, group: "safety", results: [], cost },
+      { id: "1-4", name: "evaluator.group.completed", at: "2026-01-01T00:00:05.000Z", pass: 1, group: "drawable", results: [], cost },
+      // No repairer.started/repairer.completed: nothing failed, so runPass never calls the repairer.
+      { id: "1-5", name: "pass.completed", at: "2026-01-01T00:00:06.000Z", pass: 1, failing: [], results: [] },
+    ];
+
+    const nodes = nodesFromEvents(events);
+    expect(nodeById(nodes, "verify").state).toBe("done");
+    // Splice genuinely did not run this pass — there is nothing to splice — so it reads `queued`,
+    // never a fabricated `done`, exactly as if it had never run at all.
+    expect(nodeById(nodes, "splice").state).toBe("queued");
+    // Gate makes its continue/stop decision every pass regardless of repair, so it was never
+    // affected by this bug and needs no special-casing here.
+    expect(nodeById(nodes, "gate").state).toBe("done");
+  });
+
+  // The other half of Splice's fix: a `done` from an earlier pass that DID repair must not linger
+  // once a later pass has nothing to repair — otherwise the screen would still claim a splice
+  // "just happened" on a pass where none did.
+  it("reverts splice from done back to queued on a later pass with nothing to repair", () => {
+    const cost = { inputTokens: 100, outputTokens: 50, usd: 0.01, latencyMs: 500 };
+    const events: RunEvent[] = [
+      { id: "0-0", name: "run.started", at: "2026-01-01T00:00:00.000Z", runId: "r1", rubricVersion: "1.0.0", model: "m", description: "d" },
+      // Pass 1: repairs something, so splice legitimately reaches `done`.
+      { id: "1-0", name: "pass.started", at: "2026-01-01T00:00:01.000Z", pass: 1, description: "d" },
+      { id: "1-1", name: "evaluator.group.started", at: "2026-01-01T00:00:02.000Z", pass: 1, group: "look" },
+      { id: "1-2", name: "evaluator.group.completed", at: "2026-01-01T00:00:03.000Z", pass: 1, group: "look", results: [], cost },
+      { id: "1-3", name: "evaluator.group.completed", at: "2026-01-01T00:00:04.000Z", pass: 1, group: "safety", results: [], cost },
+      { id: "1-4", name: "evaluator.group.completed", at: "2026-01-01T00:00:05.000Z", pass: 1, group: "drawable", results: [], cost },
+      { id: "1-5", name: "repairer.started", at: "2026-01-01T00:00:06.000Z", pass: 1, spanIds: ["age_build-0"] },
+      { id: "1-6", name: "repairer.completed", at: "2026-01-01T00:00:07.000Z", pass: 1, replacements: [], cost },
+      { id: "1-7", name: "pass.completed", at: "2026-01-01T00:00:08.000Z", pass: 1, repairedDescription: "d2", failing: ["age_build"], results: [] },
+      // Pass 2 (final): nothing left to repair.
+      { id: "2-0", name: "pass.started", at: "2026-01-01T00:00:09.000Z", pass: 2, description: "d2" },
+      { id: "2-1", name: "evaluator.group.started", at: "2026-01-01T00:00:10.000Z", pass: 2, group: "look" },
+      { id: "2-2", name: "evaluator.group.completed", at: "2026-01-01T00:00:11.000Z", pass: 2, group: "look", results: [], cost },
+      { id: "2-3", name: "evaluator.group.completed", at: "2026-01-01T00:00:12.000Z", pass: 2, group: "safety", results: [], cost },
+      { id: "2-4", name: "evaluator.group.completed", at: "2026-01-01T00:00:13.000Z", pass: 2, group: "drawable", results: [], cost },
+      { id: "2-5", name: "pass.completed", at: "2026-01-01T00:00:14.000Z", pass: 2, failing: [], results: [] },
+    ];
+
+    const nodes = nodesFromEvents(events);
+    expect(nodeById(nodes, "verify").state).toBe("done");
+    expect(nodeById(nodes, "splice").state).toBe("queued");
+  });
 });

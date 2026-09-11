@@ -244,16 +244,30 @@ function pluralize(n: number, word: string): string {
  *
  * `verify`, `splice` and `gate` have no events of their own on the wire (§6, the contract's
  * `EVENT_NAMES`) — they are enforcement steps inferred from the evaluator/repairer events that
- * bracket them. Their `state`, `progress` and `note` are honestly derived from those bracketing
- * events — a node moving to `done` because the next real step started is a sound inference about
- * *sequence*. Their `latencyMs`, `tokensIn/Out` and `costUsd` are deliberately left unset, not
+ * bracket them. Their `latencyMs`, `tokensIn/Out` and `costUsd` are deliberately left unset, not
  * derived from the gap between two timestamps: the backend can run real, invisible-on-the-wire
  * work between those two events (e.g. Verify's bracket can contain a full `retryVerbatim` model
  * call when a quote needs a second pass — see `apps/backend/src/orchestrate/runPass.ts`), so a
  * timestamp gap would silently misattribute that work's cost to the wrong step. Leaving these
  * fields unset is what makes `formatLatency`/`formatCost` render "not measured" for them, same as
- * their already-unset token/cost fields — the bracket can honestly say *what happened* for these
- * three nodes, never honestly say *how long it took*.
+ * their already-unset token/cost fields.
+ *
+ * Their `state` is a different question per node, because what each one actually does on a given
+ * pass differs:
+ * - Verify runs on *every* pass, repair or no repair — `runPass` calls `verifySpans` unconditionally
+ *   before it ever checks whether there is anything to repair. Its `done` transition used to fire
+ *   only on `repairer.started`, which does not fire on the final pass or on any pass with nothing
+ *   selected for repair — exactly the happy path a fully successful run takes on its last pass, so
+ *   Verify got stuck reading "running" forever there. `pass.completed` fires on every pass without
+ *   exception, and by the time it fires this pass's verification has demonstrably resolved (see the
+ *   `pass.completed` case below), so it is the fallback that closes that gap.
+ * - Splice genuinely does not run on a pass with nothing repaired — there is no text to splice.
+ *   Forcing it to `done` regardless (the previous bug, in the opposite direction from Verify's)
+ *   would fabricate a claim the pass never made; it reads `queued` on such a pass instead, the same
+ *   as if it had never run at all.
+ * - Gate needs no special case: it makes a real decision — continue or stop — every single pass,
+ *   with or without a repair, so its unconditional `done` on every `pass.completed` was never
+ *   wrong to begin with.
  */
 export function nodesFromEvents(events: RunEvent[]): PipelineNode[] {
   const nodes = new Map<string, PipelineNode>(PIPELINE_NODES.map((n) => [n.id, { ...n }]));
@@ -385,15 +399,47 @@ export function nodesFromEvents(events: RunEvent[]): PipelineNode[] {
       }
 
       case "pass.completed": {
-        // Splice's own duration is not honestly attributable either — same reasoning as Verify
-        // above — so `latencyMs` stays unset here too.
-        patch("splice", {
-          state: "done",
-          cueId: event.id,
-          progress: 1,
-          payload: { repairedDescription: event.repairedDescription },
-          note: event.repairedDescription ? "spliced into description" : "no repair to splice",
-        });
+        // Verification genuinely completes every pass, whether or not a repair follows it —
+        // `runToCompletion` emits `pass.completed` only "after `runPass` has already fully
+        // resolved verification (including the one verbatim retry, if it ran)". `repairer.started`
+        // (the event that used to carry Verify's only "done" transition) never fires on the final
+        // pass or on any pass with nothing to select for repair, so relying on it alone left Verify
+        // reading "running... 0%" forever on exactly those passes — the happy path, since a
+        // completely successful run's last pass is always one of them. `pass.completed` fires on
+        // every pass without exception, so it is the fallback that closes that gap. Skipped when
+        // Verify is already `done`: a pass that did repair already got a more specific cueId
+        // (`repairer.started`'s own) attributing the transition to the real handoff, and that is
+        // worth keeping rather than overwriting with this later, less specific event.
+        if (nodes.get("verify")?.state !== "done") {
+          patch("verify", { state: "done", cueId: event.id, progress: 1 });
+        }
+
+        // Splice, unlike Verify, genuinely does not run on a pass with nothing to repair — there
+        // is no text to splice. `event.repairedDescription` is defined if and only if
+        // `runPass` actually applied a replacement (`runPass.ts`: set only when the repairer
+        // returned at least one usable replacement), so it is the exact honest signal for whether
+        // this pass's splice happened. When it didn't, `done` (implying "just spliced something")
+        // would be as fabricated as Verify's old stuck-`running` was misleading in the other
+        // direction — so this reverts Splice to `queued`, the same state it would show if it had
+        // never run at all, rather than leaving a stale `done` from an earlier pass that did repair.
+        patch(
+          "splice",
+          event.repairedDescription !== undefined
+            ? {
+                state: "done",
+                cueId: event.id,
+                progress: 1,
+                payload: { repairedDescription: event.repairedDescription },
+                note: "spliced into description",
+              }
+            : {
+                state: "queued",
+                cueId: event.id,
+                progress: 0,
+                payload: undefined,
+                note: "no repair to splice this pass",
+              },
+        );
 
         const stillFailing = event.failing.length;
         patch("gate", {
