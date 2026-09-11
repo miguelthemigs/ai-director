@@ -63,15 +63,44 @@ describe("RunScreen", () => {
 
     await startAndFinishPass1();
 
-    // hair_spec is rubric index 3 (its quote does not overlap another check's, unlike
-    // age_build's "young man", which sits inside hair_spec's own wider quote and is dropped from
-    // the specimen — see the task report's note on overlapping spans).
+    // age_build is rubric index 1, the roving-tabindex default. Its quote ("young man") is nested
+    // inside hair_spec's own wider quote ("A confident young man") in this fixture's first pass —
+    // exactly the overlap case that must still render its own reachable fragment.
     const listbox = screen.getByRole("listbox", { name: /checks/i });
-    fireEvent.keyDown(listbox, { key: "3" });
     fireEvent.keyDown(listbox, { key: "Enter" });
 
-    const fragment = screen.getByRole("button", { name: /hair specified three ways, band/i });
+    const fragment = screen.getByRole("button", { name: /age bracket and build, band/i });
     expect(fragment).toHaveAttribute("aria-current", "true");
+  });
+
+  it("renders every span in an overlapping pair, and either covering check can select its own fragment", async () => {
+    const client = new FixtureRunClient({ speedMs: 1, scenario: "improvedStillFailing" });
+    render(<RunScreen client={client} />);
+
+    await startAndFinishPass1();
+
+    // age_build's "young man" nests inside hair_spec's "A confident young man". Neither check may
+    // lose its evidence to the other — the engine's own `verifySpans` already guarantees both
+    // survive the wire (see PRODUCT.md and the repairer's history); this is that same guarantee one
+    // layer up, in the specimen's rendering.
+    const ageBuildFragment = screen.getByRole("button", { name: /age bracket and build, band/i });
+    fireEvent.click(ageBuildFragment);
+    expect(screen.getByRole("option", { name: /age bracket and build/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+
+    const hairSpecFragments = screen.getAllByRole("button", { name: /hair specified three ways, band/i });
+    expect(hairSpecFragments.length).toBeGreaterThan(0);
+    fireEvent.click(hairSpecFragments[0]!);
+    expect(screen.getByRole("option", { name: /hair specified three ways/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+
+    // Selecting hair_spec must not have removed age_build's own fragment from the DOM — both
+    // checks stay reachable regardless of which is currently selected.
+    expect(screen.getByRole("button", { name: /age bracket and build, band/i })).toBeInTheDocument();
   });
 
   it("selects the check when its fragment in the text is activated", async () => {
@@ -80,8 +109,11 @@ describe("RunScreen", () => {
 
     await startAndFinishPass1();
 
-    const fragment = screen.getByRole("button", { name: /wardrobe head to toe, band/i });
-    fireEvent.click(fragment);
+    // wardrobe's quote ("a Nike hoodie") itself overlaps no_brand_name's ("Nike"), so wardrobe
+    // renders as more than one fragment (split around the shared "Nike"); any one of them must
+    // select the check.
+    const [fragment] = screen.getAllByRole("button", { name: /wardrobe head to toe, band/i });
+    fireEvent.click(fragment!);
 
     const row = screen.getByRole("option", { name: /wardrobe head to toe/i });
     expect(row).toHaveAttribute("aria-selected", "true");

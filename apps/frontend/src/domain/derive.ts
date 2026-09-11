@@ -63,6 +63,47 @@ export function splitLines(description: string, spans: SpanView[]): SpecimenLine
   return lines;
 }
 
+/** A contiguous, non-overlapping run of one line's text, plus every span covering it. */
+export type SpecimenSegment = {
+  /** Offset within the line's own text (`SpecimenLineModel.text`), not the full description. */
+  start: number;
+  end: number;
+  /** Every span covering this exact run, in ascending start order. Can be empty (plain text), have
+   *  one entry (the ordinary case), or have more than one — two checks legitimately quoting
+   *  overlapping or nested text (e.g. `hair_spec` quoting "A confident young man" while
+   *  `age_build` quotes the nested "young man"). Neither is ever dropped: `verifySpans` already
+   *  guarantees both survive the wire, so the rendering layer must not silently lose one either. */
+  spans: SpecimenLineSpanModel[];
+};
+
+/**
+ * Splits one line into segments at every span boundary on it, so each segment is covered by
+ * exactly the same, fixed set of spans along its whole length. This is what makes overlapping or
+ * nested spans renderable at all: HTML cannot nest two interactive elements around the same text,
+ * so the text has to be cut at the point where the set of covering checks changes, not "first span
+ * wins and the rest are dropped."
+ */
+export function segmentLine(line: SpecimenLineModel): SpecimenSegment[] {
+  const cuts = new Set<number>([0, line.text.length]);
+  for (const span of line.spans) {
+    cuts.add(span.startInLine);
+    cuts.add(span.endInLine);
+  }
+  const sorted = [...cuts].sort((a, b) => a - b);
+
+  const segments: SpecimenSegment[] = [];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const start = sorted[i];
+    const end = sorted[i + 1];
+    if (start === undefined || end === undefined || start >= end) continue;
+    const covering = line.spans
+      .filter((s) => s.startInLine <= start && s.endInLine >= end)
+      .sort((a, b) => a.startInLine - b.startInLine);
+    segments.push({ start, end, spans: covering });
+  }
+  return segments;
+}
+
 /** The 1-based source line a span's start offset falls on. UI-only; the server never sends this. */
 export function lineOfSpan(description: string, start: number): number {
   let line = 1;

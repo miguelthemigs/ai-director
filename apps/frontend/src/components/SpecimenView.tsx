@@ -8,11 +8,11 @@ import {
   type CheckResultView,
   type SpanView,
 } from "@ai-director/contract";
-import { splitLines } from "../domain/derive.js";
+import { segmentLine, splitLines } from "../domain/derive.js";
 import { CHECK_TITLES } from "../domain/labels.js";
 import { CoverageGutter, type CoverageRuleGeometry } from "./CoverageGutter.js";
 import { SpecimenLine } from "./SpecimenLine.js";
-import { SpanMark } from "./SpanMark.js";
+import { SpanMark, type SpanMarkCoveringSpan } from "./SpanMark.js";
 
 export type SpecimenViewProps = {
   description: string;
@@ -103,10 +103,78 @@ export function SpecimenView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flatSpans]);
 
+  // One pass over every line's segments, tracking how many times each spanId will actually be
+  // rendered (a span can be split across more than one segment — an overlap with another check's
+  // quote, or a straddled line break — and its DOM occurrences must be disambiguated for
+  // assistive tech, never silently repeated with an identical accessible name).
+  const renderedLines = useMemo(() => {
+    const segmentsByLine = lines.map((line) => ({ line, segments: segmentLine(line) }));
+
+    const occurrenceTotals = new Map<string, number>();
+    for (const { segments } of segmentsByLine) {
+      for (const segment of segments) {
+        for (const span of segment.spans) {
+          occurrenceTotals.set(span.spanId, (occurrenceTotals.get(span.spanId) ?? 0) + 1);
+        }
+      }
+    }
+
+    const occurrenceSeen = new Map<string, number>();
+    const result = new Map<number, React.ReactNode[]>();
+
+    for (const { line, segments } of segmentsByLine) {
+      const nodes: React.ReactNode[] = [];
+      for (const segment of segments) {
+        const text = line.text.slice(segment.start, segment.end);
+
+        const covering: SpanMarkCoveringSpan[] = [];
+        for (const span of segment.spans) {
+          const flat = flatSpanById.get(span.spanId);
+          if (!flat) continue;
+          const seen = (occurrenceSeen.get(span.spanId) ?? 0) + 1;
+          occurrenceSeen.set(span.spanId, seen);
+          covering.push({
+            spanId: span.spanId,
+            checkId: span.checkId,
+            checkTitle: CHECK_TITLES[span.checkId],
+            band: flat.band,
+            index: flat.indexInCheck,
+            total: flat.totalInCheck,
+            occurrenceIndex: seen,
+            occurrenceTotal: occurrenceTotals.get(span.spanId) ?? 1,
+            selected: selectedCheckId === span.checkId,
+            focused: focusedSpanId === span.spanId,
+          });
+        }
+
+        const primary = covering[0];
+        if (!primary) {
+          nodes.push(<span key={`${line.line}-plain-${segment.start}`}>{text}</span>);
+          continue;
+        }
+
+        const lane = Math.max(lanes.indexOf(primary.checkId), 0);
+        nodes.push(
+          <SpanMark
+            key={`${line.line}-${segment.start}`}
+            text={text}
+            lane={lane}
+            covering={covering}
+            onSelect={onSelectCheck}
+          />,
+        );
+      }
+      result.set(line.line, nodes);
+    }
+    return result;
+  }, [lines, flatSpanById, lanes, selectedCheckId, focusedSpanId, onSelectCheck]);
+
   const moveFocus = useCallback((spanId: string | undefined) => {
     if (!spanId) return;
     setFocusedSpanId(spanId);
-    containerRef.current?.querySelector<HTMLButtonElement>(`[data-span-id="${CSS.escape(spanId)}"] button`)?.focus();
+    // A spanId can render more than one element (split by an overlap or a line break); the first
+    // occurrence is as good a place as any to land focus.
+    containerRef.current?.querySelector<HTMLButtonElement>(`[data-span-id="${CSS.escape(spanId)}"]`)?.focus();
   }, []);
 
   const onKeyDown = useCallback(
@@ -226,52 +294,9 @@ export function SpecimenView({
             else lineRefs.current.delete(line.line);
           }}
         >
-          {renderLineContent(line, flatSpanById, lanes, selectedCheckId, focusedSpanId, onSelectCheck)}
+          {renderedLines.get(line.line)}
         </SpecimenLine>
       ))}
     </div>
   );
-}
-
-function renderLineContent(
-  line: ReturnType<typeof splitLines>[number],
-  flatSpanById: Map<string, FlatSpan>,
-  lanes: CheckId[],
-  selectedCheckId: CheckId | null,
-  focusedSpanId: string | null,
-  onSelectCheck: (checkId: CheckId) => void,
-): React.ReactNode {
-  const ordered = [...line.spans].sort((a, b) => a.startInLine - b.startInLine);
-  const nodes: React.ReactNode[] = [];
-  let cursor = 0;
-
-  for (const span of ordered) {
-    if (span.startInLine < cursor) continue; // overlapping spans: keep the first, drop the rest
-    const flat = flatSpanById.get(span.spanId);
-    if (!flat) continue;
-    if (span.startInLine > cursor) {
-      nodes.push(<span key={`${line.line}-plain-${cursor}`}>{line.text.slice(cursor, span.startInLine)}</span>);
-    }
-    nodes.push(
-      <SpanMark
-        key={span.spanId}
-        spanId={span.spanId}
-        checkId={span.checkId}
-        checkTitle={CHECK_TITLES[span.checkId]}
-        text={line.text.slice(span.startInLine, span.endInLine)}
-        band={flat.band}
-        lane={Math.max(lanes.indexOf(span.checkId), 0)}
-        selected={selectedCheckId === span.checkId}
-        index={flat.indexInCheck}
-        total={flat.totalInCheck}
-        onSelect={onSelectCheck}
-        focused={focusedSpanId === span.spanId}
-      />,
-    );
-    cursor = span.endInLine;
-  }
-  if (cursor < line.text.length) {
-    nodes.push(<span key={`${line.line}-plain-${cursor}-tail`}>{line.text.slice(cursor)}</span>);
-  }
-  return nodes;
 }
