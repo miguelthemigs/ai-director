@@ -3493,6 +3493,21 @@ git commit -m "feat: run screen, coverage gutter, check panel, span selection"
 - Consumes: everything from Task 13, plus `ReplacementView`, `PassView`, `TERMINAL_STATUSES`, `isSuccess` from `@ai-director/contract`.
 - Produces: the components above. `VerdictBanner` takes `{ status: RunStatus; failingCount: number; passesUsed: number; meanBefore: number; meanAfter: number }`.
 
+**Added after the Task 13 review: lift the run stream to `App`.** Task 13 kept `useRunStream` inside
+`RunScreen`, which left `TopBar`'s run-identity strip and `ScreenTabs`' failing-count badge wired to
+the Task 12 stub (`run={null} failingCount={0}`). Design doc §6.2 makes that badge part of the
+terminal-state contract — on a failing run it carries the failing count with an alarm treatment — so
+it cannot stay stubbed.
+
+Move the `useRunStream` call up into `App`, pass the run and its derived counts down to `TopBar`,
+`ScreenTabs` and `RunScreen`. Do this here rather than in Task 15 because the Architecture screen
+consumes the *same* event stream to drive its graph: with the hook inside each screen, opening both
+would open two subscriptions to one run, and in Phase C that means two `EventSource` connections
+where the server expects one.
+
+Assert in a test that the failing-count badge reflects a failing run's real count and is absent on a
+`passed` run.
+
 **Design inputs, read only these sections:**
 - `…ui-design.md` §6.2 — **the binding terminal-state table**. Everything `VerdictBanner` renders comes from that table's row for the status, and nothing outside it.
 - `…ui-design.md` §5 "Run screen" for `PassStepper`, `PassStep`, `FragmentDiff`, `FragmentDiffRow`, `CheckStrip`, `CueBadge`.
