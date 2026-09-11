@@ -150,10 +150,13 @@ describe.skipIf(!live)("a full run against the real API reads as a failure when 
     // -- formatPassResult prints it per-check for any individual check that
     // scored at or above the pass band, which can happen even in a failing
     // run -- so this checks for the words a failing run must never use, not
-    // for the substring "pass".
-    for (const word of ["PASSED", "SUCCESS", "success", "complete", "done"]) {
+    // for the substring "pass". Matched case-insensitively, since "Complete"
+    // or "Done" at the start of a sentence would read as success just as
+    // readily as the lowercase forms.
+    const renderedLower = rendered.toLowerCase();
+    for (const word of ["passed", "success", "complete", "done", "finished"]) {
       expect(
-        rendered.includes(word),
+        renderedLower.includes(word),
         `formatPassResult's output contained "${word}" for a run that finished as ` +
           `"${out.status}" -- that reads as success and must never appear in a failing run's ` +
           "rendered output.",
