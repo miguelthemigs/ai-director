@@ -1828,6 +1828,50 @@ and handle `not_evaluated` explicitly: such a check is neither passing nor faili
 and `runToCompletion` must never count it toward a terminal `passed`.
 - Produces: `type PassResult = { pass: number; description: string; results: EvaluatorCheckResult[]; failing: string[]; unverified: UnverifiedQuote[]; negativeConstraintPresent: boolean; repairedDescription?: string }`, `runPass(deps, args): Promise<PassResult>`, `runToCompletion(deps, args: { rubric: Rubric; description: string; runId: string; maxPasses?: number }): Promise<{ status: RunStatus; passes: PassResult[]; finalDescription: string }>`.
 
+**Six corrections from the Task 9 review. These supersede the reference loop below where they differ.**
+
+1. **`no_improvement` is classified by improvement, not by failing count.** UI design doc §6.2 is
+   binding and fixes the banner's second line to "no fragment improved its band". Classifying on count
+   alone makes that sentence false whenever a band rose without the failing set shrinking. Rule:
+   `no_improvement` only when nothing improved — neither the failing set shrank nor any check's band
+   rose between the first and last pass. Otherwise `improved_still_failing`.
+
+2. **The early break must not fire on a transient group failure.** A pass with nothing repairable
+   currently breaks the loop. That is correct when the state is genuinely unrepairable, and wrong when
+   the cause is a `not_evaluated` check, which means a group *call* failed and may be transient. One
+   API error on one of three parallel calls would otherwise report a passing description as
+   `no_improvement` with zero re-attempts, and the retry cannot rescue it because a `not_evaluated`
+   check produces no unverified quote. Rule: if there is nothing to repair but any check is
+   `not_evaluated`, continue to the next pass and re-evaluate; only break when nothing is repairable
+   and every check was actually evaluated.
+
+3. **`PassResult` gains `notEvaluated: string[]`.** `failing` currently mixes "scored below band 4"
+   with "never scored". That is correct for the `passed` gate, which must fold in both, but wrong as a
+   display count — design doc §6.2 binds the banner numeral to "the count of checks still below band
+   4", and a check with no band is not below 4. Keep `failing` as the gate, add `notEvaluated` so the
+   presenter can render each honestly.
+
+4. **Wrap the loop in an error boundary and finish `"failed"`.** There is no try/catch, and
+   `RunStatus` already carries `"failed"` unused. A reachable path: `repairSpans` does not dedupe
+   spanIds, so a model returning two replacements for one span passes its validation and then
+   `applyReplacements` throws `SpliceError`. The exception escapes, `finishRun` is never called, and
+   the run is stranded at `status: "running"` forever with the CLI showing a stack trace. Catch,
+   call `finishRun(runId, "failed", passes)`, and rethrow or return the failure — but never leave an
+   orphaned `running` manifest.
+
+5. **`rejected` goes into the pass payload, not `console.warn`.** Task 7 returns `rejected` precisely
+   so a repairer that invents span ids is *surfaced*. A console line reaches neither the CLI, the
+   store, nor the UI, and when every replacement is rejected no repair file is written at all, so the
+   failure leaves no trace. Put it in the pass's `repair` payload written through the store.
+
+6. **Do not repair on the final pass.** If the last allowed pass evaluates and then repairs, the run
+   returns text that nothing ever scored, while reporting scores that describe *different* text. Task
+   17 highlighting `finalDescription` with that pass's spans would compute offsets into the wrong
+   string, and the repair call is pure cost that is never measured. Rule: the final pass evaluates and
+   stops. `finalDescription` is always the exact text the final scores describe. This product's claim
+   is that every number traces to the words that produced it; handing back unscored text at the last
+   step breaks that claim at the one place a user reads the result.
+
 **Added to this task after review: choosing which spans the Repairer receives.** Task 3 now returns
 every verified span, including spans that nest across checks, so two of them can cover the same
 characters. The splice cannot apply both in one pass, and Task 4 throws if asked to. `runPass` is
@@ -2181,6 +2225,13 @@ constructs real dependencies, so it is the first place this must be satisfied.
 group call is built, with the additional instruction that the model must quote verbatim from the
 description. Do not fold it into `evaluate` — the retry asks a different question and Task 9's review
 judged the separate seam correct.
+
+**The review flagged that nothing in the repo forces this and neither half exists yet.** There is no
+production `RetryVerbatimFn` anywhere, and `agents/evaluator/prompt.ts` carries no verbatim-quoting
+instruction to build one from. You are writing both. Add a `buildVerbatimRetryPrompt(rubric, group)`
+to `agents/evaluator/prompt.ts` — the group's normal prompt plus an explicit instruction to quote
+exactly and only text that appears in the description — and test that it contains that instruction and
+still contains only its own group's check ids.
 
 If you find `runToCompletion` cannot be called without it, that is the point: a missing retry
 dependency should be a compile error, not a silently skipped retry.
