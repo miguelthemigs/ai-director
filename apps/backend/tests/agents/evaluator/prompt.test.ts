@@ -42,4 +42,15 @@ describe("evaluator schema", () => {
       }),
     ).toThrow();
   });
+
+  // The schema validates structure only. A failing band (< 4) with empty quotes is
+  // structurally well-formed and parses successfully here; the quotes-required-below-4
+  // rule is enforced per check, in code, by Task 6's `evaluateGroup` — not by this schema.
+  it("parses a failing band with empty quotes (schema is structural only)", () => {
+    const parsed = EvaluatorGroupOutputSchema.parse({
+      results: [{ checkId: "wardrobe", band: 3, reason: "Footwear missing.", quotes: [] }],
+    });
+    expect(parsed.results[0]!.band).toBe(3);
+    expect(parsed.results[0]!.quotes).toEqual([]);
+  });
 });
