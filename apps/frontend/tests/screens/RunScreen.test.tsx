@@ -1,7 +1,27 @@
+import { useState } from "react";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { RunClient } from "../../src/data/RunClient.js";
 import { RunScreen } from "../../src/screens/RunScreen.js";
 import { FixtureRunClient } from "../../src/data/FixtureRunClient.js";
+import { useRunStream } from "../../src/hooks/useRunStream.js";
+
+/** Stands in for `App`, which now owns `useRunStream` (Task 14 lifted it out of `RunScreen` so the
+ *  Architecture screen can share one subscription). Mirrors exactly what `App` wires down. */
+function Harness({ client }: { client: RunClient }): React.JSX.Element {
+  const [runId, setRunId] = useState<string | null>(null);
+  const { run, status, events, error } = useRunStream(client, runId);
+  return (
+    <RunScreen
+      client={client}
+      run={run}
+      status={status}
+      events={events}
+      error={error}
+      onRunStarted={setRunId}
+    />
+  );
+}
 
 /** Submits the composer and advances the fixture stream exactly through pass 1's completion
  *  (`pass.completed`, event index 10) — every check scored, nothing from pass 2 started yet. */
@@ -13,10 +33,26 @@ async function startAndFinishPass1(): Promise<void> {
   // `client.startRun`) must fully settle and commit — subscribing the stream — before any fake
   // timer advances, or the fixture's first events fire to zero listeners and are lost forever.
   await act(async () => {
-    fireEvent.click(screen.getByRole("button", { name: /run/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
   });
   await act(async () => {
     await vi.advanceTimersByTimeAsync(11);
+  });
+}
+
+/** Submits the composer and advances the fixture stream well past `run.completed` — enough ticks
+ *  for either fixture scenario's full event log (32 events for `improvedStillFailing`, 22 for
+ *  `noImprovement`, at 1ms each) to land. Advancing further than the log is harmless: the fixture
+ *  client stops scheduling once it runs out of events. */
+async function startAndFinishRun(): Promise<void> {
+  fireEvent.change(screen.getByPlaceholderText("Paste the character description."), {
+    target: { value: "a description long enough to submit" },
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(60);
   });
 }
 
@@ -31,7 +67,7 @@ describe("RunScreen", () => {
 
   it("shows all nine checks with their own percentage once a run streams", async () => {
     const client = new FixtureRunClient({ speedMs: 1, scenario: "improvedStillFailing" });
-    render(<RunScreen client={client} />);
+    render(<Harness client={client} />);
 
     await startAndFinishPass1();
 
@@ -44,7 +80,7 @@ describe("RunScreen", () => {
 
   it("shows no aggregate score anywhere in a group header", async () => {
     const client = new FixtureRunClient({ speedMs: 1, scenario: "improvedStillFailing" });
-    render(<RunScreen client={client} />);
+    render(<Harness client={client} />);
 
     await startAndFinishPass1();
 
@@ -59,7 +95,7 @@ describe("RunScreen", () => {
 
   it("highlights the quoted fragment when its check is activated from the keyboard", async () => {
     const client = new FixtureRunClient({ speedMs: 1, scenario: "improvedStillFailing" });
-    render(<RunScreen client={client} />);
+    render(<Harness client={client} />);
 
     await startAndFinishPass1();
 
@@ -75,7 +111,7 @@ describe("RunScreen", () => {
 
   it("renders every span in an overlapping pair, and either covering check can select its own fragment", async () => {
     const client = new FixtureRunClient({ speedMs: 1, scenario: "improvedStillFailing" });
-    render(<RunScreen client={client} />);
+    render(<Harness client={client} />);
 
     await startAndFinishPass1();
 
@@ -105,7 +141,7 @@ describe("RunScreen", () => {
 
   it("selects the check when its fragment in the text is activated", async () => {
     const client = new FixtureRunClient({ speedMs: 1, scenario: "improvedStillFailing" });
-    render(<RunScreen client={client} />);
+    render(<Harness client={client} />);
 
     await startAndFinishPass1();
 
@@ -121,7 +157,7 @@ describe("RunScreen", () => {
 
   it("shows an explicit fragment-not-found notice for an unverified quote", async () => {
     const client = new FixtureRunClient({ speedMs: 1, scenario: "improvedStillFailing" });
-    render(<RunScreen client={client} />);
+    render(<Harness client={client} />);
 
     await startAndFinishPass1();
 
@@ -132,7 +168,7 @@ describe("RunScreen", () => {
 
   it("makes the description read-only once submitted", async () => {
     const client = new FixtureRunClient({ speedMs: 1, scenario: "improvedStillFailing" });
-    render(<RunScreen client={client} />);
+    render(<Harness client={client} />);
 
     expect(screen.getByPlaceholderText("Paste the character description.")).toBeInTheDocument();
 
@@ -142,4 +178,25 @@ describe("RunScreen", () => {
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.getByText(/read-only/i)).toBeInTheDocument();
   });
+
+  const FORBIDDEN = [/\bcomplete\b/i, /\bsuccess\b/i, /\bdone\b/i, /\bfinished\b/i, /✓/, /✔/];
+
+  it.each([
+    ["improvedStillFailing", 4],
+    ["noImprovement", 2],
+  ] as const)(
+    "never shows a success state for the %s scenario, end to end",
+    async (scenario, expectedFailing) => {
+      const client = new FixtureRunClient({ speedMs: 1, scenario });
+      render(<Harness client={client} />);
+
+      await startAndFinishRun();
+
+      const documentText = document.body.textContent ?? "";
+      for (const pattern of FORBIDDEN) {
+        expect(documentText).not.toMatch(pattern);
+      }
+      expect(screen.getByTestId("verdict-numeral")).toHaveTextContent(String(expectedFailing));
+    },
+  );
 });

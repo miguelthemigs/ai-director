@@ -1,16 +1,11 @@
 /*
  * The Run screen (design doc §4.1, §5 "Run screen"). Scoped to this screen and imported only by
  * `RunScreen.tsx`; the shared chrome in `base.css` is untouched.
- *
- * The pass rail (`PassStepper`, the mockup's left-hand 88px column) is not built in this task —
- * see the task report — so this is a two-column layout (field, checks) rather than the mockup's
- * three. Extending `--w-rail` back in is a matter of adding the third grid column when that
- * component exists.
  */
 
 .run {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--w-checks);
+  grid-template-columns: var(--w-rail) minmax(0, 1fr) var(--w-checks);
   gap: 0;
   min-height: 0;
   height: 100%;
@@ -21,7 +16,7 @@
 
 @media (max-width: 1024px) {
   .run {
-    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-columns: var(--w-rail) minmax(0, 1fr) 340px;
   }
 }
 
@@ -33,6 +28,302 @@
     border-inline-start: none;
     border-top: var(--bd-hair) solid var(--ln);
   }
+}
+
+/* ── Pass rail ─────────────────────────────────────────────── */
+
+.run__rail {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--sp-5);
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-4) var(--sp-2);
+  background: var(--sf-panel);
+}
+
+.pass-stepper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.pass-stepper__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.pass-stepper__cue {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+  padding-top: var(--sp-3);
+  border-top: var(--bd-hair) solid var(--ln);
+}
+.pass-stepper__cue-label {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.pass-step {
+  position: relative;
+  all: unset;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+  width: 100%;
+  padding: var(--sp-3) var(--sp-2);
+  cursor: pointer;
+  color: var(--ink-2);
+  border-radius: var(--r-2);
+  box-sizing: border-box;
+}
+.pass-step:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.pass-step[data-selected] {
+  color: var(--ink);
+}
+.pass-step__pill {
+  position: absolute;
+  inset: 0;
+  background: var(--sf-panel-raised);
+  z-index: 0;
+}
+.pass-step__frame,
+.pass-step__label,
+.pass-step__status,
+.pass-step__count {
+  position: relative;
+  z-index: 1;
+}
+.pass-step__frame {
+  width: 100%;
+  height: 4px;
+  border-radius: var(--r-1);
+  background: var(--ln);
+}
+.pass-step__frame[data-state="empty"] {
+  background: transparent;
+  border: var(--bd-hair) dashed var(--ln-strong);
+}
+.pass-step__frame[data-state="running"] {
+  background: var(--mark);
+}
+.pass-step__frame[data-state="done"] {
+  background: var(--band-4);
+}
+.pass-step__frame[data-state="terminated"] {
+  background: var(--sig-alarm-fill);
+}
+.pass-step__terminator {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* The cross-bar: a diagonal hairline over the fill, so a failed final pass never reads as a
+   * plain closed frame (design doc §6.2). */
+  background: repeating-linear-gradient(
+    45deg,
+    var(--sig-alarm-ink) 0,
+    var(--sig-alarm-ink) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+}
+.pass-step__label {
+  font-size: var(--fs-label);
+  font-weight: var(--fw-med);
+}
+.pass-step__status {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.pass-step__count {
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+}
+
+/* ── Verdict banner ────────────────────────────────────────── */
+
+.verdict-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  text-align: center;
+  padding: var(--sp-4) var(--sp-3);
+  border-radius: var(--r-2);
+}
+.verdict-banner[data-status="passed"] {
+  border: var(--bd-mark) solid var(--band-5);
+  background: var(--sf-panel);
+  color: var(--band-5);
+}
+.verdict-banner[data-status="improved_still_failing"] {
+  border: var(--bd-mark) solid var(--sig-alarm-edge);
+  background: var(--sig-alarm-tint);
+  color: var(--sig-alarm-edge);
+}
+.verdict-banner[data-status="no_improvement"] {
+  /* The only solid colour fill behind text in the product (design doc §6.2). */
+  border: none;
+  background: var(--sig-alarm-fill);
+  color: var(--sig-alarm-ink);
+}
+.verdict-banner__word {
+  margin: 0;
+  font-size: var(--fs-verdict);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tr-verdict);
+}
+.verdict-banner__count {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.verdict-banner__count-num {
+  font-size: var(--fs-count);
+  font-weight: var(--fw-bold);
+  line-height: 1;
+}
+.verdict-banner__count-label {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+}
+.verdict-banner__detail {
+  margin: 0;
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+}
+.verdict-banner[data-status="no_improvement"] .verdict-banner__detail {
+  color: var(--sig-alarm-ink);
+}
+
+/* ── Fragment diff ─────────────────────────────────────────── */
+
+.run__diff {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.fragment-diff {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.fragment-diff__empty {
+  color: var(--ink-2);
+  font-size: var(--fs-body);
+}
+.fragment-diff-row {
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  padding: var(--sp-3);
+}
+.fragment-diff-row__jump {
+  all: unset;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  cursor: pointer;
+  width: 100%;
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-specimen);
+}
+.fragment-diff-row__jump:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--r-1);
+}
+.fragment-diff-row__line {
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+.fragment-diff-row__text {
+  flex: 1;
+}
+.fragment-diff-row__old {
+  position: relative;
+  color: var(--diff-del);
+  background: var(--diff-del-ground);
+  text-decoration: none;
+}
+.fragment-diff-row__strike {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 50%;
+  height: 1px;
+  background: var(--diff-del);
+}
+.fragment-diff-row__new {
+  color: var(--diff-add);
+  background: var(--diff-add-ground);
+  margin-inline-start: var(--sp-2);
+  text-decoration: none;
+}
+.fragment-diff-row__meta {
+  margin-inline-start: auto;
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.fragment-diff-row__rationale {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+}
+
+/* ── Check strip (phone) ───────────────────────────────────── */
+
+.check-strip {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  height: 36px;
+}
+.check-strip__cell {
+  all: unset;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  border-inline-end: var(--bd-hair) solid var(--ln-faint);
+  color: var(--ink-3);
+}
+.check-strip__cell[data-band="1"] { color: var(--band-1); }
+.check-strip__cell[data-band="2"] { color: var(--band-2); }
+.check-strip__cell[data-band="3"] { color: var(--band-3); }
+.check-strip__cell[data-band="4"] { color: var(--band-4); }
+.check-strip__cell[data-band="5"] { color: var(--band-5); }
+.check-strip__cell[data-selected] {
+  background: var(--mark-soft);
+}
+.check-strip__percent {
+  font-size: var(--fs-micro);
+}
+
+/* ── Cue badge ─────────────────────────────────────────────── */
+
+.cue-badge {
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
 }
 
 /* ── Field column ──────────────────────────────────────────── */

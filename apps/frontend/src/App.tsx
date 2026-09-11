@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { MotionConfig } from "motion/react";
 import type { RunClient } from "./data/RunClient.js";
+import { failingCount } from "./domain/derive.js";
+import { useRunStream } from "./hooks/useRunStream.js";
 import { T } from "./motion/tokens.js";
 import { AppShell } from "./components/AppShell.js";
 import { TopBar } from "./components/TopBar.js";
@@ -41,6 +43,17 @@ function VersionsScreenStub(): React.JSX.Element {
  */
 export function App({ client }: { client: RunClient }): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>(readInitialScreen);
+  const [runId, setRunId] = useState<string | null>(null);
+
+  // Owned here, not inside `RunScreen`: Task 15's Architecture screen reads the same event stream
+  // to drive its graph, and a hook inside each screen would open two `EventSource` subscriptions
+  // to one run once both screens exist (see the task report).
+  const { run, status, events, error } = useRunStream(client, runId);
+  const failing = failingCount(run?.passes.at(-1)?.results ?? []);
+  // `no_improvement` is the only state in the product that carries a solid alarm-fill treatment
+  // (design doc §6.2); every other failing badge — here, `improved_still_failing` — is the alarm
+  // outline instead, so the tab badge cannot borrow the same fill regardless of status.
+  const badgeTone = status === "no_improvement" ? "fill" : "outline";
 
   useEffect(() => {
     const onPopState = () => setScreen(screenFromPath(window.location.pathname));
@@ -59,9 +72,24 @@ export function App({ client }: { client: RunClient }): React.JSX.Element {
   return (
     <MotionConfig reducedMotion="user" transition={T.reveal}>
       <AppShell>
-        <TopBar screen={screen} run={null} failingCount={0} onScreenChange={navigate} />
+        <TopBar
+          screen={screen}
+          run={run}
+          failingCount={failing}
+          badgeTone={badgeTone}
+          onScreenChange={navigate}
+        />
         <main className="screen-body">
-          {screen === "run" ? <RunScreen client={client} /> : null}
+          {screen === "run" ? (
+            <RunScreen
+              client={client}
+              run={run}
+              status={status}
+              events={events}
+              error={error}
+              onRunStarted={setRunId}
+            />
+          ) : null}
           {screen === "architecture" ? <ArchitectureScreenStub /> : null}
           {screen === "versions" ? <VersionsScreenStub /> : null}
         </main>

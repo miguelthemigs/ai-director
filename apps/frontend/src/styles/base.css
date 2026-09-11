@@ -126,9 +126,18 @@ a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; 
   min-width: var(--sp-6);
   padding-inline: var(--sp-2);
   border-radius: var(--r-1);
+  font-size: var(--fs-micro);
+}
+/* `no_improvement` only (design doc §6.2) — the product's one solid-fill-behind-text treatment. */
+.screen-tab__badge[data-tone="fill"] {
   background: var(--sig-alarm-fill);
   color: var(--sig-alarm-ink);
-  font-size: var(--fs-micro);
+}
+/* Every other failing status, including `improved_still_failing` — never the solid fill. */
+.screen-tab__badge[data-tone="outline"] {
+  background: transparent;
+  color: var(--sig-alarm-edge);
+  border: var(--bd-mark) solid var(--sig-alarm-edge);
 }
 
 .run-identity {

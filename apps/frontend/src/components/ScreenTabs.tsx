@@ -13,10 +13,14 @@ const TABS: ReadonlyArray<{ id: Screen; label: string; path: string }> = [
 export function ScreenTabs({
   active,
   failingCount,
+  badgeTone = "outline",
   onChange,
 }: {
   active: Screen;
   failingCount: number;
+  /** Design doc §6.2: `fill` (the product's one solid-colour-behind-text treatment) is reserved
+   *  for `no_improvement`; every other failing run's badge is the alarm outline. */
+  badgeTone?: "outline" | "fill";
   onChange: (screen: Screen) => void;
 }): React.JSX.Element {
   return (
@@ -37,7 +41,11 @@ export function ScreenTabs({
           >
             {tab.label}
             {tab.id === "run" && failingCount > 0 ? (
-              <span className="screen-tab__badge tnum" aria-label={`${failingCount} failing`}>
+              <span
+                className="screen-tab__badge tnum"
+                data-tone={badgeTone}
+                aria-label={`${failingCount} failing`}
+              >
                 {failingCount}
               </span>
             ) : null}

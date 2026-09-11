@@ -100,6 +100,27 @@ export function CheckPanel({
           move(failing[currentPos === -1 ? 0 : nextPos]);
           break;
         }
+        // Next / previous fragment of the focused check (design doc §7 "Keyboard, and the check
+        // to fragment link"). Cycles `activeSpanId`, not the focused check, so `f`/`Shift+F` and
+        // `n`/`p` compose: jump to a failing check, then walk its own quoted fragments.
+        case "n":
+        case "p": {
+          const result = byId.get(focusedId);
+          if (result?.status !== "scored" || result.spans.length === 0) break;
+          event.preventDefault();
+          const spans = result.spans;
+          const currentSpanIndex = spans.findIndex((s) => s.spanId === activeSpanId);
+          const forward = event.key === "n";
+          const nextSpanIndex =
+            currentSpanIndex === -1
+              ? 0
+              : forward
+                ? (currentSpanIndex + 1) % spans.length
+                : (currentSpanIndex - 1 + spans.length) % spans.length;
+          const nextSpan = spans[nextSpanIndex];
+          if (nextSpan) onSelectSpan(nextSpan.spanId);
+          break;
+        }
         default: {
           if (/^[1-9]$/.test(event.key)) {
             event.preventDefault();
@@ -108,7 +129,7 @@ export function CheckPanel({
         }
       }
     },
-    [focusedId, byId, move, onSelectCheck],
+    [focusedId, byId, move, onSelectCheck, activeSpanId, onSelectSpan],
   );
 
   const total = passingCount(results);
