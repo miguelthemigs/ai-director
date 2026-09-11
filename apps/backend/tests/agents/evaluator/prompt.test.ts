@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildEvaluatorSystemPrompt } from "../../../src/agents/evaluator/prompt.js";
+import {
+  buildEvaluatorSystemPrompt,
+  buildVerbatimRetryPrompt,
+} from "../../../src/agents/evaluator/prompt.js";
 import { EvaluatorGroupOutputSchema } from "../../../src/agents/evaluator/schema.js";
 import { loadRubric } from "../../../src/rubric/load.js";
 
@@ -24,6 +27,32 @@ describe("evaluator prompt", () => {
     const prompt = buildEvaluatorSystemPrompt(rubric, "drawable");
     expect(prompt).toContain("Band 1:");
     expect(prompt).toContain("Band 5:");
+  });
+});
+
+describe("verbatim retry prompt", () => {
+  it("instructs the model to quote only text that appears verbatim in the description", async () => {
+    const rubric = await loadRubric("v1");
+    const prompt = buildVerbatimRetryPrompt(rubric, "safety");
+    expect(prompt).toMatch(/quote (only )?.*verbatim|verbatim.*quote/i);
+    expect(prompt).toMatch(/exactly/i);
+  });
+
+  it("still contains only its own group's check ids", async () => {
+    const rubric = await loadRubric("v1");
+    const prompt = buildVerbatimRetryPrompt(rubric, "safety");
+    expect(prompt).toContain("no_real_person");
+    expect(prompt).toContain("no_brand_name");
+    expect(prompt).not.toContain("hair_spec");
+    expect(prompt).not.toContain("drawable_only");
+  });
+
+  it("is the group's normal prompt plus the retry instruction, not a replacement for it", async () => {
+    const rubric = await loadRubric("v1");
+    const normal = buildEvaluatorSystemPrompt(rubric, "look");
+    const retry = buildVerbatimRetryPrompt(rubric, "look");
+    expect(retry).toContain(normal);
+    expect(retry.length).toBeGreaterThan(normal.length);
   });
 });
 
