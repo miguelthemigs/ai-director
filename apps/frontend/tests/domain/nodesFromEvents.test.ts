@@ -101,4 +101,19 @@ describe("nodesFromEvents", () => {
     const intake = nodeById(nodes, "intake");
     expect(intake.costUsd).toBeUndefined();
   });
+
+  // Fix round 1: Verify's and Splice's latency was previously derived as the wall-clock gap
+  // between two real event timestamps (repairer.started - lastGroupCompleted; pass.completed -
+  // repairer.completed). Review found that gap can silently contain a full, invisible-on-the-wire
+  // `retryVerbatim` model call in the backend (apps/backend/src/orchestrate/runPass.ts), so the
+  // number looked measured but was not honestly attributable to that step. The fix is to never
+  // derive it at all, so `formatLatency` renders "not measured" the same way it already does for
+  // these nodes' token/cost fields. `FIXTURE_EVENT_LOG`'s own timestamps are seconds apart (real,
+  // non-zero gaps) precisely so this test cannot pass by accident of a zero gap looking absent.
+  it("reports no latency for verify, splice or gate, even though their bracketing events carry real, non-zero timestamp gaps", () => {
+    const nodes = nodesFromEvents(FIXTURE_EVENT_LOG);
+    expect(nodeById(nodes, "verify").latencyMs).toBeUndefined();
+    expect(nodeById(nodes, "splice").latencyMs).toBeUndefined();
+    expect(nodeById(nodes, "gate").latencyMs).toBeUndefined();
+  });
 });

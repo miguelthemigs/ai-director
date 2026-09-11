@@ -171,12 +171,7 @@ type Bookkeeping = {
   evalTokensOut: number;
   evalCostUsd: number;
   evalLatencyMs: number;
-  /** `at` of the most recent `evaluator.group.completed` this pass — start point for Verify's
-   *  measured latency, which is the real gap to `repairer.started`, not a guess. */
-  lastGroupCompletedAt: string | null;
   passResults: CheckResultView[];
-  /** `at` of `repairer.completed` — start point for Splice's measured latency to `pass.completed`. */
-  repairerCompletedAt: string | null;
 };
 
 function emptyBookkeeping(): Bookkeeping {
@@ -188,9 +183,7 @@ function emptyBookkeeping(): Bookkeeping {
     evalTokensOut: 0,
     evalCostUsd: 0,
     evalLatencyMs: 0,
-    lastGroupCompletedAt: null,
     passResults: [],
-    repairerCompletedAt: null,
   };
 }
 
@@ -217,10 +210,16 @@ function pluralize(n: number, word: string): string {
  *
  * `verify`, `splice` and `gate` have no events of their own on the wire (§6, the contract's
  * `EVENT_NAMES`) — they are enforcement steps inferred from the evaluator/repairer events that
- * bracket them. Their latency is still real: it is the measured gap between two genuine event
- * timestamps (e.g. Verify's latency is `repairer.started.at - lastGroupCompleted.at`), never a
- * fabricated number. Their token/cost fields are left unset — nothing measured a model call for
- * them — so the inspector renders "not measured" rather than a false `$0.00`.
+ * bracket them. Their `state`, `progress` and `note` are honestly derived from those bracketing
+ * events — a node moving to `done` because the next real step started is a sound inference about
+ * *sequence*. Their `latencyMs`, `tokensIn/Out` and `costUsd` are deliberately left unset, not
+ * derived from the gap between two timestamps: the backend can run real, invisible-on-the-wire
+ * work between those two events (e.g. Verify's bracket can contain a full `retryVerbatim` model
+ * call when a quote needs a second pass — see `apps/backend/src/orchestrate/runPass.ts`), so a
+ * timestamp gap would silently misattribute that work's cost to the wrong step. Leaving these
+ * fields unset is what makes `formatLatency`/`formatCost` render "not measured" for them, same as
+ * their already-unset token/cost fields — the bracket can honestly say *what happened* for these
+ * three nodes, never honestly say *how long it took*.
  */
 export function nodesFromEvents(events: RunEvent[]): PipelineNode[] {
   const nodes = new Map<string, PipelineNode>(PIPELINE_NODES.map((n) => [n.id, { ...n }]));
@@ -259,7 +258,6 @@ export function nodesFromEvents(events: RunEvent[]): PipelineNode[] {
           bk.evalTokensOut = 0;
           bk.evalCostUsd = 0;
           bk.evalLatencyMs = 0;
-          bk.lastGroupCompletedAt = null;
           bk.passResults = [];
           patch("evaluator", {
             state: "running",
@@ -280,7 +278,6 @@ export function nodesFromEvents(events: RunEvent[]): PipelineNode[] {
         bk.evalTokensOut += event.cost.outputTokens;
         bk.evalCostUsd = Math.round((bk.evalCostUsd + event.cost.usd) * 100) / 100;
         bk.evalLatencyMs += event.cost.latencyMs;
-        bk.lastGroupCompletedAt = event.at;
         bk.passResults = [...bk.passResults, ...event.results];
 
         const progress = bk.groupsCompletedThisPass / 3;
@@ -318,10 +315,9 @@ export function nodesFromEvents(events: RunEvent[]): PipelineNode[] {
       }
 
       case "repairer.started": {
-        if (bk.lastGroupCompletedAt) {
-          const verifyLatencyMs = Date.parse(event.at) - Date.parse(bk.lastGroupCompletedAt);
-          patch("verify", { state: "done", cueId: event.id, latencyMs: verifyLatencyMs, progress: 1 });
-        }
+        // Verify's own duration is not honestly attributable — see the function comment above —
+        // so only its state and progress move; its `latencyMs` stays unset ("not measured").
+        patch("verify", { state: "done", cueId: event.id, progress: 1 });
         patch("repairer", {
           state: "running",
           cueId: event.id,
@@ -335,7 +331,6 @@ export function nodesFromEvents(events: RunEvent[]): PipelineNode[] {
       }
 
       case "repairer.completed": {
-        bk.repairerCompletedAt = event.at;
         patch("repairer", {
           state: "done",
           cueId: event.id,
@@ -353,14 +348,12 @@ export function nodesFromEvents(events: RunEvent[]): PipelineNode[] {
       }
 
       case "pass.completed": {
-        const spliceLatencyMs = bk.repairerCompletedAt
-          ? Date.parse(event.at) - Date.parse(bk.repairerCompletedAt)
-          : undefined;
+        // Splice's own duration is not honestly attributable either — same reasoning as Verify
+        // above — so `latencyMs` stays unset here too.
         patch("splice", {
           state: "done",
           cueId: event.id,
           progress: 1,
-          latencyMs: spliceLatencyMs,
           payload: { repairedDescription: event.repairedDescription },
           note: event.repairedDescription ? "spliced into description" : "no repair to splice",
         });
