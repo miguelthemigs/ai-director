@@ -10,6 +10,7 @@ import { RunEventBus } from "../orchestrate/events.js";
 import type { RetryVerbatimFn } from "../orchestrate/runPass.js";
 import { runToCompletion } from "../orchestrate/runToCompletion.js";
 import { FileRunStore } from "../store/FileRunStore.js";
+import { FileVersionStore } from "../store/FileVersionStore.js";
 import { buildApp } from "./app.js";
 import type { StartRun } from "./routes/runs.js";
 
@@ -23,6 +24,7 @@ try {
 }
 
 const RUNS_DIR = "data/runs";
+const VERSIONS_DIR = "data/versions";
 
 /**
  * Duplicated from `cli/score.ts`'s private `buildRetryVerbatim` rather than
@@ -74,6 +76,7 @@ function buildRetryVerbatim(transport: ParseTransport): RetryVerbatimFn {
 async function main(): Promise<void> {
   const rubric = await loadRubric("v1");
   const store = new FileRunStore(RUNS_DIR);
+  const versionStore = new FileVersionStore(VERSIONS_DIR);
   // One bus for the whole process: `startRun` below publishes to it, and
   // `GET /runs/:id/events` (Task 18) subscribes to the very same instance --
   // that sharing is what lets a client watch a run it did not just start.
@@ -121,7 +124,7 @@ async function main(): Promise<void> {
     return view;
   };
 
-  const app = buildApp({ store, rubric, startRun, bus });
+  const app = buildApp({ store, rubric, startRun, bus, versionStore });
 
   const port = Number(process.env.PORT ?? 8787);
   await app.listen({ port });

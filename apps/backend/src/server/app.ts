@@ -3,12 +3,15 @@ import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 import { RunEventBus } from "../orchestrate/events.js";
 import type { Rubric } from "../rubric/load.js";
 import type { RunStore } from "../store/RunStore.js";
+import type { VersionStore } from "../store/VersionStore.js";
 import { registerRunRoutes, type StartRun } from "./routes/runs.js";
+import { registerVersionRoutes } from "./routes/versions.js";
 
 export type AppDeps = {
   store: RunStore;
   rubric: Rubric;
   startRun: StartRun;
+  versionStore: VersionStore;
   // Optional so every existing caller (including this file's own tests)
   // that builds an app without a bus keeps working unchanged -- a fresh one
   // is created here in that case. A real server passes its own instance so
@@ -36,6 +39,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   });
 
   registerRunRoutes(app, { ...deps, bus: deps.bus ?? new RunEventBus() });
+  registerVersionRoutes(app, { versionStore: deps.versionStore });
 
   return app;
 }

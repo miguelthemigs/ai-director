@@ -3,6 +3,22 @@ import { FIXTURE_RUNS } from "@ai-director/contract";
 import { buildApp } from "../../src/server/app.js";
 import { loadRubric } from "../../src/rubric/load.js";
 import type { RunManifest, RunStatus, RunStore } from "../../src/store/RunStore.js";
+import type { VersionStore } from "../../src/store/VersionStore.js";
+
+// This suite exercises run routes only; version routes have their own
+// dedicated tests (tests/server/versions.test.ts). This stub exists purely
+// so buildApp's required `versionStore` dep can be satisfied here.
+function stubVersionStore(): VersionStore {
+  return {
+    list: async () => [],
+    get: async (id) => {
+      throw new Error(`version "${id}" not found`);
+    },
+    compare: async () => {
+      throw new Error("not used in this suite");
+    },
+  };
+}
 
 function stubStore(): RunStore {
   const runs = new Map<string, RunManifest>();
@@ -29,6 +45,7 @@ describe("run routes", () => {
       store,
       rubric: await loadRubric("v1"),
       startRun: async () => FIXTURE_RUNS.passed,
+      versionStore: stubVersionStore(),
     });
   });
 
@@ -68,6 +85,7 @@ describe("run routes", () => {
           await new Promise((resolve) => setTimeout(resolve, 50));
           return FIXTURE_RUNS.passed;
         },
+        versionStore: stubVersionStore(),
       });
       const res = await slow.inject({
         method: "POST",
@@ -166,6 +184,7 @@ describe("run routes", () => {
         },
         rubric: await loadRubric("v1"),
         startRun: async () => FIXTURE_RUNS.passed,
+        versionStore: stubVersionStore(),
       });
 
       const res = await throwing.inject({ method: "GET", url: "/runs" });
