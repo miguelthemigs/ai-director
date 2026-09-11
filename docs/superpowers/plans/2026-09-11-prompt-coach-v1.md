@@ -2170,6 +2170,21 @@ git commit -m "feat: three-pass loop with passed, improved-still-failing and no-
 - Consumes: Tasks 2, 6, 7, 9.
 - Produces: `formatPassResult(result: PassResult, rubric: Rubric): string`, `main(argv: string[]): Promise<number>`.
 
+**You must wire the third orchestrator dependency.** Task 9's `runToCompletion` takes three deps, not
+two: `evaluate`, `repair`, and `retryVerbatim`. The third exists because the quote-exactly retry has
+to be scoped to a single group's transport call rather than a whole-run re-ask, and Task 9 left it
+unwired because the real transport lives outside its file ownership. The CLI is the first caller that
+constructs real dependencies, so it is the first place this must be satisfied.
+
+`retryVerbatim` has the same shape as a single-group evaluate call. Build it from
+`createAnthropicTransport` and `buildEvaluatorSystemPrompt(rubric, group)` exactly as the normal
+group call is built, with the additional instruction that the model must quote verbatim from the
+description. Do not fold it into `evaluate` — the retry asks a different question and Task 9's review
+judged the separate seam correct.
+
+If you find `runToCompletion` cannot be called without it, that is the point: a missing retry
+dependency should be a compile error, not a silently skipped retry.
+
 - [ ] **Step 1: Write the failing test**
 
 `apps/backend/tests/cli/score.test.ts`:
