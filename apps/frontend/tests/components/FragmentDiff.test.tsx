@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReplacementView } from "@ai-director/contract";
 import { FragmentDiff } from "../../src/components/FragmentDiff.js";
 
@@ -21,18 +21,37 @@ const REPLACEMENTS: ReplacementView[] = [
 ];
 
 describe("FragmentDiff", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("renders exactly one row per changed fragment, never the whole description", () => {
-    render(
-      <FragmentDiff pass={1} replacements={REPLACEMENTS} onSelectSpan={vi.fn()} />,
-    );
+    render(<FragmentDiff pass={1} replacements={REPLACEMENTS} onSelectSpan={vi.fn()} />);
     const rows = screen.getAllByRole("listitem");
     expect(rows).toHaveLength(2);
   });
 
-  it("shows the old and new text in <del> and <ins>, and shows the rationale", () => {
+  it("keeps the replacement out of the DOM until the strike finishes, then shows <del>/<ins>", async () => {
     const { container } = render(
       <FragmentDiff pass={1} replacements={REPLACEMENTS} onSelectSpan={vi.fn()} />,
     );
+
+    // The reflow-timing fix this test protects: an inline, non-`display:none` <ins> occupies
+    // layout space from the instant it exists in the DOM, regardless of its opacity. So the old
+    // (struck) text must be present immediately, but the new text must not enter the DOM at all
+    // until the strike finishes — otherwise the paragraph reflows to its final width at mount,
+    // underneath the still-running strike animation (motion spec §6.1/§6.2).
+    expect(container.querySelectorAll("del")).toHaveLength(2);
+    expect(container.querySelectorAll("ins")).toHaveLength(0);
+
+    // Past both rows' strike completion (order 0 at 0.14s, order 1 staggered to 0.19s).
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
 
     const dels = container.querySelectorAll("del");
     const inss = container.querySelectorAll("ins");

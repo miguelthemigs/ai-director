@@ -1,5 +1,5 @@
-import { memo } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { memo, useEffect, useState } from "react";
+import { motion } from "motion/react";
 import type { ReplacementView } from "@ai-director/contract";
 import { CHECK_TITLES } from "../domain/labels.js";
 import { STAGGER, STAGGER_CAP, T } from "../motion/tokens.js";
@@ -12,7 +12,6 @@ export type FragmentDiffRowProps = {
   line?: number;
   /** Document order among this pass's changed fragments — drives the stagger (motion spec §6.2). */
   order: number;
-  passIndex: number;
   onSelectSpan: (spanId: string) => void;
 };
 
@@ -23,11 +22,35 @@ export type FragmentDiffRowProps = {
  * strike 0.14s, one unanimated reflow at 0.14s (the text insertion itself), then the replacement
  * fading in over 0.18s. Nothing here uses `layout` — an inline fragment is exactly the trap §13.2
  * warns about.
+ *
+ * The replacement text is kept OUT of the DOM — not merely transparent — until the strike
+ * finishes, so the paragraph's one reflow lands at that instant rather than at mount. Mounting it
+ * `opacity: 0` and only delaying its opacity transition was tried first and is wrong: an inline
+ * node that is not `display: none` still occupies layout space the moment it exists, so a longer
+ * replacement (the common case — repairs usually expand a vague phrase into a specific one) would
+ * reflow the paragraph to its final width at t=0, directly under the still-running strike
+ * animation — precisely the collision §6.1 pins the reflow to a single instant to avoid. Reduced
+ * motion reveals it immediately: every state change still happens, just without the wait
+ * (design doc §7 "Reduced motion").
  */
 function FragmentDiffRowImpl(props: FragmentDiffRowProps): React.JSX.Element {
-  const { replacement, line, order, passIndex, onSelectSpan } = props;
-  const { t } = useMotionPrefs();
+  const { replacement, line, order, onSelectSpan } = props;
+  const { t, reduce } = useMotionPrefs();
   const slot = Math.min(order, STAGGER_CAP.fragment) * STAGGER.fragment;
+
+  const [revealed, setRevealed] = useState(reduce);
+  useEffect(() => {
+    if (reduce) {
+      setRevealed(true);
+      return;
+    }
+    const delayMs = (slot + T.strike.duration) * 1000;
+    const timer = setTimeout(() => setRevealed(true), delayMs);
+    return () => clearTimeout(timer);
+    // `slot` is fixed for the life of this row (its `order` never changes once mounted); only a
+    // change in the reduced-motion preference itself should re-run this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reduce]);
 
   return (
     <li className="fragment-diff-row">
@@ -53,18 +76,16 @@ function FragmentDiffRowImpl(props: FragmentDiffRowProps): React.JSX.Element {
               transition={t({ ...T.strike, delay: slot })}
             />
           </del>
-          <AnimatePresence initial={true}>
+          {revealed ? (
             <motion.ins
-              key={`${replacement.spanId}:${passIndex}`}
               className="fragment-diff-row__new"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0, transition: t(T.panelOut) }}
-              transition={t({ ...T.insert, delay: slot + T.strike.duration }, T.fade)}
+              transition={t(T.insert, T.fade)}
             >
               {replacement.newText}
             </motion.ins>
-          </AnimatePresence>
+          ) : null}
         </span>
         <span className="fragment-diff-row__meta">{CHECK_TITLES[replacement.checkId]}</span>
       </button>

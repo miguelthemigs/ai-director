@@ -30,7 +30,6 @@ export function FragmentDiff({ pass, replacements, lineOf, onSelectSpan }: Fragm
           replacement={replacement}
           line={lineOf?.(replacement.spanId)}
           order={index}
-          passIndex={pass}
           onSelectSpan={onSelectSpan}
         />
       ))}
