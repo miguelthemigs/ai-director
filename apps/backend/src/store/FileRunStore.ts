@@ -2,7 +2,7 @@ import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import type { RunManifest, RunStatus, RunStore } from "./RunStore.js";
+import { RunManifestSchema, type RunManifest, type RunStatus, type RunStore } from "./RunStore.js";
 
 const MANIFEST_FILE = "manifest.json";
 
@@ -37,15 +37,15 @@ export class FileRunStore implements RunStore {
   }
 
   async getRun(runId: string): Promise<RunManifest> {
-    let raw: string;
-    try {
-      raw = await readFile(path.join(this.dir(runId), MANIFEST_FILE), "utf8");
-    } catch {
-      throw new Error(`FileRunStore: no run found with id "${runId}"`);
-    }
-    return JSON.parse(raw) as RunManifest;
+    return this.readManifest(runId);
   }
 
+  // NOTE: if `root` itself does not exist (the store was never initialised —
+  // e.g. no run has ever been created against this root), this resolves to
+  // `[]`, the same result as "root exists and is empty". Callers must not
+  // read an empty list as confirmation that zero runs exist; it may instead
+  // mean the store was never initialised. Distinguish the two cases upstream
+  // if that distinction matters (e.g. check for the root directory first).
   async listRuns(): Promise<RunManifest[]> {
     let entries: Dirent[];
     try {
@@ -53,9 +53,16 @@ export class FileRunStore implements RunStore {
     } catch {
       return [];
     }
-    const manifests = await Promise.all(
-      entries.filter((e) => e.isDirectory()).map((e) => this.getRun(e.name)),
+    // A single corrupt or foreign manifest.json must not fail visibility
+    // into every other run, so listRuns skips entries that fail validation
+    // rather than rejecting the whole call. It also must never let a
+    // corrupt manifest appear in the result as if it were valid — skipping
+    // it entirely satisfies that. getRun is the strict boundary: asking for
+    // one specific run's details always rejects loudly on corruption.
+    const results = await Promise.allSettled(
+      entries.filter((e) => e.isDirectory()).map((e) => this.readManifest(e.name)),
     );
+    const manifests = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
     return manifests.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   }
 
@@ -64,6 +71,31 @@ export class FileRunStore implements RunStore {
       path.join(this.dir(manifest.runId), MANIFEST_FILE),
       manifest,
     );
+  }
+
+  private async readManifest(runId: string): Promise<RunManifest> {
+    let raw: string;
+    try {
+      raw = await readFile(path.join(this.dir(runId), MANIFEST_FILE), "utf8");
+    } catch {
+      throw new Error(`FileRunStore: no run found with id "${runId}"`);
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new Error(`FileRunStore: manifest for run "${runId}" is not valid JSON: ${reason}`);
+    }
+
+    const result = RunManifestSchema.safeParse(parsed);
+    if (!result.success) {
+      throw new Error(
+        `FileRunStore: manifest for run "${runId}" is invalid: ${result.error.message}`,
+      );
+    }
+    return result.data;
   }
 
   // Write to a temp file in the same directory, then rename over the target.
