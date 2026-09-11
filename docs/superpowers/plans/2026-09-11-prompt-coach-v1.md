@@ -2593,6 +2593,12 @@ export type ReplacementView = {
   rationale: string;
 };
 
+**The rationale must survive the whole pipeline.** The Repairer's schema already requires it, but
+`repairSpans` narrows its output to a bare `{spanId, newText}` and drops it, and `PassResult` never
+carried the replacements at all — so every real run rendered an empty fragment diff. Both are fixed:
+`repairSpans` retains `rationale`, and `PassResult` carries the replacements through to the presenter.
+
+
 export type PassView = {
   pass: number;
   description: string;
@@ -2611,11 +2617,31 @@ export type TerminalStatus = (typeof TERMINAL_STATUSES)[number];
 
 export type RunStatus = "running" | TerminalStatus | "failed";
 
+/**
+ * Every field is optional, and that is load-bearing. An absent field means "not measured" and the UI
+ * renders it as such; a present `0` means a real measurement of zero. A required numeric field cannot
+ * express the difference, so an unmeasured run would arrive as a confident `$0.00` — the exact
+ * fabrication the Architecture screen's "not measured" rule exists to prevent.
+ */
 export type StepCost = {
-  inputTokens: number;
-  outputTokens: number;
-  usd: number;
-  latencyMs: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  usd?: number;
+  latencyMs?: number;
+};
+
+/**
+ * What `GET /runs` can actually answer from a manifest, without reading every pass file.
+ * `listRuns` returns these; a full `RunView` requires `GET /runs/:id`.
+ */
+export type RunSummary = {
+  runId: string;
+  rubricVersion: string;
+  model: string;
+  status: RunStatus;
+  startedAt: string;
+  finishedAt?: string;
+  passes: number;
 };
 
 export type RunView = {
