@@ -1786,6 +1786,21 @@ git commit -m "feat: file-backed run store behind a swappable interface"
 
 **Interfaces:**
 - Consumes: Tasks 2, 3, 4, 6, 7, 8.
+
+**Interface change from Task 6, confirmed by its review.** `evaluateAllGroups` does NOT return a flat
+`EvaluatorCheckResult[]`. It returns `EvaluatedCheck[]`, a discriminated union on `status`:
+
+```typescript
+type EvaluatedCheck =
+  | { status: "scored"; checkId: CheckId; band: Band; reason: string; quotes: string[]; missingEvidence: boolean }
+  | { status: "not_evaluated"; checkId: CheckId; reason: string };
+```
+
+The `not_evaluated` branch deliberately carries no `band`, so a naive `r.band >= 4` filter is a
+compile error rather than a silent pass. Do not widen, flatten or default this union to make consuming
+it easier — that would reintroduce exactly the failure the shape exists to prevent. Narrow on `status`
+and handle `not_evaluated` explicitly: such a check is neither passing nor failing, it has no result,
+and `runToCompletion` must never count it toward a terminal `passed`.
 - Produces: `type PassResult = { pass: number; description: string; results: EvaluatorCheckResult[]; failing: string[]; unverified: UnverifiedQuote[]; negativeConstraintPresent: boolean; repairedDescription?: string }`, `runPass(deps, args): Promise<PassResult>`, `runToCompletion(deps, args: { rubric: Rubric; description: string; runId: string; maxPasses?: number }): Promise<{ status: RunStatus; passes: PassResult[]; finalDescription: string }>`.
 
 **Added to this task after review: choosing which spans the Repairer receives.** Task 3 now returns
@@ -3642,7 +3657,14 @@ phase, the Phase B abstraction was wrong and that is a finding, not a fix to pap
 - Test: `apps/backend/tests/present/toRunView.test.ts`, `apps/backend/tests/server/runs.test.ts`
 
 **Interfaces:**
-- Consumes: `Rubric` (Task 2), `Span` and `UnverifiedQuote` (Task 3), `EvaluatorCheckResult` (Task 5), `Replacement` (Task 4), `RunStore` and `RunManifest` (Task 8), `PassResult` and `runToCompletion` (Task 9), `bandToPercent` and `isPass` (Task 1), and every view type from `@ai-director/contract` (Task 11).
+- Consumes: `Rubric` (Task 2), `Span` and `UnverifiedQuote` (Task 3), `EvaluatedCheck` (Task 6 — the `status: "scored" | "not_evaluated"` union, not a flat `EvaluatorCheckResult`), `Replacement` (Task 4), `RunStore` and `RunManifest` (Task 8), `PassResult` and `runToCompletion` (Task 9), `bandToPercent` and `isPass` (Task 1), and every view type from `@ai-director/contract` (Task 11).
+
+**A `not_evaluated` check must survive presentation.** `CheckResultView` has a required `band` and
+`percent`, which a check with no result cannot supply. Extend the contract's `CheckResultView` with a
+`status` field mirroring the engine's union rather than inventing a placeholder band — a check that was
+never evaluated must render as "not evaluated" in the UI, never as 20%, never as a dash that reads as
+zero, and never omitted from the nine. Update Task 11's `CheckResultView` accordingly when you reach
+this task, and add a fixture covering it.
 - Produces: `toCheckResultView(result: EvaluatorCheckResult, spans: Span[], unverified: UnverifiedQuote[]): CheckResultView`, `toPassView(result: PassResult, replacements: Replacement[]): PassView`, `toRunView(manifest: RunManifest, passes: PassView[], original: string, final: string, cost: StepCost): RunView`, `buildApp(deps: AppDeps): FastifyInstance`, `type AppDeps = { store: RunStore; rubric: Rubric; startRun: StartRun }`.
 
 The presenter is the only place engine types become wire types. It is a pure function with no I/O,
@@ -4183,6 +4205,14 @@ study is a demo, and the agreement study without the pre-registered failure cond
 statistics on it.
 
 ### Task 21: Live smoke test against the real API
+
+**Carried here from Task 6's review, which could not verify it from a diff.** Task 6 passes the
+non-beta `zodOutputFormat()` helper to `client.beta.messages.parse`. The implementer's justification is
+a structural-typing argument confirmed only by `tsc`; no unit test can check it, because unit tests are
+forbidden from touching the network. This live test is the first and only place that combination is
+exercised against the real API. Assert explicitly that `parsed_output` comes back non-null and
+correctly shaped from a real call — if the helper and the beta namespace are not runtime-compatible,
+this is where it surfaces, and it is a Task 6 defect to route back, not a test to loosen.
 
 **Files:**
 - Create: `apps/backend/tests/live/evaluator.live.test.ts`, `data/samples/weak-description.txt`, `data/samples/strong-description.txt`
