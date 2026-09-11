@@ -3,6 +3,7 @@ export type KappaResult = {
   observed: number;
   expected: number;
   n: number;
+  degenerate: boolean;
   table: {
     bothPass: number;
     bothFail: number;
@@ -25,8 +26,15 @@ export type KappaResult = {
  * here as 1 rather than left as NaN or thrown. This is a deliberate choice,
  * not a fallback: a small gold set where one check passes for every item
  * will hit this, and reporting kappa 1 for total, informationless agreement
- * is more transparent than crashing or lying with NaN -- the observed/n in
- * the same result is what actually says there was no variance to measure.
+ * is more transparent than crashing or lying with NaN.
+ *
+ * But a bare `kappa: 1` here would read as "perfectly reliable" to anyone
+ * who doesn't open this file -- which is exactly backwards for the one case
+ * Cohen's kappa exists to guard against (chance-corrected agreement is
+ * undefined when there's no variance to disagree over). So this is also
+ * reported as `degenerate: true`, and every caller that renders a kappa
+ * (the CLI) must render that flag distinctly, next to `n`, rather than let
+ * a 3-item, no-variance check look identical to a well-powered one.
  */
 export function cohensKappa(pairs: Array<{ human: boolean; agent: boolean }>): KappaResult {
   const n = pairs.length;
@@ -47,13 +55,15 @@ export function cohensKappa(pairs: Array<{ human: boolean; agent: boolean }>): K
   const humanPassRate = (bothPass + humanPassAgentFail) / n;
   const agentPassRate = (bothPass + humanFailAgentPass) / n;
   const expected = humanPassRate * agentPassRate + (1 - humanPassRate) * (1 - agentPassRate);
-  const kappa = expected === 1 ? 1 : (observed - expected) / (1 - expected);
+  const degenerate = expected === 1;
+  const kappa = degenerate ? 1 : (observed - expected) / (1 - expected);
 
   return {
     kappa,
     observed,
     expected,
     n,
+    degenerate,
     table: { bothPass, bothFail, humanPassAgentFail, humanFailAgentPass },
   };
 }
