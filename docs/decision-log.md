@@ -55,8 +55,13 @@ recorded here as a candidate for a rubric v2 check rather than a dropped concern
 
 ## 2026-09-11 — What is measured and what is not
 
-No API calls were made in this session (owner instruction). The following are built but not yet
-verified against a real model, and each is listed with what would close it:
+No API calls were made in this session (owner instruction). This section separates two different
+risks: things that are **unmeasured** — the machinery exists, gated and tested, and running it is
+what closes the gap — from the one thing in the failure condition above that is **unbuildable** in
+v1: no command closes it, because the thing it needs does not exist in this project.
+
+**Unmeasured** — the following are built but not yet verified against a real model, each listed with
+what would close it:
 
 - **Whether `zodOutputFormat` is runtime-compatible with `client.beta.messages.parse`.** Verified so
   far only by `tsc` against the SDK's type declarations. A live smoke test exists in
@@ -73,5 +78,22 @@ verified against a real model, and each is listed with what would close it:
   set can only be produced by the owner, marking each description blind to the agent's output. Both
   `kappa` and `perCheckKappa` in `data/versions/notes.json` stay `null` until that happens.
 
-An assessor should read this list as the boundary of what has actually been checked, not as a set of
-caveats to discount.
+**Unbuildable in v1** — this is not a fifth item on the list above; it is a different kind of gap:
+
+- **Failure condition clause 2** ("repaired descriptions score higher on the rubric while a later
+  render comparison shows no reduction in identity drift or refusal rate") cannot currently be
+  evaluated by anything in this repository. Evaluating it needs a render comparison: actually
+  rendering the character descriptions through Seedance on Runway, across rubric versions, with a
+  measured identity-drift or refusal-rate metric on the output video. None of that — the rendering
+  step, the drift metric, the refusal metric — exists here, and building it is out of scope for v1,
+  which stops at scoring and repairing text. It is not waiting on a command the way the four items
+  above are; it is waiting on a different piece of research.
+
+The clause stays in the failure condition above rather than being dropped or softened — it is the
+right scientific commitment, and removing it would trade honesty for a cleaner-looking document. But
+until it can be evaluated, **the approach is not fully tested**: conditions 1 and 3 passing is not the
+same as the whole pre-registered condition passing, and a reader should not infer the latter from the
+former.
+
+An assessor should read this section as the boundary of what has actually been checked, not as a set
+of caveats to discount.
