@@ -53,6 +53,29 @@ The rubric is append-only once a run references it; no run had, so the rewrite i
 edit rather than a v2 change. The unnamed-logo case is real and belongs on a different check, and is
 recorded here as a candidate for a rubric v2 check rather than a dropped concern.
 
+## 2026-09-11 — Cross-provider bias check built; not run (no live calls made)
+
+Task 23 built the second self-preference mitigation spec §4 names — making the Evaluator model a
+config value so the same descriptions can be scored by an independent-lineage model, not just a
+different Claude. `createOpenAiTransport` (`apps/backend/src/api/openaiTransport.ts`) satisfies the
+existing `ParseTransport` interface from Task 6 unmodified — no widening was needed. `compareProviders`
+(`apps/backend/src/cli/bias.ts`) scores each description through both transports and compares the
+pass/fail decision per check (`isPass(band)`, not the raw ordinal band), reusing `cohensKappa` (Task
+22) rather than a second agreement statistic. A check pair is excluded, not counted as agreement, when
+either provider's group failed to evaluate; a check with zero comparable pairs is left out of the
+per-check report as unmeasured, never reported as kappa 0.
+
+No comparison has been run: this session made no calls to either the Anthropic or the OpenAI API (owner
+instruction — both keys exist in `.env` but were never read). The `bias` CLI is gated on
+`RUN_LIVE_API=1` in addition to requiring both `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`, exactly as the
+live tests under `tests/live/` are gated, specifically so it cannot run by accident. There is therefore
+no model pair, description count, or agreement number to record yet — recording one would be exactly
+the kind of invented number this log has twice already had to correct. The owner runs
+`RUN_LIVE_API=1 npx tsx apps/backend/src/cli/bias.ts -- <file-of-descriptions>` (default OpenAI side:
+`gpt-5.1`) and this entry gets a follow-up with whatever the two providers actually show. If they
+disagree substantially, that is the result to report, not a prompt to go tune away — tuning the
+evaluator prompt until they agree would destroy the control.
+
 ## 2026-09-11 — What is measured and what is not
 
 No API calls were made in this session (owner instruction). This section separates two different
@@ -72,8 +95,10 @@ what would close it:
   threshold and trigger repair and a failed exit code — has only been exercised against fixtures
   built to have the same event shapes as a live run, never against an actual model response. Closing
   this needs a live run against a description known to fail at least one check.
-- **The cross-provider bias check against OpenAI.** Not run. Closing this needs Task 23 executed with
-  both keys live.
+- **The cross-provider bias check against OpenAI.** Not run (see the dated entry below for what was
+  built). Closing this needs
+  `RUN_LIVE_API=1 npx tsx apps/backend/src/cli/bias.ts -- <file-of-descriptions>` executed with both
+  keys live.
 - **The agreement study itself.** No kappa exists because no hand-marked gold set exists yet; that
   set can only be produced by the owner, marking each description blind to the agent's output. Both
   `kappa` and `perCheckKappa` in `data/versions/notes.json` stay `null` until that happens.
