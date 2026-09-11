@@ -39,6 +39,32 @@ describe("applyReplacements", () => {
     expect(out).toContain("charcoal hoodie and white sneakers");
   });
 
+  it("applies three replacements of different lengths, growing and shrinking, without offset drift", () => {
+    const { spans } = verifySpans(description, [
+      { checkId: "age_build", quote: "lean man" },
+      { checkId: "drawable_only", quote: "very cinematic presence" },
+      { checkId: "wardrobe", quote: "grey hoodie" },
+    ]);
+    const out = applyReplacements(description, spans, [
+      // grows: 8 chars -> 38 chars
+      { spanId: "age_build:0", newText: "lean man of 178cm and broad shoulders" },
+      // shrinks: 24 chars -> 10 chars
+      { spanId: "drawable_only:0", newText: "square jaw" },
+      // shrinks: 11 chars -> 8 chars
+      { spanId: "wardrobe:0", newText: "red coat" },
+    ]);
+
+    // Independent oracle: sequential String.replace on the original text, which
+    // never reasons about offsets at all, so it cannot share a bug with the
+    // offset-based splice under test.
+    const expected = description
+      .replace("lean man", "lean man of 178cm and broad shoulders")
+      .replace("very cinematic presence", "square jaw")
+      .replace("grey hoodie", "red coat");
+
+    expect(out).toBe(expected);
+  });
+
   it("throws when a replacement names an unknown span", () => {
     expect(() => applyReplacements(description, [], [{ spanId: "nope:0", newText: "x" }])).toThrow(
       /unknown spanId nope:0/,
