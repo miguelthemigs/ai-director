@@ -1,0 +1,52 @@
+{
+  "status": "SKELETON -- not yet filled. Do not run the agreement study against this file as-is.",
+  "instructions": "Replace the three PLACEHOLDER items below with 30 to 50 real items before running `npm run agree`. Each item's description should be either (a) written properly, with no deliberate faults, (b) written with a deliberate fault on one or more specific checks, or (c) lifted from a published character-description example (record the source in a comment field or the report, since JSON has no comments). Mark every one of the 9 checks true/false by your own hand judgement BEFORE looking at any agent output for that item -- marking after seeing the agent's scores would make this study measure whether the agent agrees with itself, not whether it agrees with an independent human judge.",
+  "frozenOn": null,
+  "items": [
+    {
+      "id": "PLACEHOLDER-001",
+      "description": "PLACEHOLDER -- replace with a real character description written properly, with no deliberate fault on any check. The marks below are illustrative only and must be replaced with your own hand judgement of the real description.",
+      "marks": {
+        "age_build": true,
+        "face_skin": true,
+        "hair_spec": true,
+        "wardrobe": true,
+        "anchor_marker": true,
+        "no_real_person": true,
+        "no_brand_name": true,
+        "drawable_only": true,
+        "no_cross_slot": true
+      }
+    },
+    {
+      "id": "PLACEHOLDER-002",
+      "description": "PLACEHOLDER -- replace with a description deliberately broken on one or more specific checks (e.g. vague age/build, footwear omitted from wardrobe, a brand name included, a mood or feeling word). The marks below are illustrative only and must be replaced with your own hand judgement of the real description.",
+      "marks": {
+        "age_build": false,
+        "face_skin": true,
+        "hair_spec": true,
+        "wardrobe": false,
+        "anchor_marker": false,
+        "no_real_person": true,
+        "no_brand_name": false,
+        "drawable_only": true,
+        "no_cross_slot": true
+      }
+    },
+    {
+      "id": "PLACEHOLDER-003",
+      "description": "PLACEHOLDER -- replace with a description lifted from a published example (cite the source alongside it, e.g. in the id or in the study report). The marks below are illustrative only and must be replaced with your own hand judgement of the real description.",
+      "marks": {
+        "age_build": true,
+        "face_skin": false,
+        "hair_spec": true,
+        "wardrobe": true,
+        "anchor_marker": true,
+        "no_real_person": false,
+        "no_brand_name": true,
+        "drawable_only": false,
+        "no_cross_slot": true
+      }
+    }
+  ]
+}
