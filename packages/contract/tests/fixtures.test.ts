@@ -3,6 +3,7 @@ import {
   FIXTURE_RUNS,
   FIXTURE_EVENT_LOG,
   CHECK_IDS,
+  isScoredCheck,
   isSuccess,
   type RunView,
 } from "../src/index.js";
@@ -16,7 +17,7 @@ describe("fixture runs", () => {
     ]);
   });
 
-  it("scores all nine checks in every pass of every run", () => {
+  it("covers all nine checks in every pass of every run, scored or not", () => {
     for (const run of everyRun) {
       for (const pass of run.passes) {
         expect(pass.results.map((r) => r.checkId).sort()).toEqual(CHECK_IDS.slice().sort());
@@ -24,11 +25,23 @@ describe("fixture runs", () => {
     }
   });
 
+  it("gives the failed run a partial pass carrying not_evaluated checks", () => {
+    const pass = FIXTURE_RUNS.failed.passes[0];
+    expect(pass).toBeDefined();
+    const notEvaluated = pass!.results.filter((r) => r.status === "not_evaluated");
+    expect(notEvaluated.length).toBeGreaterThan(0);
+    for (const result of notEvaluated) {
+      expect(result).not.toHaveProperty("band");
+      expect(result).not.toHaveProperty("percent");
+      expect(result).not.toHaveProperty("passed");
+    }
+  });
+
   it("derives percent from band everywhere, never freely", () => {
     const expected = { 1: 20, 2: 40, 3: 60, 4: 80, 5: 100 } as const;
     for (const run of everyRun) {
       for (const pass of run.passes) {
-        for (const result of pass.results) {
+        for (const result of pass.results.filter(isScoredCheck)) {
           expect(result.percent).toBe(expected[result.band]);
           expect(result.passed).toBe(result.band >= 4);
         }
@@ -39,7 +52,7 @@ describe("fixture runs", () => {
   it("gives every sub-threshold check at least one span or one unverified quote", () => {
     for (const run of everyRun) {
       for (const pass of run.passes) {
-        for (const result of pass.results.filter((r) => !r.passed)) {
+        for (const result of pass.results.filter(isScoredCheck).filter((r) => !r.passed)) {
           expect(result.spans.length + result.unverified.length).toBeGreaterThan(0);
         }
       }
@@ -49,7 +62,7 @@ describe("fixture runs", () => {
   it("makes every span's offsets quote the description exactly", () => {
     for (const run of everyRun) {
       for (const pass of run.passes) {
-        for (const span of pass.results.flatMap((r) => r.spans)) {
+        for (const span of pass.results.filter(isScoredCheck).flatMap((r) => r.spans)) {
           expect(pass.description.slice(span.start, span.end)).toBe(span.quote);
         }
       }
@@ -58,7 +71,7 @@ describe("fixture runs", () => {
 
   it("carries at least one unverified quote somewhere, so the UI's 'fragment not found' state is exercised", () => {
     const unverified = everyRun.flatMap((run) =>
-      run.passes.flatMap((pass) => pass.results.flatMap((r) => r.unverified)),
+      run.passes.flatMap((pass) => pass.results.filter(isScoredCheck).flatMap((r) => r.unverified)),
     );
     expect(unverified.length).toBeGreaterThan(0);
   });

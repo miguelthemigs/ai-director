@@ -1,14 +1,15 @@
 import { groupOf, type Band, type CheckGroup, type CheckId, type Percent } from "./checks.js";
 import { eventId, type RunEvent } from "./events.js";
-import type {
-  CheckResultView,
-  PassView,
-  ReplacementView,
-  RunStatus,
-  RunView,
-  SpanView,
-  StepCost,
-  UnverifiedQuoteView,
+import {
+  isScoredCheck,
+  type CheckResultView,
+  type PassView,
+  type ReplacementView,
+  type RunStatus,
+  type RunView,
+  type SpanView,
+  type StepCost,
+  type UnverifiedQuoteView,
 } from "./run.js";
 
 const PERCENT: Record<Band, Percent> = { 1: 20, 2: 40, 3: 60, 4: 80, 5: 100 };
@@ -20,6 +21,7 @@ function spanFor(description: string, checkId: CheckId, quote: string, n: number
   return { spanId: `${checkId}-${n}`, checkId, quote, start, end: start + quote.length };
 }
 
+/** A scored check: the group's evaluator call completed. */
 function result(
   description: string,
   checkId: CheckId,
@@ -29,6 +31,7 @@ function result(
   unverified: UnverifiedQuoteView[] = [],
 ): CheckResultView {
   return {
+    status: "scored",
     checkId,
     group: groupOf(checkId),
     band,
@@ -37,11 +40,17 @@ function result(
     reason,
     spans: quotes.map((q, i) => spanFor(description, checkId, q, i)),
     unverified,
+    missingEvidence: band < 4 && quotes.length === 0 && unverified.length === 0,
   };
 }
 
+/** A check whose group's evaluator call never completed. No band, no percent, no passed. */
+function notEvaluated(checkId: CheckId, reason: string): CheckResultView {
+  return { status: "not_evaluated", checkId, group: groupOf(checkId), reason };
+}
+
 function failingOf(results: CheckResultView[]): CheckId[] {
-  return results.filter((r) => !r.passed).map((r) => r.checkId);
+  return results.filter(isScoredCheck).filter((r) => !r.passed).map((r) => r.checkId);
 }
 
 const COST: StepCost = { inputTokens: 1100, outputTokens: 600, usd: 0.02, latencyMs: 4200 };
@@ -314,13 +323,37 @@ const noImprovementRun: RunView = {
 };
 
 // ---------------------------------------------------------------------------
-// failed: the pipeline errors mid-evaluation, before any check is scored.
-// CheckResultView.band is mandatory, so a check that never finished cannot be
-// represented as a result at all — the only sound shape for a run that failed
-// before its first evaluator group completed is an empty `passes` array.
+// failed: safety and drawable finished before the look group's call errored.
+// The one partial pass carries scored results for the two completed groups
+// and not_evaluated entries — one per check id — for the group that never
+// finished. All nine check ids still appear; none is silently dropped.
 // ---------------------------------------------------------------------------
 
 const FAILED_DESC = "A woman with an interesting vibe and a mysterious energy that draws people in.";
+
+const LOOK_FAILURE_REASON = 'Evaluator group "look" failed: upstream model call returned 503 after 2 retries.';
+
+const failedPassResults: CheckResultView[] = [
+  notEvaluated("age_build", LOOK_FAILURE_REASON),
+  notEvaluated("face_skin", LOOK_FAILURE_REASON),
+  notEvaluated("hair_spec", LOOK_FAILURE_REASON),
+  notEvaluated("wardrobe", LOOK_FAILURE_REASON),
+  notEvaluated("anchor_marker", LOOK_FAILURE_REASON),
+  result(FAILED_DESC, "no_real_person", 5, "No public figure or lookalike framing.", []),
+  result(FAILED_DESC, "no_brand_name", 5, "No brand name present.", []),
+  result(FAILED_DESC, "drawable_only", 2, "Mood words describe a feeling, not a visible attribute.", [
+    "interesting vibe", "mysterious energy that draws people in",
+  ]),
+  result(FAILED_DESC, "no_cross_slot", 5, "No camera or lighting instruction present.", []),
+];
+
+const failedPass: PassView = {
+  pass: 1,
+  description: FAILED_DESC,
+  results: failedPassResults,
+  failing: failingOf(failedPassResults),
+  replacements: [],
+};
 
 const failedRun: RunView = {
   runId: "run-failed-004",
@@ -331,9 +364,9 @@ const failedRun: RunView = {
   finishedAt: "2026-09-07T14:00:06.000Z",
   originalDescription: FAILED_DESC,
   finalDescription: FAILED_DESC,
-  passes: [],
-  cost: { inputTokens: 0, outputTokens: 0, usd: 0, latencyMs: 6000 },
-  error: 'Evaluator group "look" failed: upstream model call returned 503 after 2 retries.',
+  passes: [failedPass],
+  cost: scaleCost(COST, 2),
+  error: LOOK_FAILURE_REASON,
 };
 
 // ---------------------------------------------------------------------------

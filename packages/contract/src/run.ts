@@ -16,17 +16,45 @@ export type UnverifiedQuoteView = {
   reason: "not_found" | "ambiguous";
 };
 
-export type CheckResultView = {
-  checkId: CheckId;
-  group: CheckGroup;
-  band: Band;
-  /** Always bandToPercent(band). Sent by the server so no client recomputes it. */
-  percent: Percent;
-  passed: boolean;
-  reason: string;
-  spans: SpanView[];
-  unverified: UnverifiedQuoteView[];
-};
+/**
+ * A check as the wire carries it. This is a discriminated union, mirroring the engine's
+ * `EvaluatedCheck`, and it is deliberately NOT a flat shape with an optional band.
+ *
+ * The failure this project fears is a consumer treating an unevaluated check as passing. With a flat
+ * optional `band`, a naive read of `passed` compiles fine and goes through undetected. With the union,
+ * `band`, `percent` and `passed` exist only inside the `scored` branch, so any code path reading them
+ * without narrowing on `status` fails to compile. The engine already has that guarantee; this carries
+ * it across the network instead of silently downgrading it.
+ */
+export type CheckResultView =
+  | {
+      status: "scored";
+      checkId: CheckId;
+      group: CheckGroup;
+      band: Band;
+      /** Always bandToPercent(band). Sent by the server so no client recomputes it. */
+      percent: Percent;
+      passed: boolean;
+      reason: string;
+      spans: SpanView[];
+      unverified: UnverifiedQuoteView[];
+      /** True when the check scored below band 4 but returned no quotes to back it. */
+      missingEvidence: boolean;
+    }
+  | {
+      status: "not_evaluated";
+      checkId: CheckId;
+      group: CheckGroup;
+      /** Why the group call failed. Never a band, never a percent. */
+      reason: string;
+    };
+
+/** Narrows a `CheckResultView` to its `scored` branch, so `.band`/`.percent`/`.passed` are safe to read. */
+export function isScoredCheck(
+  result: CheckResultView,
+): result is Extract<CheckResultView, { status: "scored" }> {
+  return result.status === "scored";
+}
 
 /** One fragment the Repairer rewrote, as the Run screen's diff renders it. */
 export type ReplacementView = {
