@@ -91,6 +91,40 @@ describe("runToCompletion", () => {
     );
     expect(out.passes).toHaveLength(3);
     expect(out.status).toBe("no_improvement");
+    // The final pass (pass 3) evaluates and stops -- it never calls the
+    // repairer, so only passes 1 and 2 do.
+    expect(repair).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not call the repairer on the final pass, even while checks still fail", async () => {
+    const rubric = await loadRubric("v1");
+    // Pass 2 (the final pass here) reports the failure with no quote -- it
+    // must still count as failing, but by then the text has already been
+    // spliced by pass 1's repair, so a stale quote would wrongly (and
+    // separately) trigger the quote-exactly retry instead of exercising the
+    // no-repair-on-final-pass rule this test targets.
+    const evaluate: EvaluateFn = vi
+      .fn()
+      .mockResolvedValueOnce(failDrawable(rubric))
+      .mockResolvedValueOnce(
+        rubric.checks.map((c) =>
+          c.id === "drawable_only" ? scored(c.id, 2, "still a mood word") : scored(c.id, 5, "r"),
+        ),
+      );
+    const repair: RepairFn = vi.fn().mockResolvedValue({
+      replacements: [{ spanId: "drawable_only:0", newText: "a square jaw" }],
+      rejected: [],
+    });
+    const out = await runToCompletion(
+      { evaluate, retryVerbatim: noRetry, repair, store: await store() },
+      { rubric, description, runId: "run-final-pass-1", maxPasses: 2 },
+    );
+    expect(out.passes).toHaveLength(2);
+    expect(repair).toHaveBeenCalledTimes(1); // pass 1 only; pass 2 is final
+    // finalDescription is exactly what the final pass's own scores describe,
+    // never text a repair changed after the last evaluation.
+    expect(out.finalDescription).toBe(out.passes[1]?.description);
+    expect(out.passes[1]?.repairedDescription).toBeUndefined();
   });
 
   it("reports improved_still_failing when the failing set shrinks but is not empty", async () => {
@@ -135,17 +169,30 @@ describe("runToCompletion", () => {
     expect(spy).toHaveBeenCalledWith("run-5", 1, "eval", expect.anything());
   });
 
-  it("reports the negative-constraint invariant on every pass", async () => {
+  it("reports the negative-constraint invariant honestly for both presence and absence", async () => {
+    // Weak in the original version: it only ever asserted `false`, which a
+    // hardcoded `false` would also satisfy. Assert both directions.
     const rubric = await loadRubric("v1");
     const evaluate: EvaluateFn = vi.fn().mockResolvedValue(allPass(rubric));
-    const out = await runToCompletion(
+
+    const without = await runToCompletion(
       { evaluate, retryVerbatim: noRetry, repair: vi.fn(), store: await store() },
-      { rubric, description, runId: "run-6" },
+      { rubric, description, runId: "run-6a" },
     );
-    expect(out.passes[0]?.negativeConstraintPresent).toBe(false);
+    expect(without.passes[0]?.negativeConstraintPresent).toBe(false);
+
+    const with_ = await runToCompletion(
+      { evaluate, retryVerbatim: noRetry, repair: vi.fn(), store: await store() },
+      {
+        rubric,
+        description: `${description} No identity drift across every cut.`,
+        runId: "run-6b",
+      },
+    );
+    expect(with_.passes[0]?.negativeConstraintPresent).toBe(true);
   });
 
-  it("never returns passed when a check came back not_evaluated", async () => {
+  it("never returns passed when a check came back not_evaluated, and distinguishes it from a scored failure", async () => {
     const rubric = await loadRubric("v1");
     const withNotEvaluated: EvaluatedCheck[] = rubric.checks.map((c) =>
       c.id === "no_real_person"
@@ -162,6 +209,104 @@ describe("runToCompletion", () => {
     // the loop cannot make progress -- it must never claim "passed".
     expect(out.status).not.toBe("passed");
     expect(out.passes.every((p) => p.failing.includes("no_real_person"))).toBe(true);
+    // notEvaluated is the display-only breakdown: a check with no band is not
+    // "below band 4", so the presenter needs to tell the two apart even
+    // though both fold into the `passed` gate the same way.
+    expect(out.passes.every((p) => p.notEvaluated.includes("no_real_person"))).toBe(true);
+  });
+
+  it("continues past a transient not_evaluated instead of giving up early", async () => {
+    const rubric = await loadRubric("v1");
+    const transientFailure: EvaluatedCheck[] = rubric.checks.map((c) =>
+      c.id === "no_real_person"
+        ? { status: "not_evaluated", checkId: c.id, reason: "transient network error" }
+        : scored(c.id, 5, "r"),
+    );
+    const evaluate: EvaluateFn = vi
+      .fn()
+      .mockResolvedValueOnce(transientFailure)
+      .mockResolvedValueOnce(allPass(rubric));
+    const repair: RepairFn = vi.fn().mockResolvedValue({ replacements: [], rejected: [] });
+    const out = await runToCompletion(
+      { evaluate, retryVerbatim: noRetry, repair, store: await store() },
+      { rubric, description, runId: "run-transient-1" },
+    );
+    // Pass 1 has nothing repairable (a not_evaluated check carries no
+    // quotes), but it must not be treated as genuinely unrepairable: the
+    // loop re-evaluates on pass 2, where the transient failure is gone.
+    expect(out.passes).toHaveLength(2);
+    expect(out.status).toBe("passed");
+  });
+
+  it("finishes the run as failed and rethrows when a pass throws", async () => {
+    const rubric = await loadRubric("v1");
+    const evaluate: EvaluateFn = vi.fn().mockResolvedValue(failDrawable(rubric));
+    const repair: RepairFn = vi.fn().mockRejectedValue(new Error("repairer exploded"));
+    const s = await store();
+    await expect(
+      runToCompletion(
+        { evaluate, retryVerbatim: noRetry, repair, store: s },
+        { rubric, description, runId: "run-fail-1" },
+      ),
+    ).rejects.toThrow("repairer exploded");
+
+    const manifest = await s.getRun("run-fail-1");
+    expect(manifest.status).toBe("failed");
+  });
+
+  it("writes rejected replacements into the pass's repair payload instead of only logging them", async () => {
+    const rubric = await loadRubric("v1");
+    const evaluate: EvaluateFn = vi.fn().mockResolvedValue(failDrawable(rubric));
+    const repair: RepairFn = vi.fn().mockResolvedValue({
+      replacements: [],
+      rejected: [{ spanId: "drawable_only:0", reason: "empty_text" }],
+    });
+    const s = await store();
+    const spy = vi.spyOn(s, "writePass");
+    await runToCompletion(
+      { evaluate, retryVerbatim: noRetry, repair, store: s },
+      { rubric, description, runId: "run-rejected-1" },
+    );
+    expect(spy).toHaveBeenCalledWith(
+      "run-rejected-1",
+      1,
+      "repair",
+      expect.objectContaining({
+        rejected: [{ spanId: "drawable_only:0", reason: "empty_text" }],
+      }),
+    );
+  });
+
+  it("classifies a run as improved_still_failing when a band rose even though the failing count did not shrink", async () => {
+    const rubric = await loadRubric("v1");
+    const evaluate: EvaluateFn = vi
+      .fn()
+      .mockResolvedValueOnce(
+        rubric.checks.map((c) =>
+          c.id === "drawable_only"
+            ? scored(c.id, 1, "bad", ["very cinematic presence"])
+            : scored(c.id, 5, "r"),
+        ),
+      )
+      .mockResolvedValueOnce(
+        rubric.checks.map((c) =>
+          c.id === "drawable_only" ? scored(c.id, 3, "better") : scored(c.id, 5, "r"),
+        ),
+      );
+    const repair: RepairFn = vi.fn().mockResolvedValue({
+      replacements: [{ spanId: "drawable_only:0", newText: "cinematic presence" }],
+      rejected: [],
+    });
+    const out = await runToCompletion(
+      { evaluate, retryVerbatim: noRetry, repair, store: await store() },
+      { rubric, description, runId: "run-band-rose-1", maxPasses: 2 },
+    );
+    // Both passes leave exactly one check failing (drawable_only never
+    // reaches band 4), so a count-only rule would call this no_improvement.
+    // Its band rose 1 -> 3, so it must be improved_still_failing instead.
+    expect(out.passes[0]?.failing).toHaveLength(1);
+    expect(out.passes[1]?.failing).toHaveLength(1);
+    expect(out.status).toBe("improved_still_failing");
   });
 });
 

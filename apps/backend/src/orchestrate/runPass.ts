@@ -10,11 +10,24 @@ export type PassResult = {
   pass: number;
   description: string;
   results: EvaluatedCheck[];
+  // The gate for a terminal `passed`: every check scored below band 4, plus
+  // every check that was never scored at all. A not_evaluated check has no
+  // band and must never be treated as passing, so it is folded in here.
   failing: string[];
+  // A display-only breakdown of `failing`, so a presenter can render "N below
+  // band 4" honestly instead of conflating it with "N never scored" (design
+  // doc §6.2 binds the banner numeral to checks below band 4 specifically).
+  notEvaluated: string[];
   spans: Span[];
   unverified: UnverifiedQuote[];
   negativeConstraintPresent: boolean;
   repairedDescription?: string;
+  // Replacements the Repairer returned that could not be applied. Surfaced
+  // here (and written through the store by the caller) rather than logged,
+  // so an invented spanId or empty replacement leaves a trace the CLI/UI can
+  // show -- a console line reaches none of them. Always [] on the final
+  // pass, since the final pass never calls the Repairer.
+  rejected: RejectedReplacement[];
 };
 
 export type EvaluateFn = (args: {
@@ -113,9 +126,9 @@ function mergeGroupResults(
 
 export async function runPass(
   deps: { evaluate: EvaluateFn; retryVerbatim: RetryVerbatimFn; repair: RepairFn },
-  args: { rubric: Rubric; description: string; pass: number },
+  args: { rubric: Rubric; description: string; pass: number; isFinalPass: boolean },
 ): Promise<PassResult> {
-  const { rubric, description, pass } = args;
+  const { rubric, description, pass, isFinalPass } = args;
 
   let results = await deps.evaluate({ rubric, description });
   let verified = verifySpans(description, quotesFromFailing(results));
@@ -138,6 +151,7 @@ export async function runPass(
   // A not_evaluated check has no band and is neither passing nor failing --
   // it has no result. It must never be counted as passing, so it is folded
   // into `failing` here rather than silently dropped.
+  const notEvaluated = results.filter((r) => r.status === "not_evaluated").map((r) => r.checkId);
   const failing = results
     .filter((r) => (isScored(r) ? !isPass(r.band) : true))
     .map((r) => r.checkId);
@@ -147,10 +161,17 @@ export async function runPass(
     description,
     results,
     failing,
+    notEvaluated,
     spans,
     unverified,
     negativeConstraintPresent: hasNegativeConstraint(description),
+    rejected: [],
   };
+
+  // The final pass evaluates and stops. Repairing here would hand back text
+  // nothing ever scored, while the pass results describe different text --
+  // `finalDescription` must always be exactly what the last scores describe.
+  if (isFinalPass) return base;
 
   const selected = selectNonOverlapping(rubric, spans);
   if (selected.length === 0) return base;
@@ -166,18 +187,11 @@ export async function runPass(
   const checks = rubric.checks.filter((c) => selected.some((s) => s.checkId === c.id));
 
   const { replacements, rejected } = await deps.repair({ spans: selected, checks, reasons });
-  if (rejected.length > 0) {
-    // A repairer that regularly invents span ids or returns empty text is a
-    // prompt defect, not a run failure -- surface it rather than hide it.
-    console.warn(
-      `runPass: repairer rejected ${rejected.length} replacement(s) on pass ${pass}`,
-      rejected,
-    );
-  }
-  if (replacements.length === 0) return base;
+  if (replacements.length === 0) return { ...base, rejected };
 
   return {
     ...base,
+    rejected,
     repairedDescription: applyReplacements(description, selected, replacements),
   };
 }
