@@ -63,6 +63,30 @@ is not a fix until it scores.
 are drawn because the plan includes them, and labelled `planned` so nobody mistakes them
 for something that ran.
 
+### What passes 1, 2 and 3 are
+
+A **pass** is one full round: grade the description, then rewrite whatever failed. The
+rail down the left of the Run screen has one step per pass.
+
+**Pass 1** grades the original text. Say four of the nine checks come back under 80%. The
+Repairer rewrites just those fragments.
+
+**Pass 2** grades the *rewritten* text. Maybe two still fail. It rewrites those.
+
+**Pass 3** grades it again. Last attempt, then it stops.
+
+**Why it stops at three.** If three rounds have not fixed a check, the problem is not the
+wording, it is that the information was never there. No amount of rewriting invents an eye
+colour nobody supplied. A fourth round spends money to fail the same way.
+
+Each pass keeps the description exactly as it stood at that moment, so clicking Pass 1
+against Pass 3 shows what changed and what it bought. The count under each step is how
+many fragments were rewritten in that round.
+
+A run that used all three passes and still has checks below 80% ends as
+`improved_still_failing`: the score went up, the description did not pass, and the screen
+must say so rather than showing the improvement as a win.
+
 ### Two words that are not normal words
 
 **Band** is the score: 1 to 5, shown as 20 / 40 / 60 / 80 / 100 percent. Band 4 is a
