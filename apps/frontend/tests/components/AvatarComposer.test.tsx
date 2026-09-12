@@ -1,40 +1,77 @@
-import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AvatarComposer } from "../../src/components/AvatarComposer.js";
 
-function renderComposer(onSubmit = vi.fn()) {
-  render(<AvatarComposer onSubmit={onSubmit} disabled={false} maxChars={2000} />);
+const PIXEL = "aGk=";
+
+function jsonResponse(body: unknown, ok = true, status = 200): Response {
+  return { ok, status, url: "/test", json: async () => body } as unknown as Response;
+}
+
+function renderComposer(live = false) {
+  const onSubmit = vi.fn();
+  render(<AvatarComposer onSubmit={onSubmit} disabled={false} maxChars={2000} live={live} />);
   return onSubmit;
 }
 
 describe("AvatarComposer", () => {
-  it("opens on the Guided tab, with Run disabled until a field is filled", () => {
+  it("offers two tabs and opens on Build an avatar", () => {
     renderComposer();
-    expect(screen.getByRole("tab", { name: "Guided" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "Build an avatar",
+      "Paste a description",
+    ]);
+    expect(screen.getByRole("tab", { name: "Build an avatar" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
-  it("says which description this is, so the image brief is never mistaken for it", () => {
-    renderComposer();
-    expect(
-      screen.getByText(/reaches the video model, not the brief that renders the avatar sheet/i),
-    ).toBeInTheDocument();
-  });
-
-  it("submits the assembled sentence when the Guided tab is active", () => {
+  /**
+   * The one thing this component must never get wrong.
+   *
+   * The guided fields assemble the prompt that GENERATES the avatar. The graded artefact is
+   * what a vision model writes after LOOKING at the generated avatar, which in Mentic is
+   * `UgcActor.description`. They are two different strings about two different things, and
+   * grading the first would measure the prompt rather than the product of the prompt.
+   */
+  it("never submits the assembled prompt, however full the form is", () => {
     const onSubmit = renderComposer();
 
     fireEvent.change(screen.getByLabelText("Gender"), { target: { value: "woman" } });
     fireEvent.change(screen.getByLabelText("Hair"), { target: { value: "blonde bob" } });
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
 
-    expect(onSubmit).toHaveBeenCalledWith("A woman, with blonde bob");
+    // The assembled sentence is on screen, and Run is still refused: nothing has been
+    // rendered, so nothing has been described, so there is nothing to grade.
+    expect(screen.getByText("A woman, with blonde bob")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it("submits the pasted text when the Direct tab is active", () => {
+  it("labels the assembled sentence as the render prompt, not as the graded text", () => {
+    renderComposer();
+    expect(screen.getByText("The prompt that will generate the avatar")).toBeInTheDocument();
+    expect(screen.getByText("This is what gets rendered, not what gets graded.")).toBeInTheDocument();
+    expect(screen.queryByText("What will be graded")).not.toBeInTheDocument();
+  });
+
+  it("says the whole shape of the flow at the top", () => {
+    renderComposer();
+    expect(
+      screen.getByText(/render the avatar, then grade the description the model writes back/i),
+    ).toBeInTheDocument();
+  });
+
+  it("puts the pipeline on the same tab as the fields, so it reads as one flow", () => {
+    renderComposer();
+    expect(screen.getByRole("button", { name: "Generate sheet" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Describe this person" })).toBeInTheDocument();
+  });
+
+  it("submits the pasted text on the other tab", () => {
     const onSubmit = renderComposer();
 
-    fireEvent.click(screen.getByRole("tab", { name: "Direct" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Paste a description" }));
     fireEvent.change(screen.getByPlaceholderText("Paste the character description."), {
       target: { value: "A 29-year-old woman in a grey wool coat." },
     });
@@ -43,28 +80,19 @@ describe("AvatarComposer", () => {
     expect(onSubmit).toHaveBeenCalledWith("A 29-year-old woman in a grey wool coat.");
   });
 
-  it("keeps each tab's draft when the other is used, and submits only the active one", () => {
+  it("keeps each tab's draft, and the fields never leak into the pasted run", () => {
     const onSubmit = renderComposer();
 
     fireEvent.change(screen.getByLabelText("Gender"), { target: { value: "man" } });
-    fireEvent.click(screen.getByRole("tab", { name: "Direct" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Paste a description" }));
     fireEvent.change(screen.getByPlaceholderText("Paste the character description."), {
       target: { value: "pasted text" },
     });
-    fireEvent.click(screen.getByRole("tab", { name: "Guided" }));
     fireEvent.click(screen.getByRole("button", { name: "Run" }));
 
-    // The guided draft survived the round trip, and the pasted text did not leak into the run.
-    expect(onSubmit).toHaveBeenCalledWith("A man");
-  });
-
-  it("shows the exact string that will be graded before anything is spent", () => {
-    renderComposer();
-    fireEvent.change(screen.getByLabelText("Gender"), { target: { value: "woman" } });
-    fireEvent.change(screen.getByLabelText("Eyes"), { target: { value: "hazel" } });
-
-    expect(screen.getByText("What will be graded")).toBeInTheDocument();
-    expect(screen.getByText("A woman, hazel eyes")).toBeInTheDocument();
+    expect(onSubmit).toHaveBeenCalledWith("pasted text");
+    fireEvent.click(screen.getByRole("tab", { name: "Build an avatar" }));
+    expect(screen.getByLabelText("Gender")).toHaveValue("man");
   });
 
   it("fills the form from the suggestions menu, then resets the menu to its placeholder", () => {
@@ -74,17 +102,15 @@ describe("AvatarComposer", () => {
     fireEvent.change(menu, { target: { value: "hazel" } });
 
     expect(screen.getByLabelText("Eyes")).toHaveValue("hazel");
-    // A pick-to-insert menu holds no value of its own; leaving one selected would make the next
-    // pick of the same value a no-op.
     expect(menu.value).toBe("");
   });
 
-  it("marks the two fields Mentic has no counterpart for, rather than blending them in", () => {
+  it("marks the two fields Mentic has no counterpart for", () => {
     renderComposer();
     expect(screen.getAllByText("not in Mentic")).toHaveLength(2);
   });
 
-  it("names the checks a field feeds, so a blank field shows what it costs", () => {
+  it("names the checks a field feeds", () => {
     renderComposer();
     expect(screen.getByText("anchor marker")).toBeInTheDocument();
     expect(screen.getByText("wardrobe · no brand name")).toBeInTheDocument();
@@ -107,28 +133,16 @@ describe("AvatarComposer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Surprise me" }));
     expect(screen.getByLabelText("Gender")).not.toHaveValue("");
     expect(screen.getByLabelText("Wardrobe, head to toe")).not.toHaveValue("");
-    expect(screen.getByRole("button", { name: "Run" })).toBeEnabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Clear" }));
     expect(screen.getByLabelText("Gender")).toHaveValue("");
-    expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
   });
 
-  it("counts the characters of the text that will actually run, per tab", () => {
-    renderComposer();
-    fireEvent.change(screen.getByLabelText("Gender"), { target: { value: "woman" } });
-    // "A woman" is 7 characters.
-    expect(screen.getByText("7 / 2000 char")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Direct" }));
-    expect(screen.getByText("0 / 2000 char")).toBeInTheDocument();
-  });
-
-  it("blocks Run and flags the count once the text passes the cap", () => {
+  it("blocks Run and flags the count once the pasted text passes the cap", () => {
     const onSubmit = vi.fn();
-    render(<AvatarComposer onSubmit={onSubmit} disabled={false} maxChars={5} />);
+    render(<AvatarComposer onSubmit={onSubmit} disabled={false} maxChars={5} live={false} />);
 
-    fireEvent.click(screen.getByRole("tab", { name: "Direct" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Paste a description" }));
     fireEvent.change(screen.getByPlaceholderText("Paste the character description."), {
       target: { value: "far too long for the cap" },
     });
@@ -139,31 +153,75 @@ describe("AvatarComposer", () => {
   });
 });
 
-describe("AvatarComposer, the Pipeline tab", () => {
-  it("offers three tabs, with Pipeline between Guided and Direct", () => {
-    render(<AvatarComposer onSubmit={vi.fn()} disabled={false} maxChars={2000} live={false} />);
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
-      "Guided",
-      "Pipeline",
-      "Direct",
-    ]);
+describe("AvatarComposer, the full build flow", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
-  it("says what the Pipeline tab is for when it is the active one", () => {
-    render(<AvatarComposer onSubmit={vi.fn()} disabled={false} maxChars={2000} live={false} />);
-    fireEvent.click(screen.getByRole("tab", { name: "Pipeline" }));
-    expect(screen.getByText(/render the sheet, then read the description back off it/i)).toBeInTheDocument();
-  });
+  it("grades the description written FROM the avatar, never the prompt that made it", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          imageBase64: PIXEL,
+          mediaType: "image/png",
+          model: "gemini-3-pro-image",
+          authoredPrompt: "authored",
+          sheetPrompt: "sheet",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          description: "A woman in her late twenties, blonde bob, grey wool coat.",
+          raw: "A woman in her late twenties, blonde bob, grey wool coat.",
+          trimmed: false,
+          model: "claude-sonnet-5",
+        }),
+      );
 
-  it("keeps Run disabled on the Pipeline tab until a description has been read off a sheet", () => {
-    render(<AvatarComposer onSubmit={vi.fn()} disabled={false} maxChars={2000} live={false} />);
+    const onSubmit = vi.fn();
+    render(<AvatarComposer onSubmit={onSubmit} disabled={false} maxChars={2000} live={true} />);
 
     fireEvent.change(screen.getByLabelText("Gender"), { target: { value: "woman" } });
-    fireEvent.click(screen.getByRole("tab", { name: "Pipeline" }));
+    fireEvent.change(screen.getByLabelText("Hair"), { target: { value: "blonde bob" } });
 
-    // The guided draft must not leak across: this tab grades what the DESCRIBE step wrote,
-    // and nothing has been described yet.
-    expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Generate sheet" }));
+    await screen.findByAltText("The rendered character reference sheet");
+
+    fireEvent.click(screen.getByRole("button", { name: "Describe this person" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Run" })).toBeEnabled());
+
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      "A woman in her late twenties, blonde bob, grey wool coat.",
+    );
+    // The assembled prompt is on screen throughout and is never what runs.
+    expect(onSubmit).not.toHaveBeenCalledWith("A woman, with blonde bob");
+  });
+
+  it("counts the characters of the described text, not of the assembled prompt", async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({ imageBase64: PIXEL, mediaType: "image/png", model: "m", authoredPrompt: "a", sheetPrompt: "b" }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ description: "seven!!", raw: "seven!!", trimmed: false, model: "c" }),
+      );
+
+    render(<AvatarComposer onSubmit={vi.fn()} disabled={false} maxChars={2000} live={true} />);
+    fireEvent.change(screen.getByLabelText("Gender"), { target: { value: "woman" } });
+
+    // "A woman" is also 7 characters, so this asserts on the count only after the described
+    // string has arrived, where the two lengths would otherwise be indistinguishable.
     expect(screen.getByText("0 / 2000 char")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate sheet" }));
+    await screen.findByAltText("The rendered character reference sheet");
+    fireEvent.click(screen.getByRole("button", { name: "Describe this person" }));
+
+    await waitFor(() => expect(screen.getByText("7 / 2000 char")).toBeInTheDocument());
   });
 });

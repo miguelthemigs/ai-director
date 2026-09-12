@@ -124,9 +124,9 @@ describe("App shell — RUN tab failing badge (design doc §6.2)", () => {
     // The file-level `beforeEach` above already starts every test on `/`.
     const client = new FixtureRunClient({ speedMs: 1, scenario });
     render(<App client={client} />);
-    // The composer opens on the Guided tab (Mentic's field form); this helper drives the Direct
-    // tab, which is the paste-a-real-description path.
-    fireEvent.click(screen.getByRole("tab", { name: "Direct" }));
+    // The composer opens on the Build tab (fields, render, describe); this helper drives the Direct
+    // tab, which grades a description on its own.
+    fireEvent.click(screen.getByRole("tab", { name: "Paste a description" }));
     fireEvent.change(screen.getByPlaceholderText("Paste the character description."), {
       target: { value: "a description long enough to submit" },
     });

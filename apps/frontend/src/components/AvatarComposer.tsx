@@ -26,7 +26,7 @@ export type AvatarComposerProps = {
   live?: boolean;
 };
 
-type Tab = "guided" | "pipeline" | "direct";
+type Tab = "build" | "paste";
 
 /**
  * The ORDER is load-bearing rather than cosmetic: each panel's slide offset is its own index
@@ -36,9 +36,8 @@ type Tab = "guided" | "pipeline" | "direct";
  * Mentic's own `actor-step.tsx`, whose comment makes the same point.
  */
 const TABS = [
-  { value: "guided", label: "Guided" },
-  { value: "pipeline", label: "Pipeline" },
-  { value: "direct", label: "Direct" },
+  { value: "build", label: "Build an avatar" },
+  { value: "paste", label: "Paste a description" },
 ] as const satisfies readonly { value: Tab; label: string }[];
 
 /** Small on purpose: this is a tab switch inside a panel, not a page transition. */
@@ -161,7 +160,7 @@ export function AvatarComposer({
   live = true,
 }: AvatarComposerProps): React.JSX.Element {
   const { t, v, reduce } = useMotionPrefs();
-  const [tab, setTab] = useState<Tab>("guided");
+  const [tab, setTab] = useState<Tab>("build");
   const [fields, setFields] = useState<AvatarFieldValues>({});
   const [direct, setDirect] = useState("");
   /** What the DESCRIBE step wrote. Separate from `direct` because it is not something the
@@ -175,8 +174,15 @@ export function AvatarComposer({
   // The single source of the graded text. The character count, Run's disabled state and the
   // string that is actually submitted all read from this one expression, so they can never
   // disagree about what is about to be graded.
-  const activeText =
-    tab === "guided" ? (anyFieldSet ? assembled : "") : tab === "pipeline" ? pipelined : direct;
+  // ── What is actually graded ────────────────────────────────────────────────────────
+  // NOT `assembled`. The guided fields produce the prompt that GENERATES the avatar; they
+  // are the input to the image, exactly as `assembleActorDescription` feeds
+  // `actorSheetBrief` in Mentic. The graded artefact is what the vision model writes after
+  // LOOKING at the rendered sheet, which in Mentic is `UgcActor.description` and here is
+  // whatever `SheetPipeline` hands back. Submitting the assembled text would grade the
+  // prompt instead of the product of the prompt, which is a different string about a
+  // different thing, and it is the single easiest mistake to make about this pipeline.
+  const activeText = tab === "build" ? pipelined : direct;
 
   const overLimit = activeText.length > maxChars;
   const canSubmit = !disabled && activeText.trim().length > 0 && !overLimit;
@@ -222,16 +228,16 @@ export function AvatarComposer({
       </div>
 
       <p className="avatar-composer__note">
-        {tab === "pipeline"
-          ? "Mentic's own pipeline, end to end: render the sheet, then read the description back off it."
-          : "The description that reaches the video model, not the brief that renders the avatar sheet."}
+        {tab === "build"
+          ? "Describe the person, render the avatar, then grade the description the model writes back from that avatar. That last one is what reaches the video model."
+          : "Paste a description straight out of Mentic to grade it on its own."}
       </p>
 
       <div className="avatar-composer__panels" data-reduce={reduce || undefined}>
         <motion.div
           className="avatar-composer__panel"
-          data-active={tab === "guided" || undefined}
-          aria-hidden={tab !== "guided"}
+          data-active={tab === "build" || undefined}
+          aria-hidden={tab !== "build"}
           {...panelMotion(0)}
         >
           <div className="avatar-composer__toolbar">
@@ -266,21 +272,19 @@ export function AvatarComposer({
           </div>
 
           <div className="avatar-preview">
-            <span className="avatar-preview__label">What will be graded</span>
+            <span className="avatar-preview__label">The prompt that will generate the avatar</span>
             <p className="avatar-preview__text" data-empty={!anyFieldSet || undefined}>
               {anyFieldSet ? assembled : "Fill a field, or press Surprise me."}
             </p>
+            {/* Said here, at the one place someone would otherwise assume the opposite.
+                These words go to the image model. They are not the words that get graded. */}
+            <p className="avatar-preview__caveat">
+              This is what gets rendered, not what gets graded.
+            </p>
           </div>
-        </motion.div>
 
-        <motion.div
-          className="avatar-composer__panel"
-          data-active={tab === "pipeline" || undefined}
-          aria-hidden={tab !== "pipeline"}
-          {...panelMotion(1)}
-        >
           <SheetPipeline
-            seedDescription={anyFieldSet ? assembled : direct}
+            seedDescription={anyFieldSet ? assembled : ""}
             onDescription={setPipelined}
             disabled={disabled}
             live={live}
@@ -289,9 +293,9 @@ export function AvatarComposer({
 
         <motion.div
           className="avatar-composer__panel"
-          data-active={tab === "direct" || undefined}
-          aria-hidden={tab !== "direct"}
-          {...panelMotion(2)}
+          data-active={tab === "paste" || undefined}
+          aria-hidden={tab !== "paste"}
+          {...panelMotion(1)}
         >
           <label className="avatar-field__label" htmlFor="description-composer-input">
             Description

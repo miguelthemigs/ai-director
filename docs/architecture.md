@@ -19,7 +19,12 @@ enough to give you the same person twice?**
 
 ### What each part does, and why it has to be there
 
-**Description.** The text going in. That is all it is.
+**Description.** The text going in. Worth being precise about which text: you fill in a
+form describing a person, and that assembles the prompt that RENDERS the avatar. An image
+model draws a character sheet from it. Then a second model looks at that sheet and writes
+the person down from scratch, and THAT paragraph is the one that reaches the video model
+and the one that gets graded. The words you typed are never scored; the words written back
+off the picture are.
 
 **Evaluator.** An AI that marks the text against nine things: age and build, face and
 skin, hair, clothes, an identifying mark, no real celebrities, no brand names, nothing

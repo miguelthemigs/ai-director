@@ -8,11 +8,12 @@ import {
 } from "../data/avatarApi.js";
 
 export type SheetPipelineProps = {
-  /** The description the guided form assembled. Used as the input to the sheet, so the
-   *  pipeline starts where the form left off rather than asking for the text twice. */
+  /** The guided form's assembled sentence. This is the IMAGE PROMPT, the text that
+   *  generates the avatar, and it is never the text that gets graded. */
   seedDescription: string;
-  /** Called with the description the DESCRIBE step produced. This is the string the nine
-   *  checks grade, and it is not the one that went in. */
+  /** Called with the description the DESCRIBE step produced: what a vision model wrote
+   *  after looking at the generated avatar. This is the string the nine checks grade, and
+   *  it is emphatically not the one that went in. */
   onDescription: (description: string) => void;
   disabled: boolean;
   /** Fixture mode has no backend. Both steps here spend real money, so there is nothing
@@ -127,13 +128,13 @@ export function SheetPipeline({
       <ol className="sheet-pipeline__steps">
         <li className="sheet-pipeline__step">
           <div className="sheet-pipeline__step-head">
-            <span className="sheet-pipeline__step-label">1 · Render the sheet</span>
+            <span className="sheet-pipeline__step-label">2 · Generate the avatar</span>
             <span className="sheet-pipeline__cost">paid image call</span>
           </div>
           <p className="sheet-pipeline__hint">
-            Runs Mentic&rsquo;s doctrine over the guided description, wraps the result in the
-            three-panel layout, and sends it to Nano Banana Pro. Or skip it and upload a sheet
-            you already rendered in Mentic.
+            Takes the prompt above, runs Mentic&rsquo;s doctrine over it, wraps the result in the
+            three-panel character-sheet layout and sends it to Nano Banana Pro. Or skip the
+            render and upload an avatar you already made in Mentic.
           </p>
           <div className="sheet-pipeline__actions">
             <button
@@ -171,7 +172,7 @@ export function SheetPipeline({
         {loaded ? (
           <li className="sheet-pipeline__step">
             <div className="sheet-pipeline__step-head">
-              <span className="sheet-pipeline__step-label">The sheet</span>
+              <span className="sheet-pipeline__step-label">The avatar</span>
               <span className="sheet-pipeline__cost">
                 {loaded.source === "uploaded" ? "uploaded" : sheet?.model}
               </span>
@@ -195,12 +196,14 @@ export function SheetPipeline({
 
         <li className="sheet-pipeline__step">
           <div className="sheet-pipeline__step-head">
-            <span className="sheet-pipeline__step-label">2 · Describe it</span>
+            <span className="sheet-pipeline__step-label">3 · Describe the avatar</span>
             <span className="sheet-pipeline__cost">paid vision call</span>
           </div>
           <p className="sheet-pipeline__hint">
-            Runs Mentic&rsquo;s own describe prompt over the sheet. What comes back is the
-            paragraph that reaches the video model, and it is what the nine checks grade.
+            Runs Mentic&rsquo;s own describe prompt over the avatar above. The model looks at the
+            rendered image and writes the person down from scratch. What it writes is the
+            paragraph that reaches the video model, and it is the only thing the nine checks
+            ever grade.
           </p>
           <button
             type="button"
@@ -215,7 +218,7 @@ export function SheetPipeline({
         {described ? (
           <li className="sheet-pipeline__step">
             <div className="sheet-pipeline__step-head">
-              <span className="sheet-pipeline__step-label">What the video model would get</span>
+              <span className="sheet-pipeline__step-label">4 · What gets graded</span>
               <span className="sheet-pipeline__cost">
                 {described.model} · {described.description.length} char
               </span>
@@ -229,7 +232,8 @@ export function SheetPipeline({
               </p>
             ) : null}
             <p className="sheet-pipeline__hint">
-              Press Run below to grade it against the nine checks.
+              Written from the avatar, not from what you typed. Press Run to grade it against
+              the nine checks.
             </p>
           </li>
         ) : null}
