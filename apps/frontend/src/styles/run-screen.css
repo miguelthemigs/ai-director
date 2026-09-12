@@ -172,6 +172,9 @@
   text-align: center;
   padding: var(--sp-4) var(--sp-3);
   border-radius: var(--r-2);
+  box-sizing: border-box;
+  min-width: 0;
+  flex-shrink: 0;
 }
 .verdict-banner[data-status="passed"] {
   border: var(--bd-mark) solid var(--band-5);
@@ -194,6 +197,12 @@
   font-size: var(--fs-verdict);
   font-weight: var(--fw-bold);
   letter-spacing: var(--tr-verdict);
+  /* NO IMPROVEMENT is two words and STILL FAILING is two words: both may wrap onto two lines, and
+   * neither may ever spill past the banner's own border. This is the guard, not the fix — the fix
+   * was moving the banner out of the 88px pass rail (see RunScreen) — but the verdict word is the
+   * one string on the screen that must stay readable in any container it is ever put in. */
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 .verdict-banner__count {
   margin: 0;
@@ -216,6 +225,11 @@
   margin: 0;
   font-size: var(--fs-ui);
   color: var(--ink-2);
+  /* §6.2 structural fact 2: the qualifying clause shares this line so no truncation can separate it
+   * from the improvement wording. A clipped line is a truncation, so this line must wrap, never
+   * overflow. */
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 .verdict-banner[data-status="no_improvement"] .verdict-banner__detail {
   color: var(--sig-alarm-ink);

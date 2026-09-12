@@ -201,6 +201,20 @@ export function RunScreen({ client, run, status, events, error, onRunStarted }: 
           streaming={status === "streaming"}
           cueId={events.at(-1)?.id}
         />
+      </div>
+
+      <div className="run__field">
+        {/*
+          The verdict does NOT sit at the foot of the pass rail, which is where the design doc's
+          FIRST VIEWPORT line puts it. The rail is `--w-rail`, 88px, and the verdict word is
+          `--fs-verdict`, 28px: `STILL FAILING` is thirteen characters and needs roughly 220px, so
+          in the rail it rendered clipped on both edges and the mandatory second line was cut to
+          "asses used · me". Every binding requirement in §6.2 is about the banner's CONTENT and
+          TREATMENT — the word, the numeral, the second line, the tokens and words forbidden — and
+          none of them survives being illegible. It moves to the head of the description column,
+          which is the widest column on the screen and the first thing read, and §6.2's table is
+          rendered unchanged.
+        */}
         {terminal ? (
           <VerdictBanner
             status={terminal}
@@ -210,9 +224,6 @@ export function RunScreen({ client, run, status, events, error, onRunStarted }: 
             meanAfter={meanAfter}
           />
         ) : null}
-      </div>
-
-      <div className="run__field">
         <div className="run__field-header">
           <SectionLabel>Description</SectionLabel>
           {hasStarted ? (

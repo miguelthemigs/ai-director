@@ -124,3 +124,66 @@ test.describe("real-browser render and layout", () => {
     await expect(page.getByText("Sample data — not a real run")).toBeVisible();
   });
 });
+
+/**
+ * FIXED DEFECT, found from a screenshot on 2026-09-12: the verdict banner was rendering inside the
+ * pass rail, which is `--w-rail` (88px) wide, while `--fs-verdict` is 28px. `STILL FAILING` spilled
+ * past the banner's border on both edges and the mandatory second line was clipped to
+ * "asses used · me".
+ *
+ * That is not a cosmetic problem. Design doc §6.2 structural fact 2 requires the qualifying clause
+ * "the description did not pass" to share a line with the improvement wording so that no truncation
+ * can separate the two; a line clipped by its own container IS that truncation, arriving by a route
+ * the rule did not anticipate. A reader seeing `rose 54 → 78` with the qualifier cut off reads a
+ * failed run as a good one, which is the single thing this product may never do.
+ *
+ * Geometry, not screenshots: every child box must sit inside the banner's own box. jsdom cannot
+ * answer this (no layout engine), and the 312 unit tests all run there.
+ */
+test.describe("the verdict banner never overflows its own border", () => {
+  for (const scenario of ["passed", "improvedStillFailing", "noImprovement"] as const) {
+    test(`${scenario}: word, numeral and second line all fit inside the banner`, async ({ page }) => {
+      await gotoFixture(page, scenario);
+      await page.getByLabel("Description").fill("A woman with short black hair and a grey wool coat.");
+      await page.getByRole("button", { name: "Run", exact: true }).dispatchEvent("click");
+
+      const banner = page.locator(".verdict-banner");
+      await expect(banner).toBeVisible({ timeout: 15_000 });
+
+      const bannerBox = await banner.boundingBox();
+      expect(bannerBox).not.toBeNull();
+      if (!bannerBox) return;
+
+      for (const child of [".verdict-banner__word", ".verdict-banner__count", ".verdict-banner__detail"]) {
+        const box = await banner.locator(child).boundingBox();
+        expect(box, `${child} has no box`).not.toBeNull();
+        if (!box) continue;
+        // A one-pixel tolerance for sub-pixel rounding; a genuine overflow is tens of pixels.
+        expect(box.x, `${child} overflows the banner's left edge`).toBeGreaterThanOrEqual(bannerBox.x - 1);
+        expect(
+          box.x + box.width,
+          `${child} overflows the banner's right edge`,
+        ).toBeLessThanOrEqual(bannerBox.x + bannerBox.width + 1);
+      }
+    });
+  }
+
+  /**
+   * The other half of the same screenshot: `meanPercent` returns a raw float, so an unrounded mean
+   * reached the line as `53.666666666666664`. §6.2's binding table writes every mean as a whole
+   * number (`mean 88`, `mean rose 62 → 80`), and a 16-digit float is also what made the line long
+   * enough to overflow in the first place.
+   */
+  test("the second line prints whole-number means, never raw floats", async ({ page }) => {
+    await gotoFixture(page, "improvedStillFailing");
+    await page.getByLabel("Description").fill("A woman with short black hair and a grey wool coat.");
+    await page.getByRole("button", { name: "Run", exact: true }).dispatchEvent("click");
+
+    const line = page.getByTestId("verdict-second-line");
+    await expect(line).toBeVisible({ timeout: 15_000 });
+    const text = await line.innerText();
+
+    expect(text, `second line carried a fractional mean: ${text}`).not.toMatch(/\d\.\d/);
+    expect(text).toMatch(/the description did not pass$/);
+  });
+});

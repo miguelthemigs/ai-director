@@ -43,6 +43,19 @@ export function verdictNumeralLabel(status: TerminalStatus): string {
 }
 
 /**
+ * A mean, as §6.2's binding table writes one: a whole number. Every example in that row is an
+ * integer (`mean 88`, `mean rose 62 → 80`, `mean unchanged at 62`), and `meanPercent` hands over a
+ * raw float — nine checks at 20-point bands means a mean is a multiple of 20/9, so an unrounded one
+ * reaches the banner as `53.666666666666664` and overflows the line it is printed on.
+ *
+ * Rounding cannot collapse two genuinely different means into one number: the smallest possible gap
+ * between two means is 20/n, and n is at most 9, so distinct means are always at least 2.2 apart.
+ */
+function roundMean(percent: number): number {
+  return Math.round(percent);
+}
+
+/**
  * The mandatory second line, exactly as §6.2 fixes it per status. `improved_still_failing`'s
  * qualifying clause — "the description did not pass" — always shares the line with any
  * improvement wording, so no truncation or screenshot can separate the two (structural fact 2).
@@ -53,18 +66,23 @@ export function verdictSecondLine(
   meanBefore: number,
   meanAfter: number,
 ): string {
+  const before = roundMean(meanBefore);
+  const after = roundMean(meanAfter);
   if (status === "passed") {
-    return `${passesUsed} passes used · mean ${meanAfter}`;
+    return `${passesUsed} passes used · mean ${after}`;
   }
   if (status === "no_improvement") {
-    return `${passesUsed} passes used · mean unchanged at ${meanAfter} · no fragment improved its band`;
+    return `${passesUsed} passes used · mean unchanged at ${after} · no fragment improved its band`;
   }
+  // The verb is chosen from the ROUNDED pair, never the raw one. Two means that print as the same
+  // number must not be narrated as a rise: `rose 54 → 54` is a sentence that argues with itself,
+  // and this is the one line in the product where a claim of improvement is most load-bearing.
   const change =
-    meanAfter > meanBefore
-      ? `rose ${meanBefore} → ${meanAfter}`
-      : meanAfter < meanBefore
-        ? `fell ${meanBefore} → ${meanAfter}`
-        : `unchanged at ${meanAfter}`;
+    after > before
+      ? `rose ${before} → ${after}`
+      : after < before
+        ? `fell ${before} → ${after}`
+        : `unchanged at ${after}`;
   return `${passesUsed} passes used · mean ${change} · the description did not pass`;
 }
 
