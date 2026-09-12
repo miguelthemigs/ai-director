@@ -337,6 +337,20 @@ where it is written rather than where it is typed.
 Every one of those files says at the top that it is the **subject under test**. Editing
 one means this repo stops measuring Mentic and starts measuring a prompt of its own.
 
+**There is one graded artefact, and it is not the one you type.** The guided fields
+assemble the prompt that GENERATES the avatar: that text feeds `authorActorPrompt`, then
+`actorSheetBrief`, then the image model, and it is never read again once the image comes
+back. The graded artefact is what `describeActorFromPhoto` writes after LOOKING at the
+rendered sheet, stored on `UgcActor.description` and spliced into every render prompt.
+Every call site in Mentic passes `actor.headshotUrl`, the generated image, never the text
+that generated it. Grading the assembled sentence would measure the prompt rather than the
+product of the prompt, and the gap between the two is precisely the thing worth measuring.
+
+The composer is arranged so that misreading is hard to make: the assembled sentence is
+labelled *the prompt that will generate the avatar*, carries the line *this is what gets
+rendered, not what gets graded*, and Run stays disabled until a description has been read
+back off a generated avatar.
+
 **Two routes, not one, and the split is the point.** `POST /avatar/sheet` runs the
 doctrine and renders the sheet. `POST /avatar/describe` reads a description back off it.
 A description can lose a check in three different places: the form never asked for the
