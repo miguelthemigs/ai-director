@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { gotoFixture } from "./helpers.js";
+import { gotoFixture, startRun } from "./helpers.js";
 
 /**
  * Settles the question the task brief left open: does the app actually render, with real
@@ -100,7 +100,7 @@ test.describe("real-browser render and layout", () => {
   });
 
   test("the description composer sits left of the checks panel (the two-column layout)", async ({ page }) => {
-    const composer = page.locator(".description-composer");
+    const composer = page.locator(".avatar-composer");
     const checksPanel = page.locator("section.check-panel");
 
     await expect(composer).toBeVisible();
@@ -144,8 +144,7 @@ test.describe("the verdict banner never overflows its own border", () => {
   for (const scenario of ["passed", "improvedStillFailing", "noImprovement"] as const) {
     test(`${scenario}: word, numeral and second line all fit inside the banner`, async ({ page }) => {
       await gotoFixture(page, scenario);
-      await page.getByLabel("Description").fill("A woman with short black hair and a grey wool coat.");
-      await page.getByRole("button", { name: "Run", exact: true }).dispatchEvent("click");
+      await startRun(page);
 
       const banner = page.locator(".verdict-banner");
       await expect(banner).toBeVisible({ timeout: 15_000 });
@@ -176,8 +175,7 @@ test.describe("the verdict banner never overflows its own border", () => {
    */
   test("the second line prints whole-number means, never raw floats", async ({ page }) => {
     await gotoFixture(page, "improvedStillFailing");
-    await page.getByLabel("Description").fill("A woman with short black hair and a grey wool coat.");
-    await page.getByRole("button", { name: "Run", exact: true }).dispatchEvent("click");
+    await startRun(page);
 
     const line = page.getByTestId("verdict-second-line");
     await expect(line).toBeVisible({ timeout: 15_000 });

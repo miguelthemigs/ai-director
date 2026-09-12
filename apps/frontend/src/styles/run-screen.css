@@ -373,6 +373,209 @@
   letter-spacing: var(--tr-caps);
 }
 
+/* ── Avatar composer ──────────────────────────────────────── */
+
+.avatar-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.avatar-composer__tabs {
+  display: flex;
+  gap: var(--sp-2);
+}
+.avatar-composer__tab {
+  appearance: none;
+  background: none;
+  border: var(--bd-hair) solid transparent;
+  border-radius: var(--r-1);
+  padding: var(--sp-2) var(--sp-4);
+  font-family: var(--ff-ui);
+  font-size: var(--fs-label);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.avatar-composer__tab[data-selected] {
+  color: var(--ink);
+  border-color: var(--ln-strong);
+  background: var(--sf-panel);
+}
+.avatar-composer__tab:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.avatar-composer__note {
+  margin: 0;
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+}
+
+/* Both panels stay mounted so a draft survives a tab switch. They are stacked in one grid
+   cell rather than laid out in sequence, which is what lets the inactive one slide and blur
+   out of the way instead of pushing the footer down the page. */
+.avatar-composer__panels {
+  display: grid;
+}
+.avatar-composer__panel {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+/* The inactive panel is animated to `opacity: 0` but is still in the layout and still
+   focusable, which would let a keyboard user tab into an invisible textarea. Taking it out of
+   the pointer and tab order is what makes the stack behave like one panel. */
+.avatar-composer__panel:not([data-active]) {
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.avatar-composer__toolbar {
+  display: flex;
+  gap: var(--sp-3);
+}
+.avatar-composer__reroll,
+.avatar-composer__clear {
+  appearance: none;
+  font-family: var(--ff-ui);
+  font-size: var(--fs-label);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+  padding: var(--sp-2) var(--sp-4);
+  cursor: pointer;
+}
+.avatar-composer__reroll:focus-visible,
+.avatar-composer__clear:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.avatar-composer__reroll:disabled,
+.avatar-composer__clear:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.avatar-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--sp-4);
+}
+.avatar-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.avatar-field--wide {
+  grid-column: 1 / -1;
+}
+.avatar-field__header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-3);
+}
+.avatar-field__label {
+  font-size: var(--fs-label);
+  color: var(--ink-3);
+}
+/* Which checks this field feeds. The form is a coach, so a blank field should show what it is
+   costing without the user having to run anything first. */
+.avatar-field__checks {
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+  opacity: 0.75;
+}
+/* A field with no counterpart in Mentic today. Marked rather than blended in: the difference
+   between the two field sets is itself a finding (see `avatarFields.ts`). */
+.avatar-field__flag {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+  padding: 0 var(--sp-2);
+}
+.avatar-field__row {
+  display: flex;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.avatar-field__input,
+.avatar-field__textarea {
+  flex: 1;
+  min-width: 0;
+  padding: var(--sp-3);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+  color: var(--ink);
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-ui);
+}
+.avatar-field__textarea {
+  min-height: 64px;
+  resize: vertical;
+}
+.avatar-field__input:focus-visible,
+.avatar-field__textarea:focus-visible,
+.avatar-field__pick:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.avatar-field__input:disabled,
+.avatar-field__textarea:disabled,
+.avatar-field__pick:disabled {
+  opacity: 0.6;
+}
+.avatar-field__pick {
+  width: 32px;
+  flex-shrink: 0;
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+  color: var(--ink-2);
+  text-align: center;
+  cursor: pointer;
+}
+
+/* The assembled sentence, shown before anything is spent. It is set in the specimen face at
+   specimen size because it is the exact string the checks will quote from. */
+.avatar-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+}
+.avatar-preview__label {
+  font-size: var(--fs-label);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.avatar-preview__text {
+  margin: 0;
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-specimen);
+  line-height: var(--lh-spec);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.avatar-preview__text[data-empty] {
+  color: var(--ink-3);
+}
+
 /* ── Description composer ─────────────────────────────────── */
 
 .description-composer {

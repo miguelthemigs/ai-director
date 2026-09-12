@@ -240,28 +240,22 @@ makes that judgement testable rather than a matter of taste.
 
 ## 5. What is not built yet
 
-**The Mentic-style avatar UI is not in this repo.** Today the Run screen has a plain
-textarea (`DescriptionComposer.tsx`). To score the description the way it is actually
-produced, the guided form has to come across: the thirteen fields, the 💡 suggestion
-menus, Surprise Me, and the Guided / Direct tab switch. Then the same
-`assembleActorDescription()` output goes straight into the Evaluator, and the score is a
-score of the real artefact rather than of something retyped by hand.
+**The Mentic-style avatar UI is built.** `apps/frontend/src/domain/avatarFields.ts` carries
+Mentic's field set with its suggestion values verbatim, and
+`apps/frontend/src/components/AvatarComposer.tsx` is the form: two tabs, a suggestions menu
+per field, Surprise me, and a live preview of the sentence that will be graded. Direct is
+for pasting a real description straight out of Mentic; Guided is for building one.
 
-Porting notes, from reading `actor-step.tsx`:
+Three departures from Mentic's version, each deliberate:
 
-- `ACTOR_FIELDS` is pure data with no network and no React in it. It can be copied into
-  this repo as-is, and so can `assembleActorDescription` and `randomizeActorFields`.
-- The field rows are a plain grid, an `Input`, and a native `<select>` used as a
-  pick-to-insert menu rather than a form control. Mentic's own comment explains the
-  choice: a Radix Select fights the reset-to-placeholder, a native one does not.
-- Both describe panels stay mounted and stacked, and the slide offset for each is its own
-  index minus the active index. That is what makes the transition direction agree with
-  the tab that was clicked, with no direction state to keep in sync. Worth copying
-  verbatim; it is the sort of thing that reads as trivial and is annoying to rediscover.
-- The sheet itself is a single 16:9 image. Showing it here means an `aspect-video`
-  container, not a portrait one. Mentic learned this the expensive way: the skeleton was
-  9:16 while the avatar was a portrait, and every result shoved the grid when the real
-  landscape sheets landed.
+- **It assembles prose, not a label block.** Mentic's own `assembleActorDescription` emits
+  `Eyes: hazel` / `Hair: blonde bob`, because its output is an image brief. The paragraph
+  that reaches the video model is a noun phrase, so this one emits a noun phrase.
+- **Two fields have no counterpart in Mentic.** `faceSkin` and `anchorMarker` close the two
+  gaps the table above found. They are flagged `not in Mentic` on screen, because the
+  difference between the two field sets is itself a finding.
+- **Each field names the checks it feeds.** A blank field should show what it is costing
+  before anything is run.
 
 **Which description gets scored is a real fork, and both are worth scoring.**
 `assembleActorDescription()` output is what the user wrote. `UgcActor.description` is

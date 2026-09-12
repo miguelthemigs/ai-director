@@ -37,7 +37,14 @@ export async function navigateToScreen(page: Page, tab: "Run" | "Architecture" |
  *  with. Resolves once the submit click has landed; callers wait for their own terminal signal
  *  (the verdict banner's word, a specific check's band, etc.) rather than a fixed sleep. */
 export async function startRun(page: Page): Promise<void> {
-  await page.getByLabel("Description").fill(SAMPLE_DESCRIPTION);
+  // The composer opens on the Guided tab (Mentic's field form); this helper drives the Direct
+  // tab, which is the paste-a-real-description path. `AvatarComposer` keeps both panels mounted,
+  // so the tab has to be selected rather than merely located.
+  await page.getByRole("tab", { name: "Direct" }).click();
+  // `exact: true`: Playwright's `getByLabel` matches on a substring by default, and the tab
+  // list's own label ("How to supply the description") contains the word, so a loose match
+  // resolves to two elements and throws.
+  await page.getByLabel("Description", { exact: true }).fill(SAMPLE_DESCRIPTION);
   // `exact: true`: a non-exact match on "Run" also matches every pass-step button, whose
   // accessible name includes its "not yet run" status text.
   //

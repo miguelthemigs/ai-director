@@ -13,7 +13,7 @@ import type { RunStatus } from "../hooks/useRunStream.js";
 import { useSelection } from "../hooks/useSelection.js";
 import { failingCount, lanesOf, lineOfSpan, meanPercent } from "../domain/derive.js";
 import { CheckPanel } from "../components/CheckPanel.js";
-import { DescriptionComposer } from "../components/DescriptionComposer.js";
+import { AvatarComposer } from "../components/AvatarComposer.js";
 import { EmptyState } from "../components/EmptyState.js";
 import { ErrorPanel } from "../components/ErrorPanel.js";
 import { FragmentDiff } from "../components/FragmentDiff.js";
@@ -96,7 +96,6 @@ export type RunScreenProps = {
  * `App` (see the task report for Task 14) so `TopBar` and `ScreenTabs` can read the same run.
  */
 export function RunScreen({ client, run, status, events, error, onRunStarted }: RunScreenProps): React.JSX.Element {
-  const [draft, setDraft] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const { selected, select, hoveredSpanId, hoverSpan } = useSelection();
 
@@ -164,11 +163,11 @@ export function RunScreen({ client, run, status, events, error, onRunStarted }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
-  async function handleSubmit(): Promise<void> {
+  async function handleSubmit(description: string): Promise<void> {
     if (submitting) return;
     setSubmitting(true);
     try {
-      const { runId: newRunId } = await client.startRun(draft);
+      const { runId: newRunId } = await client.startRun(description);
       onRunStarted(newRunId);
     } finally {
       setSubmitting(false);
@@ -244,13 +243,11 @@ export function RunScreen({ client, run, status, events, error, onRunStarted }: 
         {!hasStarted ? (
           <>
             <EmptyState
-              title="Paste a description to begin"
+              title="Build a description, or paste one"
               body="Nine checks, three groups, up to three repair passes. Nothing here spends a render credit."
             />
-            <DescriptionComposer
-              value={draft}
-              onChange={setDraft}
-              onSubmit={handleSubmit}
+            <AvatarComposer
+              onSubmit={(description) => void handleSubmit(description)}
               disabled={submitting}
               maxChars={MAX_CHARS}
             />
