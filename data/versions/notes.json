@@ -1,0 +1,17 @@
+{
+  "versions": [
+    {
+      "id": "rubric-v1",
+      "kind": "rubric",
+      "version": "v1",
+      "sealedAt": "2026-09-10T00:00:00.000Z",
+      "why": "First rubric. Nine checks, five bands each, sourced to Higgsfield's published character pattern and to my own measured Runway refusals.",
+      "meanPercent": null,
+      "deltaPercent": null,
+      "profile": null,
+      "kappa": null,
+      "perCheckKappa": null,
+      "goldSetSize": null
+    }
+  ]
+}

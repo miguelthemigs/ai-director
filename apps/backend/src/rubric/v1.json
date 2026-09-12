@@ -1,0 +1,133 @@
+{
+  "version": "v1",
+  "frozenOn": "2026-09-10",
+  "passBand": 4,
+  "checks": [
+    {
+      "id": "age_build",
+      "group": "look",
+      "title": "Age bracket and build",
+      "passTest": "States an age bracket and a body build.",
+      "bands": {
+        "1": "Neither age nor build appears.",
+        "2": "One of the two appears, vaguely (\"young\").",
+        "3": "Both appear but at least one is vague (\"young, average\").",
+        "4": "Age bracket and build both stated concretely (\"late 20s, lean\").",
+        "5": "Age bracket, build, and a height or proportion cue, all concrete."
+      },
+      "source": "Higgsfield Cast fields and cinematic_headphones, checked 2026-09-10"
+    },
+    {
+      "id": "face_skin",
+      "group": "look",
+      "title": "Face and skin detail",
+      "passTest": "Names at least two specific face or skin features that a render could be checked against.",
+      "bands": {
+        "1": "No face or skin detail.",
+        "2": "Only an evaluative word (\"pretty face\").",
+        "3": "One concrete feature named.",
+        "4": "Two or more concrete features named (jaw shape, eye colour, freckles).",
+        "5": "Two or more concrete features plus a skin-texture cue (freckling, capillary flush, pore detail)."
+      },
+      "source": "Higgsfield cinematic_headphones pore-level realism line, checked 2026-09-10"
+    },
+    {
+      "id": "hair_spec",
+      "group": "look",
+      "title": "Hair specified three ways",
+      "passTest": "States hair colour and texture and style together.",
+      "bands": {
+        "1": "Hair not mentioned.",
+        "2": "One of colour, texture or style.",
+        "3": "Two of the three.",
+        "4": "Colour, texture and style all stated.",
+        "5": "All three plus length or parting."
+      },
+      "source": "Higgsfield Cast fields (\"Slick back, wavy, brown\"), checked 2026-09-10"
+    },
+    {
+      "id": "wardrobe",
+      "group": "look",
+      "title": "Wardrobe head to toe",
+      "passTest": "Names every visible garment including footwear, with colours.",
+      "bands": {
+        "1": "No wardrobe.",
+        "2": "A category only (\"casual clothes\").",
+        "3": "Some garments named, footwear missing.",
+        "4": "All visible garments named with colours, footwear included.",
+        "5": "As band 4 plus fit or condition cues (\"zip half open\", \"light-wash baggy\")."
+      },
+      "source": "Higgsfield cinematic_headphones full outfit line, checked 2026-09-10"
+    },
+    {
+      "id": "anchor_marker",
+      "group": "look",
+      "title": "Identity anchor marker",
+      "passTest": "Names at least one small reusable marker that can be checked shot to shot.",
+      "bands": {
+        "1": "No marker.",
+        "2": "A marker implied but not localised (\"jewellery\").",
+        "3": "One marker named without position or count.",
+        "4": "One marker named with position or count (\"two moles on the left cheek\").",
+        "5": "Two or more such markers, each localised or counted."
+      },
+      "source": "Higgsfield gold hoop earrings and moustache examples, checked 2026-09-10"
+    },
+    {
+      "id": "no_real_person",
+      "group": "safety",
+      "title": "No real-person anchor",
+      "passTest": "Contains no celebrity, public figure, or lookalike framing.",
+      "bands": {
+        "1": "Names a real person as the character.",
+        "2": "Lookalike framing (\"looks like X\", \"X vibes\").",
+        "3": "An indirect real-person pointer (a named role a single living person holds).",
+        "4": "No real-person pointer of any kind.",
+        "5": "No real-person pointer, and the text states the character is fictional or generated."
+      },
+      "source": "My own Runway probe runs 2026-08-13 to 2026-08-30; filter reporting dated 13 April 2026"
+    },
+    {
+      "id": "no_brand_name",
+      "group": "safety",
+      "title": "No brand or franchise name",
+      "passTest": "Contains no brand, franchise, or trademarked property name.",
+      "bands": {
+        "1": "A brand or franchise name appears as the subject.",
+        "2": "A brand name appears on wardrobe or a prop.",
+        "3": "A trademarked product-line, model, or franchise-specific proper noun names the item, without the parent brand or franchise name itself (\"Air Max\", \"the Batmobile\").",
+        "4": "No brand or franchise reference.",
+        "5": "No brand reference, and garments are described generically enough to be re-renderable."
+      },
+      "source": "My own Runway moderation refusals, recorded in APPLIED-RESEARCH.md"
+    },
+    {
+      "id": "drawable_only",
+      "group": "drawable",
+      "title": "Only drawable words",
+      "passTest": "Contains no mood word, feeling, backstory or judgement.",
+      "bands": {
+        "1": "Mostly mood, feeling or backstory.",
+        "2": "Several undrawable phrases.",
+        "3": "One or two undrawable phrases.",
+        "4": "No undrawable phrases.",
+        "5": "No undrawable phrases, and every sentence names something visible."
+      },
+      "source": "My render-tested shot-construction contract, APPLIED-RESEARCH.md"
+    },
+    {
+      "id": "no_cross_slot",
+      "group": "drawable",
+      "title": "No cross-slot instructions",
+      "passTest": "Contains no camera, lighting, colour grade or audio instruction.",
+      "bands": {
+        "1": "Multiple camera or lighting instructions inside the description.",
+        "2": "One camera or lighting instruction plus a grade or audio note.",
+        "3": "One such instruction.",
+        "4": "None: the block describes only the person.",
+        "5": "None, and the block is a single self-contained paragraph reusable in any stage."
+      },
+      "source": "My render-tested shot-construction contract, APPLIED-RESEARCH.md"
+    }
+  ]
+}

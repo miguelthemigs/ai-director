@@ -1,0 +1,269 @@
+html { font-size: 16px; }
+
+body {
+  margin: 0;
+  background: var(--sf-ground);
+  color: var(--ink);
+  font-family: var(--ff-ui);
+  font-size: var(--fs-body);
+  line-height: var(--lh-ui);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "cv05" 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+::selection      { background: var(--mark-soft); color: var(--ink); }
+:focus-visible   { outline: none; box-shadow: var(--focus-ring); border-radius: var(--r-1); }
+input, textarea, [contenteditable] { caret-color: var(--mark); }
+
+* { scrollbar-width: thin; scrollbar-color: var(--ln-strong) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--ln); border: 3px solid transparent; background-clip: content-box; border-radius: 99px; }
+*::-webkit-scrollbar-thumb:hover { background-color: var(--ln-strong); }
+
+a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+
+/* Every numeric readout in the product. */
+.tnum { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+
+/* Visually hidden but still reachable by assistive tech — a screen's own landmark heading, a live
+ * region's text. Never use `display: none`/`visibility: hidden` for these; both remove the content
+ * from the accessibility tree along with the viewport. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * Belt-and-suspenders backstop for anyone whose OS asks for reduced motion but whose browser
+ * runs a component before React mounts (or a component that, in error, animates outside
+ * useMotionPrefs). The primary mechanism is useMotionPrefs + MotionConfig at the app root
+ * (src/motion/useMotionPrefs.ts); this block only catches what that mechanism cannot reach.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * Shared chrome structure. Only the layout each component's own responsibility calls for
+ * (design doc §5 "Shared") plus §2 tokens — the per-screen layouts of §4 are out of scope here
+ * and belong to Tasks 13-16.
+ */
+
+.shell {
+  display: grid;
+  grid-template-rows: var(--h-topbar) minmax(0, 1fr);
+  height: 100dvh;
+  overflow: hidden;
+}
+.shell > * { padding-inline: var(--sp-5); }
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  height: var(--h-topbar);
+  border-bottom: var(--bd-hair) solid var(--ln);
+}
+.top-bar__mark {
+  font-family: var(--ff-ui);
+  font-weight: var(--fw-semi);
+  font-size: var(--fs-label);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.top-bar__right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  margin-inline-start: auto;
+}
+
+.screen-tabs {
+  display: flex;
+  gap: var(--sp-4);
+}
+.screen-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-block: var(--sp-2);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-med);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  text-decoration: none;
+  border-bottom: var(--bd-mark) solid transparent;
+}
+.screen-tab[data-active] {
+  color: var(--ink);
+  border-bottom-color: var(--focus);
+}
+.screen-tab__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--sp-6);
+  padding-inline: var(--sp-2);
+  border-radius: var(--r-1);
+  font-size: var(--fs-micro);
+}
+/* `no_improvement` only (design doc §6.2) — the product's one solid-fill-behind-text treatment. */
+.screen-tab__badge[data-tone="fill"] {
+  background: var(--sig-alarm-fill);
+  color: var(--sig-alarm-ink);
+}
+/* Every other failing status, including `improved_still_failing` — never the solid fill. */
+.screen-tab__badge[data-tone="outline"] {
+  background: transparent;
+  color: var(--sig-alarm-edge);
+  border: var(--bd-mark) solid var(--sig-alarm-edge);
+}
+
+.run-identity {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-5);
+  margin: 0;
+}
+.run-identity__field {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+.run-identity__label {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0;
+}
+.run-identity__value {
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+  margin: 0;
+}
+.run-identity--empty .run-identity__label {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Sample-data marker (fix round 1, task 16). Never the alarm tokens — this names provenance, not a
+ * failure — and never conveyed by colour alone: the text itself is the signal. */
+.fixture-notice {
+  font-family: var(--ff-ui);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-med);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--mark);
+  border-radius: var(--r-1);
+  padding: var(--sp-1) var(--sp-3);
+  white-space: nowrap;
+}
+
+.theme-toggle {
+  font-family: var(--ff-ui);
+  font-size: var(--fs-label);
+  color: var(--ink-2);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+  padding: var(--sp-2) var(--sp-4);
+  cursor: pointer;
+}
+.theme-toggle:hover { color: var(--ink); border-color: var(--ln-strong); }
+
+.screen-body {
+  min-height: 0;
+  overflow: auto;
+  padding-block: var(--sp-6);
+}
+.screen-title {
+  font-family: var(--ff-ui);
+  font-size: var(--fs-title);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--tr-title);
+  color: var(--ink);
+  margin: 0;
+}
+
+.empty-state {
+  max-width: 68ch;
+  color: var(--ink-2);
+}
+.empty-state__title {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semi);
+  color: var(--ink);
+  margin: 0 0 var(--sp-2);
+}
+.empty-state__body { margin: 0 0 var(--sp-4); }
+.empty-state__action {
+  font-family: var(--ff-ui);
+  font-size: var(--fs-ui);
+  color: var(--ink);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+  padding: var(--sp-2) var(--sp-4);
+  cursor: pointer;
+}
+
+.error-panel {
+  border: var(--bd-mark) solid var(--sig-alarm-edge);
+  background: var(--sig-alarm-tint);
+  border-radius: var(--r-2);
+  padding: var(--sp-5);
+  max-width: 68ch;
+}
+.error-panel__title {
+  font-weight: var(--fw-semi);
+  color: var(--ink);
+  margin: 0 0 var(--sp-2);
+}
+.error-panel__detail { color: var(--ink-2); margin: 0 0 var(--sp-3); }
+.error-panel__cue { color: var(--ink-3); font-size: var(--fs-micro); margin: 0 0 var(--sp-3); }
+.error-panel__resume { color: var(--ink-2); font-size: var(--fs-ui); margin: 0 0 var(--sp-3); }
+.error-panel__retry {
+  font-family: var(--ff-ui);
+  font-size: var(--fs-ui);
+  color: var(--sig-alarm-ink);
+  background: var(--sig-alarm-fill);
+  border: none;
+  border-radius: var(--r-1);
+  padding: var(--sp-2) var(--sp-4);
+  cursor: pointer;
+}
+
+.skeleton-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.skeleton-rows__row {
+  background: var(--sf-panel);
+  border-radius: var(--r-1);
+}

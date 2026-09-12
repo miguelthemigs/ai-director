@@ -1,0 +1,301 @@
+/*
+ * Versions screen (design doc §4.3, §5, §6.4; motion spec §11). Durations and colours are never
+ * literals here — every timing lives in `src/motion/tokens.ts` and every colour is one of the
+ * custom properties in `tokens.css`.
+ */
+
+.versions {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--sp-5);
+  min-height: 0;
+}
+
+.versions__stats {
+  color: var(--ink-3);
+  font-size: var(--fs-ui);
+  margin: 0 0 var(--sp-3);
+}
+
+/* ── Table ───────────────────────────────────────────────────── */
+
+.vtable {
+  display: grid;
+  grid-template-columns: 40px 56px 96px 88px 68px 84px 116px minmax(0, 1fr);
+  align-items: start;
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  background: var(--sf-panel);
+}
+.vtable__row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  border-block-end: var(--bd-hair) solid var(--ln-faint);
+  padding-block: var(--sp-3);
+}
+.vtable__row:last-child {
+  border-block-end: none;
+}
+.vtable__row--head {
+  padding-block: var(--sp-2);
+  border-block-end: var(--bd-hair) solid var(--ln-strong);
+}
+.vtable__row[aria-selected="true"] {
+  background: var(--sf-panel-raised);
+  box-shadow: inset 2px 0 0 var(--mark);
+}
+.vtable__row[data-missing-note] {
+  box-shadow: inset 2px 0 0 var(--sig-alarm-edge);
+}
+.vtable__head {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding-inline: var(--sp-3);
+}
+.vtable__cell {
+  padding-inline: var(--sp-3);
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+}
+.vtable__cell--kind {
+  text-transform: uppercase;
+  letter-spacing: var(--tr-caps);
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+}
+.vtable__cell--note {
+  color: var(--ink);
+}
+.vtable__cell--note[data-missing] {
+  color: var(--sig-alarm-edge);
+}
+
+/* ── Revision chip ───────────────────────────────────────────── */
+
+.revision-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.revision-chip__swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 11px;
+  height: 14px;
+  font-size: 8px;
+  line-height: 1;
+  color: var(--rev-ink);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+}
+.revision-chip__swatch[data-rev="1"] { background: var(--rev-1-white); }
+.revision-chip__swatch[data-rev="2"] { background: var(--rev-2-blue); }
+.revision-chip__swatch[data-rev="3"] { background: var(--rev-3-pink); }
+.revision-chip__swatch[data-rev="4"] { background: var(--rev-4-yellow); }
+.revision-chip__swatch[data-rev="5"] { background: var(--rev-5-green); }
+.revision-chip__swatch[data-rev="6"] { background: var(--rev-6-goldenrod); }
+.revision-chip__swatch[data-rev="7"] { background: var(--rev-7-buff); }
+.revision-chip__swatch[data-rev="8"] { background: var(--rev-8-salmon); }
+.revision-chip__swatch[data-rev="9"] { background: var(--rev-9-cherry); }
+.revision-chip__id {
+  color: var(--ink);
+  font-weight: var(--fw-med);
+}
+
+/* ── Delta badge ─────────────────────────────────────────────── */
+
+.delta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  color: var(--ink-3);
+}
+.delta-badge--unmeasured {
+  color: var(--ink-3);
+  font-style: italic;
+}
+.delta-badge[data-sign="up"] { color: var(--band-4); }
+.delta-badge[data-sign="down"] { color: var(--band-1); }
+.delta-badge[data-sign="flat"] { color: var(--ink-3); }
+.delta-badge__eq {
+  margin-inline-start: var(--sp-1);
+}
+
+/* ── Check profile sparkline ─────────────────────────────────── */
+
+.check-profile-sparkline {
+  display: inline-flex;
+  align-items: center;
+}
+.check-profile-sparkline--empty {
+  color: var(--ink-3);
+  font-style: italic;
+  font-size: var(--fs-ui);
+  margin: 0;
+}
+.check-profile-sparkline__threshold {
+  stroke: var(--ln-strong);
+  stroke-width: 1;
+}
+.check-profile-sparkline__line {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.5;
+}
+
+/* ── Compare panel ───────────────────────────────────────────── */
+
+.version-compare {
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  background: var(--sf-panel-raised);
+  box-shadow: var(--sh-raise);
+  padding: var(--sp-5);
+}
+.version-compare__header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  margin-block-end: var(--sp-4);
+}
+.version-compare__title {
+  font-weight: var(--fw-semi);
+  color: var(--ink);
+  margin: 0;
+  margin-inline-end: auto;
+}
+.version-compare__swap,
+.version-compare__close {
+  font-family: var(--ff-ui);
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+  padding: var(--sp-1) var(--sp-3);
+  cursor: pointer;
+}
+.version-compare__agreement {
+  display: flex;
+  gap: var(--sp-6);
+  margin-block-end: var(--sp-4);
+}
+.version-compare__panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--sp-6);
+}
+
+.agreement-readout {
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+  margin: 0;
+}
+.agreement-readout--unmeasured {
+  color: var(--ink-3);
+}
+
+/* ── Prompt diff ─────────────────────────────────────────────── */
+
+.prompt-diff__title {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 var(--sp-2);
+}
+.prompt-diff__empty {
+  color: var(--ink-3);
+  font-style: italic;
+  font-size: var(--fs-ui);
+  margin: 0;
+}
+.prompt-diff__body {
+  margin: 0;
+  padding: var(--sp-3);
+  overflow-x: auto;
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-ui);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+}
+.prompt-diff__line {
+  display: flex;
+  gap: var(--sp-2);
+  white-space: pre;
+}
+.prompt-diff__line[data-kind="removed"] {
+  color: var(--diff-del);
+  background: var(--diff-del-ground);
+}
+.prompt-diff__line[data-kind="added"] {
+  color: var(--diff-add);
+  background: var(--diff-add-ground);
+}
+.prompt-diff__line[data-kind="same"] {
+  color: var(--ink-2);
+}
+.prompt-diff__marker {
+  color: var(--ink-3);
+  width: 1ch;
+  flex: none;
+}
+
+/* ── Check delta table ───────────────────────────────────────── */
+
+.check-delta-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-ui);
+}
+.check-delta-table th,
+.check-delta-table td {
+  padding-block: var(--sp-2);
+  padding-inline: var(--sp-2);
+  border-block-end: var(--bd-hair) solid var(--ln-faint);
+  text-align: start;
+}
+.check-delta-table thead th {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border-block-end-color: var(--ln-strong);
+}
+.check-delta-table__check {
+  color: var(--ink);
+  font-weight: var(--fw-reg);
+}
+.check-delta-table__arrow {
+  color: var(--ink-3);
+}
+
+@media (max-width: 1024px) {
+  .vtable {
+    grid-template-columns: 36px 48px 80px 72px 60px 76px 92px minmax(0, 1fr);
+  }
+  .version-compare__panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .vtable {
+    display: flex;
+    flex-direction: column;
+  }
+  .vtable__row--head {
+    display: none;
+  }
+  .vtable__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2) var(--sp-4);
+  }
+}

@@ -1,0 +1,421 @@
+/*
+ * Architecture screen (design doc §4.2, §5, §6.3; motion spec §8, §9, §10). Durations and colours
+ * are never literals here — every timing lives in `src/motion/tokens.ts` and every colour is one
+ * of the custom properties in `tokens.css`.
+ */
+
+.arch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--w-inspect);
+  grid-template-rows: minmax(0, 1fr) 132px;
+  grid-template-areas: "graph inspect" "cues cues";
+  min-height: 0;
+  gap: 0;
+}
+
+.arch__graph {
+  grid-area: graph;
+  overflow: auto;
+  padding: var(--sp-5);
+  position: relative;
+}
+
+.arch__cues {
+  grid-area: cues;
+  border-block-start: var(--bd-hair) solid var(--ln);
+  background: var(--sf-panel);
+  overflow-y: auto;
+}
+
+/* ── Graph board ─────────────────────────────────────────────── */
+
+.graph {
+  position: relative;
+}
+.graph__edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+.graph__nodes {
+  position: relative;
+}
+.graph__node-slot {
+  position: absolute;
+}
+
+/* ── Edges ───────────────────────────────────────────────────── */
+
+.edge__base {
+  stroke: var(--ln-strong);
+  stroke-width: 1;
+  fill: none;
+}
+.edge__base[data-active] {
+  stroke: var(--band-4);
+  stroke-width: 2;
+}
+.edge[data-planned] .edge__base {
+  stroke-dasharray: 5 4;
+  stroke: var(--ln);
+}
+.edge__flow {
+  stroke: var(--mark);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* ── Node ────────────────────────────────────────────────────── */
+
+.node {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  width: 100%;
+  height: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  font-family: var(--ff-ui);
+  font-size: var(--fs-label);
+  color: var(--ink-3);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  text-align: start;
+}
+
+.node__accent {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 0;
+  height: 2px;
+  background: var(--ln-strong);
+  transform-origin: left center;
+}
+
+.node__label {
+  font-weight: var(--fw-med);
+  color: var(--ink);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+}
+.node__state {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.node__note,
+.node__warning {
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+}
+.node__warning {
+  color: var(--sig-alarm-edge);
+}
+.node__elapsed,
+.node__progress-text {
+  font-size: var(--fs-micro);
+  color: var(--ink-2);
+}
+
+.node__track {
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: var(--ln-faint);
+  overflow: hidden;
+}
+.node__progress {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--band-4);
+  transform-origin: left center;
+}
+
+/* State fills — text label above always carries the state; colour is never the only signal. */
+.node[data-state="queued"] {
+  border-color: var(--ln);
+  color: var(--ink-3);
+}
+.node[data-state="running"] {
+  border-width: var(--bd-mark);
+  border-color: var(--mark);
+}
+.node[data-state="running"] .node__accent {
+  background: var(--mark);
+}
+.node[data-state="done"] {
+  border-color: var(--band-4);
+}
+.node[data-state="done"] .node__accent {
+  background: var(--band-4);
+}
+.node[data-state="failed"] {
+  background: var(--sig-alarm-fill);
+  border-color: var(--sig-alarm-fill);
+  color: var(--sig-alarm-ink);
+}
+.node[data-state="failed"] .node__label,
+.node[data-state="failed"] .node__state {
+  color: var(--sig-alarm-ink);
+}
+.node[data-state="failed"] .node__accent {
+  background: var(--sig-alarm-ink);
+}
+.node[data-warning] {
+  border-color: var(--sig-alarm-edge);
+}
+.node[data-selected] {
+  box-shadow: var(--focus-ring);
+}
+
+.node--planned {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  width: 100%;
+  height: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  font-family: var(--ff-ui);
+  font-size: var(--fs-label);
+  color: var(--ink-3);
+  background: transparent;
+  border: var(--bd-hair) dashed var(--ln);
+  border-radius: var(--r-2);
+  cursor: pointer;
+  text-align: start;
+}
+.node--planned .node__label {
+  font-weight: var(--fw-med);
+  color: var(--ink-3);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+}
+.node--planned .node__state {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+}
+
+/* ── Inspector ───────────────────────────────────────────────── */
+
+.inspector {
+  grid-area: inspect;
+  border-inline-start: var(--bd-hair) solid var(--ln);
+  background: var(--sf-panel-raised);
+  box-shadow: var(--sh-raise);
+  overflow-y: auto;
+  padding: var(--sp-5);
+}
+.inspector__empty {
+  color: var(--ink-3);
+  font-size: var(--fs-ui);
+}
+.inspector__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-block-end: var(--sp-4);
+}
+.inspector__title {
+  font-weight: var(--fw-semi);
+  color: var(--ink);
+}
+.inspector__close {
+  font-family: var(--ff-ui);
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+  padding: var(--sp-1) var(--sp-3);
+  cursor: pointer;
+}
+
+/* ── Metric row ──────────────────────────────────────────────── */
+
+.metric-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding-block: var(--sp-2);
+  border-block-end: var(--bd-hair) solid var(--ln-faint);
+  font-size: var(--fs-ui);
+}
+.metric-row__label {
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: var(--tr-caps);
+  font-size: var(--fs-micro);
+}
+.metric-row__value {
+  color: var(--ink);
+}
+.metric-row__unit {
+  color: var(--ink-3);
+  margin-inline-start: var(--sp-2);
+}
+
+/* ── Payload ─────────────────────────────────────────────────── */
+
+.payload {
+  margin-block-start: var(--sp-4);
+}
+.payload--empty {
+  color: var(--ink-3);
+  font-size: var(--fs-ui);
+}
+.payload__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-block-end: var(--sp-2);
+}
+.payload__toolbar-label {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.payload__copy {
+  font-family: var(--ff-ui);
+  font-size: var(--fs-micro);
+  color: var(--ink-2);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+  padding: var(--sp-1) var(--sp-2);
+  cursor: pointer;
+}
+.payload__body {
+  margin: 0;
+  padding: var(--sp-3);
+  overflow: auto;
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-ui);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+}
+.payload__key { color: var(--ink-2); }
+.payload__string { color: var(--ink); }
+.payload__number { color: var(--band-5); }
+.payload__keyword { color: var(--ink-2); }
+
+/* ── Cue log ─────────────────────────────────────────────────── */
+
+.cue-log {
+  padding: var(--sp-3) var(--sp-5);
+}
+.cue-log__heading {
+  margin: 0 0 var(--sp-2);
+}
+.cue-log__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.cue-log__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-4);
+  width: 100%;
+  font-family: var(--ff-ui);
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+  background: transparent;
+  border: none;
+  padding: var(--sp-1) 0;
+  cursor: pointer;
+  text-align: start;
+}
+.cue-log__cue {
+  color: var(--ink-3);
+  font-size: var(--fs-micro);
+  min-width: 4ch;
+}
+.cue-log__label { color: var(--ink-2); }
+.cue-log__state {
+  color: var(--ink-3);
+  font-size: var(--fs-micro);
+  text-transform: uppercase;
+  letter-spacing: var(--tr-caps);
+}
+.cue-log__row[data-state="failed"] .cue-log__state {
+  color: var(--sig-alarm-edge);
+}
+.cue-log__ms {
+  color: var(--ink-3);
+  margin-inline-start: auto;
+}
+
+/* ── Stage list (phone) ─────────────────────────────────────── */
+
+.stage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: none;
+}
+.stage-list__button {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 52px;
+  padding-inline: var(--sp-4);
+  border: none;
+  border-inline-start: var(--bd-mark) solid var(--ln);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: start;
+}
+.stage-list__row[data-planned] .stage-list__button {
+  border-inline-start-style: dashed;
+  color: var(--ink-3);
+}
+.stage-list__state {
+  color: var(--ink-3);
+  font-size: var(--fs-micro);
+  text-transform: uppercase;
+}
+.stage-list__cue,
+.stage-list__latency {
+  color: var(--ink-3);
+  font-size: var(--fs-micro);
+  margin-inline-start: auto;
+}
+
+@media (max-width: 1024px) {
+  .arch {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 32px auto;
+    grid-template-areas: "graph" "cues" "inspect";
+  }
+  .inspector {
+    border-inline-start: none;
+    border-block-start: var(--bd-hair) solid var(--ln);
+    max-height: 45dvh;
+  }
+}
+
+@media (max-width: 720px) {
+  .arch__graph .graph {
+    display: none;
+  }
+  .stage-list {
+    display: flex;
+    flex-direction: column;
+  }
+}
