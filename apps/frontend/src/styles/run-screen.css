@@ -3,15 +3,22 @@
  * `RunScreen.tsx`; the shared chrome in `base.css` is untouched.
  */
 
+/* Three cards on the ground rather than three panes divided by hairlines. The seam-only
+   treatment is what made every screen read as one undifferentiated instrument panel; a
+   gap plus a radius is what separates a document from a chrome. */
 .run {
   display: grid;
   grid-template-columns: var(--w-rail) minmax(0, 1fr) var(--w-checks);
-  gap: 0;
+  gap: var(--sp-4);
   min-height: 0;
   height: 100%;
+  padding-block: var(--sp-4);
 }
-.run > * + * {
-  border-inline-start: var(--bd-hair) solid var(--ln);
+.run > * {
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-3);
+  overflow: hidden;
 }
 
 @media (max-width: 1024px) {
@@ -23,10 +30,11 @@
 @media (max-width: 720px) {
   .run {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .run > * + * {
-    border-inline-start: none;
-    border-top: var(--bd-hair) solid var(--ln);
+    /* The whole screen scrolls as one at phone width; three independently scrolling
+       cards inside a viewport-height grid is how a phone layout traps content. */
+    grid-template-rows: auto;
+    height: auto;
+    overflow-y: auto;
   }
 }
 
@@ -35,11 +43,10 @@
 .run__rail {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   gap: var(--sp-5);
   min-height: 0;
   overflow-y: auto;
-  padding: var(--sp-4) var(--sp-2);
+  padding: var(--sp-5) var(--sp-3);
   background: var(--sf-panel);
 }
 
@@ -98,6 +105,7 @@
   outline: none;
   box-shadow: var(--focus-ring);
 }
+.pass-step:hover:not([data-selected]) { color: var(--ink); }
 .pass-step[data-selected] {
   color: var(--ink);
 }
@@ -105,6 +113,8 @@
   position: absolute;
   inset: 0;
   background: var(--sf-panel-raised);
+  border-radius: var(--r-2);
+  box-shadow: inset 0 0 0 1px var(--ln);
   z-index: 0;
 }
 .pass-step__frame,
@@ -117,6 +127,7 @@
 .pass-step__frame {
   width: 100%;
   height: 4px;
+  border-radius: 999px;
   border-radius: var(--r-1);
   background: var(--ln);
 }
@@ -164,39 +175,56 @@
 
 /* ── Verdict banner ────────────────────────────────────────── */
 
+/* The headline result. Three states, one shape: a card with a tinted ground, a coloured
+   rule down its leading edge and the numeral as the largest thing on the screen. The old
+   version was a full-bleed colour block with centred all-caps type, which is why it read
+   as an error dump rather than a finding. §6.2's binding table is unchanged: same word,
+   same numeral, same second line, same forbidden tokens. */
 .verdict-banner {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "mark word"
+    "mark count"
+    "mark detail";
   align-items: center;
-  gap: var(--sp-2);
-  text-align: center;
-  padding: var(--sp-4) var(--sp-3);
-  border-radius: var(--r-2);
+  column-gap: var(--sp-5);
+  row-gap: var(--sp-2);
+  text-align: start;
+  padding: var(--sp-6);
+  border-radius: var(--r-4);
+  border: var(--bd-hair) solid var(--ln);
+  border-inline-start-width: 4px;
   box-sizing: border-box;
   min-width: 0;
   flex-shrink: 0;
+  box-shadow: var(--sh-raise);
 }
 .verdict-banner[data-status="passed"] {
-  border: var(--bd-mark) solid var(--band-5);
-  background: var(--sf-panel);
+  border-color: var(--band-5);
+  background: linear-gradient(135deg, var(--band-5-tint), var(--sf-panel-raised) 60%);
   color: var(--band-5);
 }
 .verdict-banner[data-status="improved_still_failing"] {
-  border: var(--bd-mark) solid var(--sig-alarm-edge);
-  background: var(--sig-alarm-tint);
+  border-color: var(--sig-alarm-edge);
+  background: linear-gradient(135deg, var(--sig-alarm-tint), var(--sf-panel-raised) 60%);
   color: var(--sig-alarm-edge);
 }
 .verdict-banner[data-status="no_improvement"] {
-  /* The only solid colour fill behind text in the product (design doc §6.2). */
-  border: none;
-  background: var(--sig-alarm-fill);
+  /* Still the strongest treatment in the product, and still the only one whose ground is
+     the alarm colour at full strength rather than a tint (design doc §6.2). */
+  border-color: var(--sig-alarm-fill);
+  background: linear-gradient(135deg, var(--sig-alarm-fill), #8d1a21 70%);
   color: var(--sig-alarm-ink);
 }
+.verdict-banner > :first-child { grid-area: mark; }
 .verdict-banner__word {
+  grid-area: word;
   margin: 0;
-  font-size: var(--fs-verdict);
-  font-weight: var(--fw-bold);
-  letter-spacing: var(--tr-verdict);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
   /* NO IMPROVEMENT is two words and STILL FAILING is two words: both may wrap onto two lines, and
    * neither may ever spill past the banner's own border. This is the guard, not the fix — the fix
    * was moving the banner out of the 88px pass rail (see RunScreen) — but the verdict word is the
@@ -205,23 +233,33 @@
   overflow-wrap: anywhere;
 }
 .verdict-banner__count {
+  grid-area: count;
   margin: 0;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-1);
+  align-items: baseline;
+  gap: var(--sp-4);
 }
 .verdict-banner__count-num {
   font-size: var(--fs-count);
   font-weight: var(--fw-bold);
   line-height: 1;
+  letter-spacing: var(--tr-verdict);
 }
+/* §6.2 structural fact 1: on a failed run the biggest number on the screen counts what is
+   still wrong. Its label sits beside it at reading size rather than shouting underneath. */
 .verdict-banner__count-label {
-  font-size: var(--fs-micro);
-  letter-spacing: var(--tr-caps);
-  text-transform: uppercase;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-med);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-2);
+}
+.verdict-banner[data-status="no_improvement"] .verdict-banner__count-label {
+  color: var(--sig-alarm-ink);
+  opacity: 0.85;
 }
 .verdict-banner__detail {
+  grid-area: detail;
   margin: 0;
   font-size: var(--fs-ui);
   color: var(--ink-2);
@@ -354,17 +392,25 @@
 .run__field {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-5);
+  gap: var(--sp-6);
   min-height: 0;
   overflow-y: auto;
-  padding: var(--sp-5);
-  background: var(--sf-field);
+  padding: var(--sp-6);
+  background: var(--sf-panel);
 }
 .run__field-header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--sp-4);
+}
+.run__field-header .section-label,
+.run__field-header h2 {
+  font-size: var(--fs-title);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--tr-title);
+  text-transform: none;
+  color: var(--ink);
 }
 .run__field-meta {
   font-size: var(--fs-micro);
@@ -949,12 +995,24 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  padding: var(--sp-5);
+  gap: var(--sp-4);
+  padding: var(--sp-5) var(--sp-6);
   border-bottom: var(--bd-hair) solid var(--ln);
+  /* Sticks so the "5/9 at ≥80" summary stays readable while the nine rows scroll. */
+  position: sticky;
+  top: 0;
+  background: var(--sf-panel);
+  z-index: 2;
 }
 .check-panel__summary {
   font-size: var(--fs-ui);
+  font-weight: var(--fw-med);
   color: var(--ink-2);
+  background: var(--sf-panel-raised);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: 999px;
+  padding: var(--sp-2) var(--sp-4);
+  white-space: nowrap;
 }
 .check-panel__list {
   list-style: none;
@@ -978,7 +1036,13 @@
 h3.section-label {
   display: flex;
   align-items: baseline;
-  padding: var(--sp-3) var(--sp-5);
+  gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-6);
+  background: var(--sf-ground);
+  border-block: var(--bd-hair) solid var(--ln);
+  position: sticky;
+  top: 60px;
+  z-index: 1;
 }
 
 /* ── Check row ─────────────────────────────────────────────── */
@@ -986,10 +1050,19 @@ h3.section-label {
 .check-row {
   list-style: none;
   border-bottom: var(--bd-hair) solid var(--ln-faint);
-  padding: var(--sp-3) var(--sp-5);
+  padding: var(--sp-4) var(--sp-5);
+  /* The leading rule is what a selected row gets instead of only a tinted ground: a tint
+     alone is a colour-only signal, and these rows are the primary navigation of the screen. */
+  border-inline-start: 3px solid transparent;
+  transition: background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.check-row:hover {
+  background: var(--sf-hover);
 }
 .check-row[data-selected] {
   background: var(--mark-soft);
+  border-inline-start-color: var(--brand);
 }
 .check-row:focus-visible,
 .check-row:focus {
@@ -997,22 +1070,35 @@ h3.section-label {
   box-shadow: var(--focus-ring);
 }
 .check-row__hit {
-  all: unset;
+  /* Not `all: unset`: it clears every property in its own rule including ones written
+     above it, which is how `.pass-step` lost its `position: relative` and made the whole
+     app unclickable. Reset the button chrome explicitly instead. */
+  appearance: none;
+  background: none;
+  border: none;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  text-align: inherit;
   display: flex;
   align-items: center;
   gap: var(--sp-4);
   width: 100%;
+  min-width: 0;
   cursor: pointer;
   color: var(--ink);
 }
 .check-row__title {
   flex: 1;
-  font-size: var(--fs-ui);
+  min-width: 0;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-med);
 }
 .check-row__body {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
+  flex-shrink: 0;
 }
 .check-row__not-evaluated {
   font-size: var(--fs-micro);
@@ -1021,8 +1107,9 @@ h3.section-label {
   color: var(--ink-3);
 }
 .check-row__reason {
-  margin: var(--sp-2) 0 0;
+  margin: var(--sp-3) 0 0;
   font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
   color: var(--ink-2);
 }
 .check-row__reason--not-evaluated {
@@ -1041,10 +1128,15 @@ h3.section-label {
 }
 .band-meter__track {
   position: relative;
-  width: 100%;
-  height: 6px;
-  border-radius: var(--r-1);
-  background: var(--sf-panel-raised);
+  /* Explicit width. This was `width: 100%` inside an `inline-flex` with no sized ancestor,
+     so it resolved to its content width, which for an empty element is zero plus the
+     fill's own box: every meter in the product rendered as a 12px dash. */
+  width: var(--meter-track-w, 56px);
+  flex-shrink: 0;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--sf-ground);
+  box-shadow: inset 0 0 0 1px var(--ln);
   overflow: hidden;
 }
 .band-meter__tick {
@@ -1066,7 +1158,7 @@ h3.section-label {
   display: block;
   height: 100%;
   width: 100%;
-  border-radius: var(--r-0);
+  border-radius: 999px;
   background: var(--ink-3);
 }
 .band-meter[data-band="1"] .band-meter__fill { background: var(--band-1); }
@@ -1075,10 +1167,79 @@ h3.section-label {
 .band-meter[data-band="4"] .band-meter__fill { background: var(--band-4); }
 .band-meter[data-band="5"] .band-meter__fill { background: var(--band-5); }
 .band-meter__percent {
-  min-width: 3ch;
+  min-width: 4ch;
+  flex-shrink: 0;
   text-align: right;
+  font-size: var(--fs-ui);
+  font-weight: var(--fw-semi);
   color: var(--ink-2);
 }
+.band-meter[data-band="1"] .band-meter__percent { color: var(--band-1); }
+.band-meter[data-band="2"] .band-meter__percent { color: var(--band-2); }
+.band-meter[data-band="3"] .band-meter__percent { color: var(--band-3); }
+.band-meter[data-band="4"] .band-meter__percent { color: var(--band-4); }
+.band-meter[data-band="5"] .band-meter__percent { color: var(--band-5); }
+
+/* ── Band mark ─────────────────────────────────────────────────
+   The stroke pattern each band carries independently of colour, so the pass threshold
+   survives `grayscale(1)`. It is a genuine accessibility device and it stays, but on its
+   own it rendered as a stray dash floating beside the percentage. Seating it in a small
+   chip is what makes it read as a deliberate swatch. */
+
+.band-mark {
+  flex-shrink: 0;
+  overflow: visible;
+}
+.band-meter .band-mark {
+  box-sizing: content-box;
+  padding: 3px 4px;
+  border-radius: var(--r-1);
+  background: var(--sf-ground);
+  box-shadow: inset 0 0 0 1px var(--ln);
+}
+.band-meter[data-band="1"] .band-mark { color: var(--band-1); }
+.band-meter[data-band="2"] .band-mark { color: var(--band-2); }
+.band-meter[data-band="3"] .band-mark { color: var(--band-3); }
+.band-meter[data-band="4"] .band-mark { color: var(--band-4); }
+.band-meter[data-band="5"] .band-mark { color: var(--band-5); }
+
+/* In the verdict banner the mark is the card's own glyph, at the head of the leading
+   column, so it gets room rather than a chip. */
+.verdict-banner .band-mark {
+  width: 36px;
+  height: auto;
+}
+
+/* ── Delta badge ───────────────────────────────────────────────
+   Had no rule of its own anywhere in the product: it rendered as a bare arrow glyph and
+   a number inheriting whatever surrounded it, and in the check row the unstyled SVG
+   overflowed the panel. The sign is carried by the arrow AND by the word in its
+   `aria-label`, never by colour alone. */
+
+.delta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-shrink: 0;
+  min-width: 4ch;
+  justify-content: flex-end;
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-med);
+  line-height: 1;
+  color: var(--ink-3);
+}
+.delta-badge__arrow {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  fill: currentColor;
+}
+.delta-badge[data-sign="up"] { color: var(--band-5); }
+.delta-badge[data-sign="down"] { color: var(--band-1); }
+.delta-badge[data-sign="flat"],
+.delta-badge[data-sign="none"] { color: var(--ink-3); }
+.delta-badge--unmeasured { font-style: italic; }
+.delta-badge__eq { opacity: 0.7; }
 
 /* ── Quotes ────────────────────────────────────────────────── */
 

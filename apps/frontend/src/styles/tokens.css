@@ -1,68 +1,95 @@
+/*
+ * The design token layer.
+ *
+ * ── 2026-09-12: from lab instrument to product ──────────────────────────────────
+ * The first version was a "lined continuity script": graphite ground, Courier Prime
+ * everywhere, hairline seams, 2px radii, one reserved alarm fill. It was internally
+ * consistent and it read as a terminal, because almost every surface in it was a
+ * hairline-ruled rectangle full of monospace.
+ *
+ * The reference now is a modern developer product: near-neutral dark ground, one green
+ * brand accent, real cards with radius and elevation, a humanist sans for every piece of
+ * UI text, and monospace reserved for the ONE thing that is genuinely code-like, the
+ * description being graded.
+ *
+ * What did NOT change, because it is the product rather than the paint:
+ *   - the band ramp is still five steps with a hue break at the pass threshold, and
+ *     every band still carries a `BandMark` glyph, so nothing is signalled by colour
+ *     alone;
+ *   - the alarm treatment is still reserved for a terminal failure;
+ *   - spans, diffs and coverage still read warm-for-contested, cool-for-settled.
+ */
 :root {
   color-scheme: dark;
 
-  /* ── Surfaces ──────────────────────────────────────────────── */
-  --sf-ground:        #0e1012;  /* app ground */
-  --sf-panel:         #17191c;  /* panels, check column, tables */
-  --sf-panel-raised:  #1f2125;  /* the ONE elevation step: inspector, compare drawer, popover */
-  --sf-field:         #080a0c;  /* the script field — recessed, darker than ground */
+  /* ── Brand ─────────────────────────────────────────────────── */
+  --brand:            #3ecf8e;
+  --brand-hover:      #4ade9c;
+  --brand-ink:        #06231a;  /* text ON a brand fill */
+  --brand-tint:       #113328;  /* brand-tinted ground */
+  --brand-edge:       #2a7d5c;
 
-  /* ── Seams (panels divide with lines, never with shadow) ───── */
-  --ln-faint:         #272a2e;  /* row rules inside a panel */
-  --ln:               #363a3e;  /* panel seams */
-  --ln-strong:        #575b61;  /* graph edges, table head rule, active borders */
+  /* ── Surfaces ──────────────────────────────────────────────── */
+  --sf-ground:        #161616;  /* app ground */
+  --sf-panel:         #1c1c1c;  /* panels, check column, tables */
+  --sf-panel-raised:  #242424;  /* inspector, popover, the one elevation step */
+  --sf-field:         #131313;  /* the description field, recessed */
+  --sf-hover:         #2a2a2a;  /* row and control hover */
+
+  /* ── Seams ─────────────────────────────────────────────────── */
+  --ln-faint:         #232323;  /* row rules inside a panel */
+  --ln:               #2e2e2e;  /* panel seams, card borders */
+  --ln-strong:        #3f3f3f;  /* graph edges, active borders */
 
   /* ── Ink ───────────────────────────────────────────────────── */
-  --ink:              #ebedef;
-  --ink-2:            #b3b6ba;  /* reasons, secondary values */
-  --ink-3:            #878b90;  /* labels, units, cue ids */
+  --ink:              #ededed;
+  --ink-2:            #a1a1a1;  /* reasons, secondary values */
+  --ink-3:            #737373;  /* labels, units, cue ids */
 
-  /* ── Mark (selection + focus; grease pencil) ───────────────── */
-  --mark:             #fbf3dd;
-  --mark-soft:        #332d1c;  /* selected-span ground */
+  /* ── Mark (selection) ──────────────────────────────────────── */
+  --mark:             #3ecf8e;
+  --mark-soft:        #1b3b30;
 
-  /* ── Band ramp — ink values, used for numerals, rules, meters ─
-     Polarity: fail = hot + bright + wide, pass = cool + quiet.
-     The hue break between band 3 and band 4 IS the pass threshold. */
-  --band-1:           #fe7365;  /*  20 */
-  --band-2:           #ffa459;  /*  40 */
-  --band-3:           #f2d350;  /*  60 */
-  --band-4:           #169597;  /*  80  ← pass threshold */
-  --band-5:           #45adcd;  /* 100 */
+  /* ── Band ramp ─────────────────────────────────────────────────
+     Polarity: fail = warm, pass = green. The hue break between band 3 and
+     band 4 IS the pass threshold, and `BandMark` draws a distinct glyph per
+     band so the threshold is never carried by colour alone. */
+  --band-1:           #f87171;  /*  20 */
+  --band-2:           #fb923c;  /*  40 */
+  --band-3:           #fbbf24;  /*  60 */
+  --band-4:           #2ab87a;  /*  80  ← pass threshold */
+  --band-5:           #3ecf8e;  /* 100 */
 
   /* ── Band tints — meter troughs and chip grounds. Text on these is --ink. */
-  --band-1-tint:      #4c1410;
-  --band-2-tint:      #442100;
-  --band-3-tint:      #392c01;
-  --band-4-tint:      #013132;
-  --band-5-tint:      #02323f;
+  --band-1-tint:      #3a1c1c;
+  --band-2-tint:      #3a2415;
+  --band-3-tint:      #382e12;
+  --band-4-tint:      #12312a;
+  --band-5-tint:      #113328;
 
-  /* ── Span highlight grounds — sit behind specimen text ─────── */
-  --span-1:           #450907;
-  --span-2:           #3a1b00;
-  --span-3:           #2e2401;
-  --span-unverified:  #1b1d1f;  /* quote failed verification: neutral, never a band colour */
+  /* ── Span highlight grounds — sit behind the description text ─ */
+  --span-1:           #3d1d1d;
+  --span-2:           #3b2616;
+  --span-3:           #373014;
+  --span-unverified:  #242424;  /* quote failed verification: neutral, never a band colour */
 
-  /* ── Reserved alarm. Terminal failure and pipeline defect ONLY.
-     --sig-alarm-fill is the only solid colour fill behind text in the product. */
-  --sig-alarm-fill:   #b00c15;
-  --sig-alarm-ink:    #fef9f8;
-  --sig-alarm-edge:   #f14e46;
-  --sig-alarm-tint:   #490d0b;
+  /* ── Reserved alarm. Terminal failure and pipeline defect ONLY. */
+  --sig-alarm-fill:   #b4232b;
+  --sig-alarm-ink:    #fff1f1;
+  --sig-alarm-edge:   #f0656b;
+  --sig-alarm-tint:   #341819;
 
-  /* ── Diff. Aliased to the band axis on purpose: warm = removed/contested,
-     cool = added/clear. There is no red/green pair anywhere in this product. */
+  /* ── Diff ──────────────────────────────────────────────────── */
   --diff-del:         var(--band-1);
   --diff-del-ground:  var(--span-1);
-  --diff-add:         var(--band-4);
-  --diff-add-ground:  var(--band-4-tint);
+  --diff-add:         var(--band-5);
+  --diff-add-ground:  var(--band-5-tint);
 
   /* ── Focus ─────────────────────────────────────────────────── */
-  --focus:            #fbf3dd;
+  --focus:            #3ecf8e;
   --focus-ring: 0 0 0 2px var(--sf-ground), 0 0 0 4px var(--focus);
 
-  /* ── Revision paper. Film's own revision order. Versions screen only.
-     Always rendered with its version number beside it; never a state signal. */
+  /* ── Revision paper. Versions screen only. ─────────────────── */
   --rev-1-white:      #ffffff;
   --rev-2-blue:       #bcd4e6;
   --rev-3-pink:       #f7c8d8;
@@ -72,38 +99,42 @@
   --rev-7-buff:       #eee0c6;
   --rev-8-salmon:     #f6bca3;
   --rev-9-cherry:     #e78fa0;
-  --rev-ink:          #171a1e;  /* ink printed on a revision chip, both themes */
+  --rev-ink:          #171a1e;
 
-  /* ── Type ──────────────────────────────────────────────────── */
-  --ff-ui: "Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --ff-specimen: "Courier Prime", "Courier New", ui-monospace, "SF Mono", Menlo, monospace;
+  /* ── Type ──────────────────────────────────────────────────────
+     One humanist sans for everything a person reads, one mono for the ONE
+     thing that is genuinely code-like: the description under test, its
+     quotes, its diffs and the prompts. Monospace everywhere was what made
+     the first version read as a terminal. */
+  --ff-ui: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --ff-specimen: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  --fs-micro:     0.6875rem; /* 11px — cue ids, lane tabs, axis ticks, units */
-  --fs-label:     0.75rem;   /* 12px — caps labels, column heads, node labels */
-  --fs-ui:        0.8125rem; /* 13px — reasons, table cells, payload keys */
-  --fs-body:      0.875rem;  /* 14px — default UI text, notes */
-  --fs-specimen:  0.9375rem; /* 15px — the description, quotes, diffs, prompts */
-  --fs-readout:   1.125rem;  /* 18px — the band percentage numeral */
-  --fs-title:     1.25rem;   /* 20px — screen title */
+  --fs-micro:     0.75rem;   /* 12px — cue ids, units. Was 11px, which is below the floor. */
+  --fs-label:     0.8125rem; /* 13px — caps labels, column heads, node labels */
+  --fs-ui:        0.875rem;  /* 14px — reasons, table cells, payload keys */
+  --fs-body:      0.9375rem; /* 15px — default UI text, notes */
+  --fs-specimen:  0.875rem;  /* 14px — the description. Mono runs large at the same px. */
+  --fs-readout:   1.0625rem; /* 17px — the band percentage numeral */
+  --fs-title:     1.375rem;  /* 22px — screen title */
   --fs-verdict:   1.75rem;   /* 28px — terminal verdict word */
-  --fs-count:     2.5rem;    /* 40px — the single display numeral; see §6 for what it may hold */
+  --fs-count:     3rem;      /* 48px — the single display numeral */
 
-  --lh-tight:  1.15;
-  --lh-ui:     1.35;
-  --lh-spec:   1.7333;  /* 15px × 1.7333 = 26px = --pitch */
+  --lh-tight:  1.2;
+  --lh-ui:     1.5;     /* was 1.35; 1.5 is the readability floor for body text */
+  --lh-spec:   1.7857;  /* 14px × 1.7857 = 25px = --pitch */
 
-  --tr-caps:   0.09em;  /* uppercase labels */
-  --tr-title:  0.01em;
-  --tr-verdict: -0.015em;
+  --tr-caps:   0.06em;
+  --tr-title:  -0.01em;
+  --tr-verdict: -0.02em;
 
   --fw-reg: 400;
   --fw-med: 500;
   --fw-semi: 600;
   --fw-bold: 700;
-  --wd-narrow: 88;      /* Archivo wdth axis for dense labels */
+  --wd-narrow: 100;
   --wd-normal: 100;
 
-  /* ── Space. 4px base; dense instrument. ────────────────────── */
+  /* ── Space ─────────────────────────────────────────────────── */
   --sp-1:  2px;
   --sp-2:  4px;
   --sp-3:  8px;
@@ -114,32 +145,39 @@
   --sp-8: 48px;
   --sp-9: 64px;
 
-  /* ── Pitch. The script's line rhythm. Everything in the field column
-     and every coverage rule is an integer multiple of this. ──── */
-  --pitch: 26px;
+  /* ── Pitch. The description's line rhythm. ─────────────────── */
+  --pitch: 25px;
 
   /* ── Fixed structure ───────────────────────────────────────── */
-  --h-topbar:    48px;
-  --w-rail:      88px;
+  --h-topbar:    56px;
+  --w-rail:     104px;
   --w-checks:   400px;
   --w-inspect:  360px;
   --w-linenum:   28px;
-  --w-lane:       6px;   /* one coverage lane; max 9 lanes = 54px */
-  --measure:     66ch;   /* specimen measure ≈ 71 columns of Courier Prime */
+  --w-lane:       6px;
+  --measure:     68ch;
 
-  /* ── Radii. Paperwork is square. ───────────────────────────── */
+  /* ── Radii. Cards, not paperwork. ──────────────────────────── */
   --r-0: 0;
-  --r-1: 2px;   /* chips, band swatches, meter caps */
-  --r-2: 3px;   /* graph node corners, popovers */
-  --r-3: 6px;   /* nothing larger exists */
+  --r-1: 4px;   /* chips, band swatches, meter caps */
+  --r-2: 8px;   /* controls, inputs, graph nodes */
+  --r-3: 12px;  /* cards, panels, popovers */
+  --r-4: 16px;  /* the verdict banner, the one largest surface */
 
   /* ── Borders ───────────────────────────────────────────────── */
   --bd-hair: 1px;
-  --bd-mark: 2px;   /* selected rule, focus, alarm outline */
+  --bd-mark: 2px;
 
-  /* ── Shadow. Two, both with offset and blur. Neither divides a panel. */
-  --sh-raise: 0 2px 6px rgb(0 0 0 / 0.42), 0 8px 24px rgb(0 0 0 / 0.30);
-  --sh-pop:   0 4px 10px rgb(0 0 0 / 0.48), 0 16px 40px rgb(0 0 0 / 0.36);
+  /* ── Elevation ─────────────────────────────────────────────── */
+  --sh-raise: 0 1px 2px rgb(0 0 0 / 0.40), 0 4px 16px rgb(0 0 0 / 0.28);
+  --sh-pop:   0 2px 6px rgb(0 0 0 / 0.46), 0 16px 48px rgb(0 0 0 / 0.36);
+  --sh-glow:  0 0 0 1px var(--brand-edge), 0 4px 20px rgb(62 207 142 / 0.18);
+
+  /* ── Easing and duration, for anything CSS animates itself.
+     Motion spec §2 still governs everything driven by Motion. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
 
   /* ── Breakpoints (documentation; use the literals in media queries) */
   --bp-lap:  1024px;
@@ -150,47 +188,55 @@
 [data-theme="light"] {
   color-scheme: light;
 
-  --sf-ground:        #f3f2ef;
-  --sf-panel:         #fbfaf7;
-  --sf-panel-raised:  #e9e8e3;
-  --sf-field:         #fefdfc;
+  --brand:            #1f9c68;
+  --brand-hover:      #178257;
+  --brand-ink:        #ffffff;
+  --brand-tint:       #ddf5e9;
+  --brand-edge:       #7fd3ae;
 
-  --ln-faint:         #d9d7d2;
-  --ln:               #c0beb7;
-  --ln-strong:        #8f8c84;
+  --sf-ground:        #f7f7f6;
+  --sf-panel:         #ffffff;
+  --sf-panel-raised:  #f2f2f1;
+  --sf-field:         #fbfbfa;
+  --sf-hover:         #efefee;
 
-  --ink:              #171a1e;
-  --ink-2:            #494d54;
-  --ink-3:            #686c73;
+  --ln-faint:         #ececea;
+  --ln:               #dededa;
+  --ln-strong:        #b9b9b3;
 
-  --mark:             #2a2a49;   /* pencil blue-black */
-  --mark-soft:        #d9dbfc;
+  --ink:              #1a1a1a;
+  --ink-2:            #525252;
+  --ink-3:            #767676;
 
-  --band-1:           #be010c;
-  --band-2:           #a55401;
-  --band-3:           #846604;
-  --band-4:           #05585d;
-  --band-5:           #023e5b;
+  --mark:             #1f9c68;
+  --mark-soft:        #d2f2e2;
 
-  --band-1-tint:      #ffd4ce;
-  --band-2-tint:      #fedbc2;
-  --band-3-tint:      #f9e7b3;
-  --band-4-tint:      #c8eff1;
-  --band-5-tint:      #cdeefe;
+  --band-1:           #c62828;
+  --band-2:           #b45309;
+  --band-3:           #94700a;
+  --band-4:           #14785a;
+  --band-5:           #0f6b4f;
 
-  --span-1:           #fecbc4;
-  --span-2:           #fed5b6;
-  --span-3:           #f8e4a7;
-  --span-unverified:  #e9e8e5;
+  --band-1-tint:      #fadcdc;
+  --band-2-tint:      #fbe6d2;
+  --band-3-tint:      #f8eecb;
+  --band-4-tint:      #d3f0e3;
+  --band-5-tint:      #ddf5e9;
 
-  --sig-alarm-fill:   #b20111;
-  --sig-alarm-ink:    #fefbfa;
-  --sig-alarm-edge:   #b91319;
-  --sig-alarm-tint:   #ffcfc9;
+  --span-1:           #fbd9d9;
+  --span-2:           #fce4cf;
+  --span-3:           #f9eec6;
+  --span-unverified:  #eeeeec;
 
-  --focus:            #2a2a49;
+  --sig-alarm-fill:   #b4232b;
+  --sig-alarm-ink:    #fff5f5;
+  --sig-alarm-edge:   #b4232b;
+  --sig-alarm-tint:   #fbdedf;
+
+  --focus:            #1f9c68;
   --focus-ring: 0 0 0 2px var(--sf-ground), 0 0 0 4px var(--focus);
 
-  --sh-raise: 0 1px 3px rgb(23 26 30 / 0.14), 0 6px 18px rgb(23 26 30 / 0.10);
-  --sh-pop:   0 2px 6px rgb(23 26 30 / 0.18), 0 12px 32px rgb(23 26 30 / 0.14);
+  --sh-raise: 0 1px 2px rgb(20 20 20 / 0.06), 0 4px 14px rgb(20 20 20 / 0.08);
+  --sh-pop:   0 2px 6px rgb(20 20 20 / 0.10), 0 14px 40px rgb(20 20 20 / 0.12);
+  --sh-glow:  0 0 0 1px var(--brand-edge), 0 4px 20px rgb(31 156 104 / 0.16);
 }
