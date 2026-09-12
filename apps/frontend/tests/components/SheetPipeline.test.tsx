@@ -26,6 +26,15 @@ function stubFetch(routes: { sheet?: Response; describe?: Response; list?: Respo
       if (url.startsWith("/avatar/describe")) return queue.describe.shift() ?? routes.describe ?? jsonResponse({});
       if (url.startsWith("/avatar/upload")) return routes.upload ?? jsonResponse({ id: "stored-1", mediaType: "image/png" });
       if (url === "/avatar") return routes.list ?? jsonResponse({ avatars: [] });
+      // Reopening an avatar reads its bytes back from the store rather than from memory.
+      if (/^\/avatar\/[^/]+\/image$/.test(url)) {
+        return {
+          ok: true,
+          status: 200,
+          url,
+          arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+        } as unknown as Response;
+      }
       return jsonResponse({});
     }),
   );
@@ -190,5 +199,57 @@ describe("SheetPipeline", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/limit is 6MB/);
     // The gallery's own mount fetch is the only call allowed; nothing was uploaded.
     expect(vi.mocked(fetch).mock.calls.map((call) => String(call[0]))).not.toContain("/avatar/upload");
+  });
+
+  /**
+   * The section is rendered whether or not it has contents. Showing it only once it has an
+   * avatar in it means there is no visible place for avatars to live until one exists, and
+   * the first question after a failed render becomes "where do I even look?" instead of
+   * "what went wrong?".
+   */
+  it("shows where avatars will live even when none have been saved", async () => {
+    stubFetch({ list: jsonResponse({ avatars: [] }) });
+    renderPipeline();
+
+    expect(await screen.findByText("Your avatars")).toBeInTheDocument();
+    expect(screen.getByText("none yet")).toBeInTheDocument();
+    expect(screen.getByText(/Nothing saved yet/)).toBeInTheDocument();
+  });
+
+  it("lists what is on disk, marks which have been described, and reopens one", async () => {
+    stubFetch({
+      list: jsonResponse({
+        avatars: [
+          {
+            id: "a1",
+            createdAt: "2026-09-12T10:00:00.000Z",
+            source: "generated",
+            mediaType: "image/png",
+            description: "A woman in her thirties.",
+            describeModel: "claude-sonnet-5",
+          },
+          {
+            id: "a2",
+            createdAt: "2026-09-12T09:00:00.000Z",
+            source: "uploaded",
+            mediaType: "image/png",
+          },
+        ],
+      }),
+    });
+    const onDescription = renderPipeline();
+
+    expect(await screen.findByText("2 saved")).toBeInTheDocument();
+    expect(screen.getByText("described")).toBeInTheDocument();
+    expect(screen.getByText("not described")).toBeInTheDocument();
+
+    // The thumbnail is served from the store, never carried in the list as base64.
+    const thumbs = screen.getAllByRole("img");
+    expect(thumbs[0]).toHaveAttribute("src", "/avatar/a1/image");
+
+    // Reopening an already-described avatar brings its description back without paying for
+    // a second vision call.
+    fireEvent.click(thumbs[0]!.closest("button")!);
+    await waitFor(() => expect(onDescription).toHaveBeenCalledWith("A woman in her thirties."));
   });
 });

@@ -813,6 +813,7 @@
   color: var(--ink);
 }
 .avatar-gallery__count,
+.avatar-gallery__empty,
 .avatar-gallery__where {
   margin: 0;
   font-size: var(--fs-micro);
@@ -872,6 +873,11 @@
 .avatar-gallery__when {
   color: var(--ink-3);
 }
+.avatar-gallery__empty {
+  font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
+}
+.avatar-gallery__empty code,
 .avatar-gallery__where code {
   font-family: var(--ff-specimen);
   color: var(--ink-2);

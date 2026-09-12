@@ -320,12 +320,24 @@ export function SheetPipeline({
       {/* Every avatar on disk. This exists because a rendered sheet is a paid artefact that
           used to live only in React state: gone on a reload, gone on a dev-server restart,
           and indistinguishable from a render that never happened. */}
-      {live && gallery.length > 0 ? (
+      {live ? (
         <section className="avatar-gallery" aria-label="Saved avatars">
           <div className="avatar-gallery__head">
             <span className="avatar-gallery__label">Your avatars</span>
-            <span className="avatar-gallery__count tnum">{gallery.length} saved</span>
+            <span className="avatar-gallery__count tnum">
+              {gallery.length === 0 ? "none yet" : `${gallery.length} saved`}
+            </span>
           </div>
+          {/* Rendered even when empty, and that is the point. Showing this section only once
+              it has contents means there is no visible place for avatars to be until one
+              exists, so the first question after a failed render is "where do I even look?"
+              rather than "what went wrong?". */}
+          {gallery.length === 0 ? (
+            <p className="avatar-gallery__empty">
+              Nothing saved yet. Every avatar you generate or upload is written to{" "}
+              <code>data/avatars/</code> and appears here, so it survives a reload.
+            </p>
+          ) : null}
           <ul className="avatar-gallery__grid">
             {gallery.map((record) => (
               <li key={record.id}>
@@ -363,9 +375,11 @@ export function SheetPipeline({
               </li>
             ))}
           </ul>
-          <p className="avatar-gallery__where">
-            Saved to <code>data/avatars/</code>. Click one to reopen it.
-          </p>
+          {gallery.length > 0 ? (
+            <p className="avatar-gallery__where">
+              Saved to <code>data/avatars/</code>. Click one to reopen it.
+            </p>
+          ) : null}
         </section>
       ) : null}
     </div>
