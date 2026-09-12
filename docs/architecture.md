@@ -5,7 +5,83 @@ Written 2026-09-12, after reading the live Mentic avatar code at
 
 ---
 
-## 0. The one-paragraph version
+## 0. In plain words
+
+*Written to be read out loud to someone who has never seen this project. Every section
+after this one assumes you know the codebase; this one assumes nothing.*
+
+### The problem it exists for
+
+To make an AI video of a person, you describe them in words. The video model never sees
+a photo, it only reads text. So if the description is vague, you get a different-looking
+person in every video. The whole app answers one question: **is this description specific
+enough to give you the same person twice?**
+
+### What each part does, and why it has to be there
+
+**Description.** The text going in. That is all it is.
+
+**Evaluator.** An AI that marks the text against nine things: age and build, face and
+skin, hair, clothes, an identifying mark, no real celebrities, no brand names, nothing
+unfilmable like "confident", and no camera directions. Nine, because those are the nine
+ways a description actually fails in practice.
+*Why nine separate checks rather than one score?* A single "7 out of 10" tells you
+nothing you can act on. Nine tells you that **hair** is the problem.
+
+**Span verification.** Code, not AI. When the Evaluator says "these words failed", this
+searches the text to confirm those words are genuinely there, and works out exactly where
+they sit.
+*Why it has to exist:* the AI sometimes invents quotes that only resemble what you wrote,
+and it cannot count characters reliably. Without this step the app would highlight words
+nobody wrote and cut the text in the wrong place.
+
+**Repairer.** An AI that rewrites only the broken chunks.
+*Why not hand it the whole description?* Because then it "improves" sentences you were
+happy with and you cannot tell what actually changed. It is handed three fragments, so
+three fragments is all it can touch.
+
+**Splice.** Code again. Puts the rewrites back, then checks that every other character is
+untouched.
+*Why:* so "only the broken parts changed" is something the app can prove rather than
+something it hopes.
+
+**Pass gate.** Did all nine reach 80%? If not, send it round again. Three rounds, then
+stop.
+*Why a limit:* if three attempts have not fixed it, the description has a real problem
+and a fourth will not help. A run ends as passed, improved-but-still-failing, or
+no-improvement, and the app is never allowed to show the last two as a win.
+
+**The loop back into the Evaluator.** After a repair the text has to be re-marked. A fix
+is not a fix until it scores.
+
+**The dashed boxes.** Interrogator, Director, Identity Meter. Designed, not built. They
+are drawn because the plan includes them, and labelled `planned` so nobody mistakes them
+for something that ran.
+
+### Two words that are not normal words
+
+**Band** is the score: 1 to 5, shown as 20 / 40 / 60 / 80 / 100 percent. Band 4 is a
+pass, and all nine checks have to reach it.
+
+**Verbatim** means the exact words, copied out of the text. Not "the hair part is weak"
+but literally `short black hair`.
+
+### The one-line version
+
+An AI grades the description and says which words are bad, code checks it is not lying,
+an AI fixes only those words, code proves nothing else changed, and it repeats until it
+passes or runs out of tries.
+
+### The actual design decision
+
+**The AI is allowed to judge. Code is what decides.** Anything that has to be exact,
+where a word sits, what the score is, whether the text changed, is done in code. Every
+box above is either a judgement handed to a model or a fact computed in code, and the
+whole architecture is the line drawn between those two.
+
+---
+
+## 0b. The same thing for someone who knows the codebase
 
 Mentic turns a person into a paragraph of words, because the video model refuses a
 photograph of a human face. That paragraph is the only thing carrying the person into
