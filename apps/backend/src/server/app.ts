@@ -24,6 +24,11 @@ export type AppDeps = {
    *  well, it just cannot render a sheet, and `/avatar/*` says so with a 503 instead of
    *  failing somewhere deeper with a provider error. */
   avatar?: AvatarRouteDeps;
+  /** Fastify's request/error logger. Off by default so the test suite stays quiet, and ON
+   *  in the real server: the error handler below deliberately redacts a 500's message to
+   *  the client, so without a logger a provider failure was written precisely nowhere.
+   *  That is why a failed render looked like it had silently "disappeared". */
+  logger?: boolean;
 };
 
 const DEV_ORIGIN = "http://localhost:5173";
@@ -41,7 +46,7 @@ const DEV_ORIGIN = "http://localhost:5173";
 const BODY_LIMIT_BYTES = 12 * 1024 * 1024;
 
 export function buildApp(deps: AppDeps): FastifyInstance {
-  const app = Fastify({ bodyLimit: BODY_LIMIT_BYTES });
+  const app = Fastify({ bodyLimit: BODY_LIMIT_BYTES, logger: deps.logger ?? false });
 
   app.register(cors, { origin: DEV_ORIGIN });
 

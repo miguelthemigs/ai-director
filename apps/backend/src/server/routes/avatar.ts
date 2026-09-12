@@ -9,6 +9,7 @@ import {
   SUPPORTED_MEDIA_TYPES,
   type VisionTransport,
 } from "../../describe/describeImage.js";
+import type { AvatarStore } from "../../store/AvatarStore.js";
 
 /**
  * The Mentic pipeline, reproduced end to end so it can be measured.
@@ -33,6 +34,8 @@ export type AvatarRouteDeps = {
   text?: TextTransport;
   image?: ImageTransport;
   vision?: VisionTransport;
+  /** Where rendered sheets are kept. Absent in tests that only check validation. */
+  store?: AvatarStore;
 };
 
 /** Roughly 8MB of base64, which is about 6MB of image. Well above a 2K sheet and well
@@ -51,6 +54,9 @@ const SheetBodySchema = z.object({
 });
 
 const DescribeBodySchema = z.object({
+  /** When present, the describe step's output is written back onto this stored avatar, so
+   *  the record holds the image and the paragraph read off it as one unit of evidence. */
+  avatarId: z.string().min(1).max(200).optional(),
   imageBase64: z
     .string()
     .min(1, "imageBase64 must not be empty")
@@ -89,13 +95,64 @@ export function registerAvatarRoutes(app: FastifyInstance, deps: AvatarRouteDeps
     const sheetPrompt = actorSheetBrief(authoredPrompt);
     const sheet = await generateSheet(deps.image, { prompt: sheetPrompt });
 
+    // Written to disk BEFORE replying. A paid image that only ever existed in the
+    // response body is one a dropped connection or a browser reload destroys, and a
+    // vanished sheet looks exactly like a render that never happened.
+    const record = await deps.store?.save({
+      imageBase64: sheet.imageBase64,
+      mediaType: sheet.mediaType,
+      source: "generated",
+      imageModel: sheet.model,
+      authoredPrompt,
+      sheetPrompt,
+      seedDescription: parsed.data.description,
+    });
+
     return reply.code(200).send({
+      id: record?.id ?? null,
       imageBase64: sheet.imageBase64,
       mediaType: sheet.mediaType,
       model: sheet.model,
       authoredPrompt,
       sheetPrompt,
     });
+  });
+
+  /** An avatar rendered elsewhere, kept alongside the generated ones so the gallery is the
+   *  whole set rather than only the half this server made. */
+  app.post("/avatar/upload", async (request, reply) => {
+    if (!deps.store) return reply.code(503).send({ error: "no avatar store configured" });
+
+    const parsed = DescribeBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "invalid body" });
+    }
+    const record = await deps.store.save({
+      imageBase64: parsed.data.imageBase64,
+      mediaType: parsed.data.mediaType,
+      source: "uploaded",
+    });
+    return reply.code(200).send({ id: record.id, mediaType: record.mediaType });
+  });
+
+  /** The gallery. Records only, never the bytes: a list of twenty sheets as base64 would be
+   *  tens of megabytes of JSON for a strip of thumbnails. */
+  app.get("/avatar", async (_request, reply) => {
+    if (!deps.store) return reply.code(200).send({ avatars: [] });
+    return reply.code(200).send({ avatars: await deps.store.list() });
+  });
+
+  app.get("/avatar/:id/image", async (request, reply) => {
+    if (!deps.store) return reply.code(404).send({ error: "not found" });
+    const { id } = request.params as { id: string };
+    const image = await deps.store.readImage(id);
+    if (!image) return reply.code(404).send({ error: "not found" });
+    return reply
+      .code(200)
+      .header("Content-Type", image.mediaType)
+      // Immutable: an avatar's bytes never change once written, only its record does.
+      .header("Cache-Control", "public, max-age=31536000, immutable")
+      .send(image.bytes);
   });
 
   app.post("/avatar/describe", async (request, reply) => {
@@ -116,6 +173,22 @@ export function registerAvatarRoutes(app: FastifyInstance, deps: AvatarRouteDeps
       imageBase64: parsed.data.imageBase64,
       mediaType,
     });
+
+    // Best effort. The description has been paid for and is in hand; failing the response
+    // because the record could not be updated would throw away the thing the caller asked
+    // for in order to report a bookkeeping problem.
+    if (deps.store && parsed.data.avatarId) {
+      try {
+        await deps.store.attachDescription(parsed.data.avatarId, {
+          description: result.description,
+          descriptionRaw: result.raw,
+          descriptionTrimmed: result.trimmed,
+          describeModel: result.model,
+        });
+      } catch (err) {
+        request.log.error({ err }, "could not attach description to avatar record");
+      }
+    }
 
     return reply.code(200).send(result);
   });

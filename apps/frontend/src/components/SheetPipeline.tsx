@@ -1,8 +1,12 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  avatarImageUrl,
   describeSheet,
   generateSheet,
+  listAvatars,
   splitDataUrl,
+  uploadSheet,
+  type AvatarRecord,
   type DescribeResult,
   type SheetResult,
 } from "../data/avatarApi.js";
@@ -21,7 +25,13 @@ export type SheetPipelineProps = {
   live: boolean;
 };
 
-type Loaded = { imageBase64: string; mediaType: string; source: "generated" | "uploaded" };
+type Loaded = {
+  imageBase64: string;
+  mediaType: string;
+  source: "generated" | "uploaded" | "stored";
+  /** The stored record, when there is one. Null only if the server has no avatar store. */
+  id: string | null;
+};
 
 /** Roughly 6MB of image, which is under the route's own 8MB base64 cap once base64 adds
  *  its third. Checked here so an oversized file is refused before it is read and posted. */
@@ -55,7 +65,21 @@ export function SheetPipeline({
   const [described, setDescribed] = useState<DescribeResult | null>(null);
   const [busy, setBusy] = useState<null | "sheet" | "describe">(null);
   const [error, setError] = useState<string | null>(null);
+  const [gallery, setGallery] = useState<AvatarRecord[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  /* Every avatar this server has ever rendered or been given. Loaded on mount and refreshed
+     after each write, so a sheet that was paid for is still reachable after a reload, a
+     dev-server restart, or the browser being closed. A gallery that quietly fails to load
+     is not worth an error banner over the pipeline itself. */
+  const refreshGallery = useCallback(() => {
+    if (!live) return;
+    listAvatars()
+      .then(setGallery)
+      .catch(() => setGallery([]));
+  }, [live]);
+
+  useEffect(refreshGallery, [refreshGallery]);
 
   const canGenerate = live && !disabled && busy === null && seedDescription.trim().length > 0;
   const canDescribe = live && !disabled && busy === null && loaded !== null;
@@ -72,7 +96,13 @@ export function SheetPipeline({
     try {
       const result = await generateSheet(seedDescription.trim());
       setSheet(result);
-      setLoaded({ imageBase64: result.imageBase64, mediaType: result.mediaType, source: "generated" });
+      setLoaded({
+        imageBase64: result.imageBase64,
+        mediaType: result.mediaType,
+        source: "generated",
+        id: result.id,
+      });
+      refreshGallery();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -96,9 +126,50 @@ export function SheetPipeline({
       }
       setSheet(null);
       setDescribed(null);
-      setLoaded({ ...split, source: "uploaded" });
+      setLoaded({ ...split, source: "uploaded", id: null });
+      // Stored too, so an uploaded sheet joins the gallery instead of living only in this
+      // tab until the next reload. Failing to store it must not block describing it.
+      uploadSheet(split.imageBase64, split.mediaType)
+        .then((stored) => {
+          setLoaded({ ...split, source: "uploaded", id: stored.id });
+          refreshGallery();
+        })
+        .catch(() => {});
     };
     reader.readAsDataURL(file);
+  }
+
+  /** Reopen an avatar from the gallery. The bytes come back from the store rather than from
+   *  memory, which is the whole point of having one. */
+  async function onPick(record: AvatarRecord): Promise<void> {
+    setError(null);
+    setSheet(null);
+    setDescribed(null);
+    try {
+      const res = await fetch(avatarImageUrl(record.id));
+      if (!res.ok) throw new Error(`could not load that avatar (status ${res.status})`);
+      const buffer = await res.arrayBuffer();
+      let binary = "";
+      const bytes = new Uint8Array(buffer);
+      for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]!);
+      setLoaded({
+        imageBase64: btoa(binary),
+        mediaType: record.mediaType,
+        source: "stored",
+        id: record.id,
+      });
+      if (record.description) {
+        setDescribed({
+          description: record.description,
+          raw: record.description,
+          trimmed: record.descriptionTrimmed ?? false,
+          model: record.describeModel ?? "unknown",
+        });
+        onDescription(record.description);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
   }
 
   async function onDescribe(): Promise<void> {
@@ -106,9 +177,10 @@ export function SheetPipeline({
     setBusy("describe");
     setError(null);
     try {
-      const result = await describeSheet(loaded.imageBase64, loaded.mediaType);
+      const result = await describeSheet(loaded.imageBase64, loaded.mediaType, loaded.id);
       setDescribed(result);
       onDescription(result.description);
+      refreshGallery();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -243,6 +315,58 @@ export function SheetPipeline({
         <p className="sheet-pipeline__error" role="alert">
           {error}
         </p>
+      ) : null}
+
+      {/* Every avatar on disk. This exists because a rendered sheet is a paid artefact that
+          used to live only in React state: gone on a reload, gone on a dev-server restart,
+          and indistinguishable from a render that never happened. */}
+      {live && gallery.length > 0 ? (
+        <section className="avatar-gallery" aria-label="Saved avatars">
+          <div className="avatar-gallery__head">
+            <span className="avatar-gallery__label">Your avatars</span>
+            <span className="avatar-gallery__count tnum">{gallery.length} saved</span>
+          </div>
+          <ul className="avatar-gallery__grid">
+            {gallery.map((record) => (
+              <li key={record.id}>
+                <button
+                  type="button"
+                  className="avatar-gallery__item"
+                  data-selected={loaded?.id === record.id || undefined}
+                  onClick={() => void onPick(record)}
+                >
+                  <img
+                    className="avatar-gallery__thumb"
+                    src={avatarImageUrl(record.id)}
+                    alt={record.seedDescription ?? `Avatar rendered ${record.createdAt}`}
+                    loading="lazy"
+                  />
+                  <span className="avatar-gallery__meta">
+                    {/* Whether this one has been described yet is the only status worth a
+                        badge: an avatar with no description has nothing to grade. */}
+                    <span
+                      className="avatar-gallery__state"
+                      data-described={record.description ? true : undefined}
+                    >
+                      {record.description ? "described" : "not described"}
+                    </span>
+                    <span className="avatar-gallery__when tnum">
+                      {new Date(record.createdAt).toLocaleString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="avatar-gallery__where">
+            Saved to <code>data/avatars/</code>. Click one to reopen it.
+          </p>
+        </section>
       ) : null}
     </div>
   );

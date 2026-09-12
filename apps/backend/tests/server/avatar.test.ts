@@ -1,9 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../../src/server/app.js";
 import { loadRubric } from "../../src/rubric/load.js";
 import type { RunStore } from "../../src/store/RunStore.js";
 import type { VersionStore } from "../../src/store/VersionStore.js";
 import type { AvatarRouteDeps } from "../../src/server/routes/avatar.js";
+import { FileAvatarStore } from "../../src/store/AvatarStore.js";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 function stubRunStore(): RunStore {
   return {
@@ -166,5 +170,132 @@ describe("POST /avatar/describe", () => {
 
     expect(res.statusCode).toBe(400);
     expect(vision).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("the avatar store, through the routes", () => {
+  let root: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(path.join(tmpdir(), "avatar-routes-"));
+  });
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  /**
+   * A rendered sheet is a paid artefact. Before the store existed it lived only in the
+   * response body and then in React state, so a reload, a dev-server restart or a dropped
+   * connection destroyed it, and a vanished sheet was indistinguishable from a render that
+   * never happened. It is written BEFORE the reply for exactly that reason.
+   */
+  it("persists the sheet and returns its id", async () => {
+    const store = new FileAvatarStore(root);
+    const app = await appWith({
+      store,
+      text: vi.fn(async () => ({ text: "A 29-year-old woman." })),
+      image: vi.fn(async () => ({ imageBase64: PIXEL, mediaType: "image/png" })),
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/avatar/sheet",
+      payload: { description: "a 29 year old woman" },
+    });
+
+    const id = res.json().id as string;
+    expect(id).toBeTruthy();
+    const record = await store.get(id);
+    expect(record).toMatchObject({
+      source: "generated",
+      authoredPrompt: "A 29-year-old woman.",
+      seedDescription: "a 29 year old woman",
+    });
+    expect(record?.sheetPrompt).toContain("Cinematic character reference sheet");
+  });
+
+  it("lists what it has stored, newest first, without the bytes", async () => {
+    const store = new FileAvatarStore(root);
+    await store.save({ imageBase64: PIXEL, mediaType: "image/png", source: "generated" });
+    const app = await appWith({ store });
+
+    const res = await app.inject({ method: "GET", url: "/avatar" });
+
+    expect(res.statusCode).toBe(200);
+    const avatars = res.json().avatars as unknown[];
+    expect(avatars).toHaveLength(1);
+    // A list of twenty sheets as base64 would be tens of megabytes of JSON for a strip of
+    // thumbnails; the bytes come from `/avatar/:id/image` instead.
+    expect(JSON.stringify(avatars)).not.toContain(PIXEL);
+  });
+
+  it("serves the image bytes with the right content type", async () => {
+    const store = new FileAvatarStore(root);
+    const record = await store.save({ imageBase64: PIXEL, mediaType: "image/png", source: "generated" });
+    const app = await appWith({ store });
+
+    const res = await app.inject({ method: "GET", url: `/avatar/${record.id}/image` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toBe("image/png");
+    expect(res.rawPayload.byteLength).toBeGreaterThan(0);
+  });
+
+  it("404s for an avatar id that was never stored", async () => {
+    const app = await appWith({ store: new FileAvatarStore(root) });
+    const res = await app.inject({ method: "GET", url: "/avatar/nope/image" });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("stores an uploaded sheet, so the gallery is the whole set", async () => {
+    const store = new FileAvatarStore(root);
+    const app = await appWith({ store });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/avatar/upload",
+      payload: { imageBase64: PIXEL, mediaType: "image/png" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect((await store.get(res.json().id as string))?.source).toBe("uploaded");
+  });
+
+  it("attaches the description onto the avatar it was read from", async () => {
+    const store = new FileAvatarStore(root);
+    const record = await store.save({ imageBase64: PIXEL, mediaType: "image/png", source: "generated" });
+    const app = await appWith({
+      store,
+      vision: vi.fn(async () => ({ text: "A woman in her thirties." })),
+    });
+
+    await app.inject({
+      method: "POST",
+      url: "/avatar/describe",
+      payload: { avatarId: record.id, imageBase64: PIXEL, mediaType: "image/png" },
+    });
+
+    // The image and the paragraph read off it are one unit of evidence, which is the whole
+    // question this repo asks: what did the second step write about the first?
+    expect((await store.get(record.id))?.description).toBe("A woman in her thirties.");
+  });
+
+  it("still returns the description when the record cannot be updated", async () => {
+    const app = await appWith({
+      store: new FileAvatarStore(root),
+      vision: vi.fn(async () => ({ text: "A woman in her thirties." })),
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/avatar/describe",
+      payload: { avatarId: "does-not-exist", imageBase64: PIXEL, mediaType: "image/png" },
+    });
+
+    // The vision call was paid for and the answer is in hand. Failing the response over a
+    // bookkeeping problem would throw away the thing the caller asked for.
+    expect(res.statusCode).toBe(200);
+    expect(res.json().description).toBe("A woman in her thirties.");
   });
 });

@@ -8,6 +8,21 @@ function jsonResponse(body: unknown, ok = true, status = 200): Response {
   return { ok, status, url: "/test", json: async () => body } as unknown as Response;
 }
 
+/** Routes by URL, not by call order: the gallery fetches `/avatar` on mount, so a queue of
+ *  one-shot mocks is consumed in an order no test chose. */
+function stubFetch(routes: { sheet?: Response; describe?: Response }) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: unknown) => {
+      const url = String(input);
+      if (url.startsWith("/avatar/sheet")) return routes.sheet ?? jsonResponse({});
+      if (url.startsWith("/avatar/describe")) return routes.describe ?? jsonResponse({});
+      if (url === "/avatar") return jsonResponse({ avatars: [] });
+      return jsonResponse({});
+    }),
+  );
+}
+
 function renderComposer(live = false) {
   const onSubmit = vi.fn();
   render(<AvatarComposer onSubmit={onSubmit} disabled={false} maxChars={2000} live={live} />);
@@ -154,32 +169,27 @@ describe("AvatarComposer", () => {
 });
 
 describe("AvatarComposer, the full build flow", () => {
-  beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn());
-  });
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
   it("grades the description written FROM the avatar, never the prompt that made it", async () => {
-    vi.mocked(fetch)
-      .mockResolvedValueOnce(
-        jsonResponse({
-          imageBase64: PIXEL,
-          mediaType: "image/png",
-          model: "gemini-3-pro-image",
-          authoredPrompt: "authored",
-          sheetPrompt: "sheet",
-        }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({
-          description: "A woman in her late twenties, blonde bob, grey wool coat.",
-          raw: "A woman in her late twenties, blonde bob, grey wool coat.",
-          trimmed: false,
-          model: "claude-sonnet-5",
-        }),
-      );
+    stubFetch({
+      sheet: jsonResponse({
+        id: "a1",
+        imageBase64: PIXEL,
+        mediaType: "image/png",
+        model: "gemini-3-pro-image",
+        authoredPrompt: "authored",
+        sheetPrompt: "sheet",
+      }),
+      describe: jsonResponse({
+        description: "A woman in her late twenties, blonde bob, grey wool coat.",
+        raw: "A woman in her late twenties, blonde bob, grey wool coat.",
+        trimmed: false,
+        model: "claude-sonnet-5",
+      }),
+    });
 
     const onSubmit = vi.fn();
     render(<AvatarComposer onSubmit={onSubmit} disabled={false} maxChars={2000} live={true} />);
@@ -203,13 +213,10 @@ describe("AvatarComposer, the full build flow", () => {
   });
 
   it("counts the characters of the described text, not of the assembled prompt", async () => {
-    vi.mocked(fetch)
-      .mockResolvedValueOnce(
-        jsonResponse({ imageBase64: PIXEL, mediaType: "image/png", model: "m", authoredPrompt: "a", sheetPrompt: "b" }),
-      )
-      .mockResolvedValueOnce(
-        jsonResponse({ description: "seven!!", raw: "seven!!", trimmed: false, model: "c" }),
-      );
+    stubFetch({
+      sheet: jsonResponse({ id: "a1", imageBase64: PIXEL, mediaType: "image/png", model: "m", authoredPrompt: "a", sheetPrompt: "b" }),
+      describe: jsonResponse({ description: "seven!!", raw: "seven!!", trimmed: false, model: "c" }),
+    });
 
     render(<AvatarComposer onSubmit={vi.fn()} disabled={false} maxChars={2000} live={true} />);
     fireEvent.change(screen.getByLabelText("Gender"), { target: { value: "woman" } });

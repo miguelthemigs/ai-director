@@ -789,6 +789,94 @@
   color: var(--sig-alarm-edge);
 }
 
+/* ── Avatar gallery ───────────────────────────────────────── */
+
+.avatar-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-3);
+}
+.avatar-gallery__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.avatar-gallery__label {
+  font-size: var(--fs-label);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.avatar-gallery__count,
+.avatar-gallery__where {
+  margin: 0;
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+}
+.avatar-gallery__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--sp-3);
+}
+.avatar-gallery__item {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: var(--sp-2);
+  background: var(--sf-ground);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  cursor: pointer;
+  text-align: start;
+  transition: border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.avatar-gallery__item:hover { border-color: var(--ln-strong); transform: translateY(-1px); }
+.avatar-gallery__item:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.avatar-gallery__item[data-selected] { border-color: var(--brand); box-shadow: var(--sh-glow); }
+@media (prefers-reduced-motion: reduce) {
+  .avatar-gallery__item:hover { transform: none; }
+}
+/* The sheet is 16:9 by construction, so the thumbnail is too: a square crop would cut a
+   panel out of a three-panel reference. */
+.avatar-gallery__thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--r-1);
+  background: var(--sf-panel-raised);
+}
+.avatar-gallery__meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  font-size: var(--fs-micro);
+}
+.avatar-gallery__state {
+  color: var(--ink-3);
+}
+.avatar-gallery__state[data-described] {
+  color: var(--band-5);
+}
+.avatar-gallery__when {
+  color: var(--ink-3);
+}
+.avatar-gallery__where code {
+  font-family: var(--ff-specimen);
+  color: var(--ink-2);
+}
+
 /* ── Description composer ─────────────────────────────────── */
 
 .description-composer {

@@ -12,6 +12,7 @@ import { toPassView, toRunView } from "../present/toRunView.js";
 import { RunEventBus } from "../orchestrate/events.js";
 import type { RetryVerbatimFn } from "../orchestrate/runPass.js";
 import { runToCompletion } from "../orchestrate/runToCompletion.js";
+import { FileAvatarStore } from "../store/AvatarStore.js";
 import { FileRunStore } from "../store/FileRunStore.js";
 import { FileVersionStore } from "../store/FileVersionStore.js";
 import { buildApp } from "./app.js";
@@ -27,6 +28,7 @@ try {
 }
 
 const RUNS_DIR = "data/runs";
+const AVATARS_DIR = "data/avatars";
 const VERSIONS_DIR = "data/versions";
 
 /**
@@ -137,12 +139,15 @@ async function main(): Promise<void> {
   const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY);
   const hasGoogle = Boolean(process.env.GOOGLE_AI_KEY ?? process.env.GOOGLE_API_KEY);
   const avatar = {
+    // The store is always wired, with or without provider keys: an avatar rendered on a
+    // previous run is still worth listing and serving today.
+    store: new FileAvatarStore(AVATARS_DIR),
     ...(hasAnthropic ? { text: createAnthropicTextTransport() } : {}),
     ...(hasAnthropic ? { vision: createAnthropicVisionTransport() } : {}),
     ...(hasGoogle ? { image: createGeminiImageTransport() } : {}),
   };
 
-  const app = buildApp({ store, rubric, startRun, bus, versionStore, avatar });
+  const app = buildApp({ store, rubric, startRun, bus, versionStore, avatar, logger: true });
 
   const port = Number(process.env.PORT ?? 8787);
   await app.listen({ port });

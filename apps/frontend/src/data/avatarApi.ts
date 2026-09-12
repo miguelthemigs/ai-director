@@ -34,7 +34,29 @@ async function post<T>(url: string, body: unknown): Promise<T> {
   return parsed as T;
 }
 
+export type AvatarRecord = {
+  id: string;
+  createdAt: string;
+  source: "generated" | "uploaded";
+  mediaType: string;
+  imageModel?: string;
+  authoredPrompt?: string;
+  sheetPrompt?: string;
+  seedDescription?: string;
+  description?: string;
+  descriptionTrimmed?: boolean;
+  describeModel?: string;
+};
+
+/** Where a stored avatar's bytes are served from. Never a data URL: the gallery would be
+ *  tens of megabytes of JSON if the list carried the images. */
+export function avatarImageUrl(id: string): string {
+  return `/avatar/${id}/image`;
+}
+
 export type SheetResult = {
+  /** The stored record's id, or null when the server has no avatar store wired. */
+  id: string | null;
   imageBase64: string;
   mediaType: string;
   model: string;
@@ -65,8 +87,34 @@ export function generateSheet(
   });
 }
 
-export function describeSheet(imageBase64: string, mediaType: string): Promise<DescribeResult> {
-  return post<DescribeResult>("/avatar/describe", { imageBase64, mediaType });
+export function describeSheet(
+  imageBase64: string,
+  mediaType: string,
+  /** Links the description onto the stored avatar, so the image and the paragraph read off
+   *  it are one record rather than two unrelated artefacts. */
+  avatarId?: string | null,
+): Promise<DescribeResult> {
+  return post<DescribeResult>("/avatar/describe", {
+    imageBase64,
+    mediaType,
+    ...(avatarId ? { avatarId } : {}),
+  });
+}
+
+/** Stores a sheet rendered elsewhere, so the gallery is the whole set rather than only the
+ *  half this server generated. */
+export function uploadSheet(
+  imageBase64: string,
+  mediaType: string,
+): Promise<{ id: string; mediaType: string }> {
+  return post<{ id: string; mediaType: string }>("/avatar/upload", { imageBase64, mediaType });
+}
+
+export async function listAvatars(): Promise<AvatarRecord[]> {
+  const res = await fetch("/avatar");
+  if (!res.ok) throw new Error(`could not list avatars (status ${res.status})`);
+  const body = (await res.json()) as { avatars: AvatarRecord[] };
+  return body.avatars ?? [];
 }
 
 /** Splits a `data:` URL from a `FileReader` into the two fields the API wants. Returns null
