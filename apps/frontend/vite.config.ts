@@ -14,6 +14,11 @@ export default defineConfig({
     proxy: {
       "/runs": BACKEND_ORIGIN,
       "/versions": BACKEND_ORIGIN,
+      // Every backend route prefix has to be listed here by hand. A prefix that is missing
+      // does not fail loudly: Vite serves the SPA's own index.html for it, the JSON parse
+      // fails, and the UI reports a bare 404 against a route that exists and is running.
+      // That is exactly what `/avatar` did when it shipped.
+      "/avatar": BACKEND_ORIGIN,
     },
   },
 });
