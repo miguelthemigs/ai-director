@@ -102,3 +102,58 @@ test.describe("the guided avatar form", () => {
     await expect(page.locator(".avatar-preview__text")).toHaveText("A man");
   });
 });
+
+/**
+ * The Pipeline tab reproduces Mentic end to end: doctrine call, sheet layout, Nano Banana
+ * Pro, then Mentic's describe prompt over the rendered sheet. Both steps spend real money,
+ * so this suite (which runs on the fixture client, with no backend at all) checks only that
+ * the tab is reachable and refuses to pretend. The steps themselves are covered in jsdom
+ * against a stubbed fetch, in `tests/components/SheetPipeline.test.tsx`.
+ */
+test.describe("the pipeline tab", () => {
+  test.beforeEach(async ({ page }) => {
+    await gotoFixture(page, "passed");
+  });
+
+  test("is reachable, and says it needs the real backend rather than faking a sheet", async ({ page }) => {
+    await page.getByRole("tab", { name: "Pipeline" }).click();
+
+    await expect(page.getByText(/needs the real backend/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Generate sheet" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Describe this person" })).toBeDisabled();
+  });
+
+  test("names the price of each step next to the button that spends it", async ({ page }) => {
+    await page.getByRole("tab", { name: "Pipeline" }).click();
+
+    await expect(page.getByText("paid image call")).toBeVisible();
+    await expect(page.getByText("paid vision call")).toBeVisible();
+  });
+
+  test("its steps stay inside the description column", async ({ page }) => {
+    await page.getByRole("tab", { name: "Pipeline" }).click();
+
+    const composer = page.locator(".avatar-composer");
+    // Wait for the panel slide to settle before measuring. The panels are stacked in one
+    // grid cell and animate on a transform, so a box read immediately after the click is a
+    // box mid-flight and says nothing about the resting layout.
+    await expect
+      .poll(async () => {
+        const panel = await page.locator(".avatar-composer__panel[data-active]").boundingBox();
+        const box = await composer.boundingBox();
+        return panel && box ? Math.round(panel.x - box.x) : null;
+      })
+      .toBe(0);
+
+    const composerBox = await composer.boundingBox();
+    expect(composerBox).not.toBeNull();
+    if (!composerBox) return;
+
+    for (const step of await page.locator(".sheet-pipeline__step").all()) {
+      const box = await step.boundingBox();
+      if (!box) continue;
+      expect(box.x).toBeGreaterThanOrEqual(composerBox.x - 1);
+      expect(box.x + box.width).toBeLessThanOrEqual(composerBox.x + composerBox.width + 1);
+    }
+  });
+});

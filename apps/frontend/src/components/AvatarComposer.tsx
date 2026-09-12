@@ -9,6 +9,7 @@ import {
   type AvatarField,
   type AvatarFieldValues,
 } from "../domain/avatarFields.js";
+import { SheetPipeline } from "./SheetPipeline.js";
 import { T } from "../motion/tokens.js";
 import { useMotionPrefs } from "../motion/useMotionPrefs.js";
 
@@ -20,9 +21,12 @@ export type AvatarComposerProps = {
   onSubmit: (description: string) => void;
   disabled: boolean;
   maxChars: number;
+  /** False in fixture mode. The Pipeline tab's two steps both spend real money, so with no
+   *  backend it says so rather than faking a character sheet. */
+  live?: boolean;
 };
 
-type Tab = "guided" | "direct";
+type Tab = "guided" | "pipeline" | "direct";
 
 /**
  * The ORDER is load-bearing rather than cosmetic: each panel's slide offset is its own index
@@ -33,6 +37,7 @@ type Tab = "guided" | "direct";
  */
 const TABS = [
   { value: "guided", label: "Guided" },
+  { value: "pipeline", label: "Pipeline" },
   { value: "direct", label: "Direct" },
 ] as const satisfies readonly { value: Tab; label: string }[];
 
@@ -153,11 +158,16 @@ export function AvatarComposer({
   onSubmit,
   disabled,
   maxChars,
+  live = true,
 }: AvatarComposerProps): React.JSX.Element {
   const { t, v, reduce } = useMotionPrefs();
   const [tab, setTab] = useState<Tab>("guided");
   const [fields, setFields] = useState<AvatarFieldValues>({});
   const [direct, setDirect] = useState("");
+  /** What the DESCRIBE step wrote. Separate from `direct` because it is not something the
+   *  user typed: it is the pipeline's output, and overwriting their pasted draft with it
+   *  would lose work they did by hand. */
+  const [pipelined, setPipelined] = useState("");
 
   const assembled = useMemo(() => assembleDescription(fields), [fields]);
   const anyFieldSet = Object.values(fields).some((entry) => (entry ?? "").trim().length > 0);
@@ -165,7 +175,8 @@ export function AvatarComposer({
   // The single source of the graded text. The character count, Run's disabled state and the
   // string that is actually submitted all read from this one expression, so they can never
   // disagree about what is about to be graded.
-  const activeText = tab === "guided" ? (anyFieldSet ? assembled : "") : direct;
+  const activeText =
+    tab === "guided" ? (anyFieldSet ? assembled : "") : tab === "pipeline" ? pipelined : direct;
 
   const overLimit = activeText.length > maxChars;
   const canSubmit = !disabled && activeText.trim().length > 0 && !overLimit;
@@ -211,7 +222,9 @@ export function AvatarComposer({
       </div>
 
       <p className="avatar-composer__note">
-        The description that reaches the video model, not the brief that renders the avatar sheet.
+        {tab === "pipeline"
+          ? "Mentic's own pipeline, end to end: render the sheet, then read the description back off it."
+          : "The description that reaches the video model, not the brief that renders the avatar sheet."}
       </p>
 
       <div className="avatar-composer__panels" data-reduce={reduce || undefined}>
@@ -262,9 +275,23 @@ export function AvatarComposer({
 
         <motion.div
           className="avatar-composer__panel"
+          data-active={tab === "pipeline" || undefined}
+          aria-hidden={tab !== "pipeline"}
+          {...panelMotion(1)}
+        >
+          <SheetPipeline
+            seedDescription={anyFieldSet ? assembled : direct}
+            onDescription={setPipelined}
+            disabled={disabled}
+            live={live}
+          />
+        </motion.div>
+
+        <motion.div
+          className="avatar-composer__panel"
           data-active={tab === "direct" || undefined}
           aria-hidden={tab !== "direct"}
-          {...panelMotion(1)}
+          {...panelMotion(2)}
         >
           <label className="avatar-field__label" htmlFor="description-composer-input">
             Description

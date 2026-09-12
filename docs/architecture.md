@@ -238,36 +238,43 @@ makes that judgement testable rather than a matter of taste.
 
 ---
 
-## 5. What is not built yet
+## 5. The pipeline, reproduced
 
-**The Mentic-style avatar UI is built.** `apps/frontend/src/domain/avatarFields.ts` carries
-Mentic's field set with its suggestion values verbatim, and
-`apps/frontend/src/components/AvatarComposer.tsx` is the form: two tabs, a suggestions menu
-per field, Surprise me, and a live preview of the sentence that will be graded. Direct is
-for pasting a real description straight out of Mentic; Guided is for building one.
+Mentic's whole path is now runnable in this repo, so the description can be measured
+where it is written rather than where it is typed.
 
-Three departures from Mentic's version, each deliberate:
+| Mentic | Here | Copied how |
+|---|---|---|
+| `doctrine/actor-image.md` | `apps/backend/src/avatar/doctrine/mentic-actor-image.md` | Verbatim |
+| `authorActorPrompt` | `apps/backend/src/avatar/authorPrompt.ts` | Same doctrine, same model (`claude-sonnet-5`) |
+| `actorSheetBrief`, `ACTOR_SHEET_PANELS`, `IMAGE_REALISM_TAIL` | `apps/backend/src/avatar/sheetBrief.ts` | Verbatim |
+| `googleGenerateImage` | `apps/backend/src/avatar/generateSheet.ts` | Same call shape, `gemini-3-pro-image`, 16:9, 2K |
+| `DESCRIBE_ACTOR_SYSTEM` | `apps/backend/src/describe/prompt.ts` | Verbatim |
+| `describeActorFromPhoto`, `trimToWhole` | `apps/backend/src/describe/describeImage.ts` | Same call, same 900-character cap |
+| The guided form | `apps/frontend/src/domain/avatarFields.ts` | Mentic's fields, suggestion values verbatim |
 
-- **It assembles prose, not a label block.** Mentic's own `assembleActorDescription` emits
-  `Eyes: hazel` / `Hair: blonde bob`, because its output is an image brief. The paragraph
-  that reaches the video model is a noun phrase, so this one emits a noun phrase.
-- **Two fields have no counterpart in Mentic.** `faceSkin` and `anchorMarker` close the two
-  gaps the table above found. They are flagged `not in Mentic` on screen, because the
-  difference between the two field sets is itself a finding.
-- **Each field names the checks it feeds.** A blank field should show what it is costing
-  before anything is run.
+Every one of those files says at the top that it is the **subject under test**. Editing
+one means this repo stops measuring Mentic and starts measuring a prompt of its own.
 
-**Which description gets scored is a real fork, and both are worth scoring.**
-`assembleActorDescription()` output is what the user wrote. `UgcActor.description` is
-what the vision model wrote after looking at the rendered sheet. They are different
-texts, and a drop in score between them would localise the loss to the vision call, which
-is a genuinely useful measurement. Scoring the assembled one first is the cheaper start.
+**Two routes, not one, and the split is the point.** `POST /avatar/sheet` runs the
+doctrine and renders the sheet. `POST /avatar/describe` reads a description back off it.
+A description can lose a check in three different places: the form never asked for the
+thing, the authoring step dropped it, or the describe step could not read it off the
+rendered sheet. One route returning a score would collapse all three into a single
+number. Stopping between them, with the sheet and both prompts on screen, is what makes
+the loss locatable.
 
-**Nothing here is measured yet.** Four things are built and unrun, listed in
-`docs/decision-log.md`. The one that matters most for this document is the agreement
-study: until 30 to 50 descriptions are hand-marked and `npm run agree` reports a kappa,
-the nine bands are a considered opinion, not a validated instrument. The mapping table in
-section 4 is a hypothesis about Mentic, and the agreement study is what would earn it.
+**Upload is the other half.** A sheet rendered in Mentic itself can be dropped straight
+into the Pipeline tab, which measures Mentic's real output rather than a re-render of it.
+
+**What is deliberately not reproduced.** Mentic mirrors every generated image to
+UploadThing and writes a priced row to its usage ledger. This repo has neither, and half
+an object store or half a ledger would be worse than none. The bytes go to the caller.
+
+**What is still unmeasured.** Nothing above has been run against a live provider. The
+standing instruction in this project is that the owner runs the paid calls, so every
+number this repo could report about Mentic today would be zero calls deep. The four
+outstanding items are in `docs/decision-log.md`.
 
 ---
 

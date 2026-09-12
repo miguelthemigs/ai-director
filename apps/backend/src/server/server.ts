@@ -4,6 +4,9 @@ import { buildVerbatimRetryPrompt } from "../agents/evaluator/prompt.js";
 import { EvaluatorGroupOutputSchema } from "../agents/evaluator/schema.js";
 import { repairSpans } from "../agents/repairer/run.js";
 import { createAnthropicTransport, type ParseTransport } from "../api/client.js";
+import { createAnthropicTextTransport } from "../avatar/authorPrompt.js";
+import { createGeminiImageTransport } from "../avatar/generateSheet.js";
+import { createAnthropicVisionTransport } from "../describe/describeImage.js";
 import { checksForGroup, loadRubric } from "../rubric/load.js";
 import { toPassView, toRunView } from "../present/toRunView.js";
 import { RunEventBus } from "../orchestrate/events.js";
@@ -124,7 +127,22 @@ async function main(): Promise<void> {
     return view;
   };
 
-  const app = buildApp({ store, rubric, startRun, bus, versionStore });
+  // The Mentic-pipeline transports, each wired only when its key is actually present.
+  //
+  // A missing key is a real state, not a misconfiguration to crash on. A server with no
+  // GOOGLE_AI_KEY grades descriptions perfectly well and simply cannot render a sheet,
+  // and `/avatar/sheet` answers 503 saying so. Building the transport regardless and
+  // letting it fail at call time would turn a known, explainable limit into a provider
+  // error surfacing three layers down, after the user had already typed a description.
+  const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY);
+  const hasGoogle = Boolean(process.env.GOOGLE_AI_KEY ?? process.env.GOOGLE_API_KEY);
+  const avatar = {
+    ...(hasAnthropic ? { text: createAnthropicTextTransport() } : {}),
+    ...(hasAnthropic ? { vision: createAnthropicVisionTransport() } : {}),
+    ...(hasGoogle ? { image: createGeminiImageTransport() } : {}),
+  };
+
+  const app = buildApp({ store, rubric, startRun, bus, versionStore, avatar });
 
   const port = Number(process.env.PORT ?? 8787);
   await app.listen({ port });

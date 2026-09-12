@@ -250,6 +250,7 @@ export function RunScreen({ client, run, status, events, error, onRunStarted }: 
               onSubmit={(description) => void handleSubmit(description)}
               disabled={submitting}
               maxChars={MAX_CHARS}
+              live={!client.isFixture}
             />
           </>
         ) : (

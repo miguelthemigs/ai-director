@@ -138,3 +138,32 @@ describe("AvatarComposer", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 });
+
+describe("AvatarComposer, the Pipeline tab", () => {
+  it("offers three tabs, with Pipeline between Guided and Direct", () => {
+    render(<AvatarComposer onSubmit={vi.fn()} disabled={false} maxChars={2000} live={false} />);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "Guided",
+      "Pipeline",
+      "Direct",
+    ]);
+  });
+
+  it("says what the Pipeline tab is for when it is the active one", () => {
+    render(<AvatarComposer onSubmit={vi.fn()} disabled={false} maxChars={2000} live={false} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Pipeline" }));
+    expect(screen.getByText(/render the sheet, then read the description back off it/i)).toBeInTheDocument();
+  });
+
+  it("keeps Run disabled on the Pipeline tab until a description has been read off a sheet", () => {
+    render(<AvatarComposer onSubmit={vi.fn()} disabled={false} maxChars={2000} live={false} />);
+
+    fireEvent.change(screen.getByLabelText("Gender"), { target: { value: "woman" } });
+    fireEvent.click(screen.getByRole("tab", { name: "Pipeline" }));
+
+    // The guided draft must not leak across: this tab grades what the DESCRIBE step wrote,
+    // and nothing has been described yet.
+    expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+    expect(screen.getByText("0 / 2000 char")).toBeInTheDocument();
+  });
+});

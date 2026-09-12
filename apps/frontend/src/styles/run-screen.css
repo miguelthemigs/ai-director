@@ -417,6 +417,12 @@
    out of the way instead of pushing the footer down the page. */
 .avatar-composer__panels {
   display: grid;
+  /* The outgoing panel slides sideways on a tab switch, so mid-transition it extends past
+     this box. `.run__field` sets `overflow-y: auto`, which forces `overflow-x` to `auto`
+     too, so without this a horizontal scrollbar flickers on every tab switch. `clip`
+     rather than `hidden`: it does not make this element a scroll container, so it cannot
+     swallow a focus ring by scrolling it into view. */
+  overflow-x: clip;
 }
 .avatar-composer__panel {
   grid-area: 1 / 1;
@@ -574,6 +580,161 @@
 }
 .avatar-preview__text[data-empty] {
   color: var(--ink-3);
+}
+
+/* ── Sheet pipeline ───────────────────────────────────────── */
+
+.sheet-pipeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+.sheet-pipeline__offline,
+.sheet-pipeline__error {
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-2);
+  font-size: var(--fs-ui);
+}
+.sheet-pipeline__offline {
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  color: var(--ink-2);
+}
+.sheet-pipeline__error {
+  background: var(--sig-alarm-tint);
+  border: var(--bd-mark) solid var(--sig-alarm-edge);
+  color: var(--sig-alarm-edge);
+}
+.sheet-pipeline__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.sheet-pipeline__step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  min-width: 0;
+}
+.sheet-pipeline__step-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+.sheet-pipeline__step-label {
+  font-size: var(--fs-label);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+/* Every button in this component spends money. The price is named next to the step, not
+   buried in a tooltip, because a paid call that surprises someone is a defect. */
+.sheet-pipeline__cost {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.sheet-pipeline__hint {
+  margin: 0;
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+}
+.sheet-pipeline__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+.sheet-pipeline__button {
+  appearance: none;
+  font-family: var(--ff-ui);
+  font-size: var(--fs-ui);
+  font-weight: var(--fw-semi);
+  color: var(--ink);
+  background: var(--sf-panel-raised);
+  border: var(--bd-hair) solid var(--ln-strong);
+  border-radius: var(--r-1);
+  padding: var(--sp-2) var(--sp-5);
+  cursor: pointer;
+}
+.sheet-pipeline__button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.sheet-pipeline__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+/* The sheet is 16:9 by construction (`ACTOR_SHEET_ASPECT_RATIO`). No fixed height: a
+   portrait container would letterbox a landscape sheet and hide a panel. */
+.sheet-pipeline__image {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--r-2);
+  border: var(--bd-hair) solid var(--ln);
+}
+.sheet-pipeline__prompts {
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+}
+.sheet-pipeline__prompts summary {
+  cursor: pointer;
+  font-size: var(--fs-label);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.sheet-pipeline__prompt-label {
+  margin: var(--sp-4) 0 var(--sp-2);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.sheet-pipeline__prompt {
+  margin: 0;
+  padding: var(--sp-3);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-micro);
+  line-height: var(--lh-spec);
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* The paragraph the video model would receive, set in the specimen face because it is the
+   exact string the nine checks will quote from. */
+.sheet-pipeline__description {
+  margin: 0;
+  padding: var(--sp-4);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-specimen);
+  line-height: var(--lh-spec);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.sheet-pipeline__trimmed {
+  margin: 0;
+  font-size: var(--fs-ui);
+  color: var(--sig-alarm-edge);
 }
 
 /* ── Description composer ─────────────────────────────────── */
