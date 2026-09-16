@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
@@ -129,16 +129,68 @@ type ClipMeta = { mediaType: string; file: string };
 export class FileComparisonStore implements ComparisonStore {
   constructor(private readonly root: string) {}
 
+  /**
+   * One promise chain per comparison id, serialising every read-modify-write on that
+   * row.
+   *
+   * ── The bug this exists to prevent, found by the Task 6 tests ───────────────────
+   * `stampTaskId` and `patchRender` both read the whole row, merge one side into it and
+   * write the whole row back. `driveComparison` runs BOTH sides concurrently on purpose
+   * (they must queue at the vendor together), so without this the two sides interleave:
+   * each reads the same row, each merges only its own side, and the second write
+   * silently discards the first side's changes. Observed directly — `before` stayed
+   * `queued` with a null `taskId` for an entire drive while `after` succeeded.
+   *
+   * A lost `status` is a wrong screen. A lost `taskId` is a PAID RENDER NOBODY CAN FIND,
+   * which is the exact failure the claim discipline in `compare/runComparison.ts` exists
+   * to prevent, arriving by a different door.
+   *
+   * In-process is the right scope. One server owns a row's polling, and the
+   * cross-process case that actually matters — two attempts submitting the same side —
+   * is held by the claim file, which is atomic at the filesystem.
+   */
+  private readonly rowLocks = new Map<string, Promise<unknown>>();
+
+  private withRowLock<T>(comparisonId: string, fn: () => Promise<T>): Promise<T> {
+    const prior = this.rowLocks.get(comparisonId) ?? Promise.resolve();
+    // `.then` on a settled-or-rejected prior: a failed write must not wedge the row, so
+    // the chain continues from a resolved link either way.
+    const next = prior.then(fn, fn);
+    this.rowLocks.set(
+      comparisonId,
+      next.catch(() => undefined),
+    );
+    return next;
+  }
+
   private dir(comparisonId: string): string {
     return path.join(this.root, comparisonId);
   }
 
+  /**
+   * Write to a sibling temp file, then rename over the target.
+   *
+   * ── Why not a plain `writeFile` ────────────────────────────────────────────────
+   * `writeFile` truncates and then writes, so for a moment the row on disk is empty or
+   * half a JSON document. A concurrent reader that hits that moment throws in
+   * `JSON.parse`, and `get` answers `null` for a row that exists. Found by the Task 6
+   * tests, which failed about half the time until this landed.
+   *
+   * That null is not cosmetic. `applyCheck` in `compare/runComparison.ts` treats a row
+   * it cannot read as "nothing to poll" and stops polling — so a torn read would
+   * abandon a render that OpenRouter is still working on and still billing for. Both
+   * sides of a comparison read and write this file concurrently by design, so the
+   * window is hit often rather than rarely.
+   *
+   * `rename` within one directory is atomic on POSIX: a reader sees either the whole old
+   * file or the whole new one, never a partial write. The temp name carries the pid and
+   * a random suffix so two writers cannot collide on it.
+   */
   private async write(row: ComparisonView): Promise<void> {
-    await writeFile(
-      path.join(this.dir(row.comparisonId), ROW_FILE),
-      JSON.stringify(row, null, 2),
-      "utf8",
-    );
+    const target = path.join(this.dir(row.comparisonId), ROW_FILE);
+    const temp = `${target}.${process.pid}.${randomUUID().slice(0, 8)}.tmp`;
+    await writeFile(temp, JSON.stringify(row, null, 2), "utf8");
+    await rename(temp, target);
   }
 
   private async require(comparisonId: string): Promise<ComparisonView> {
@@ -180,11 +232,13 @@ export class FileComparisonStore implements ComparisonStore {
   }
 
   async stampTaskId(comparisonId: string, side: ComparisonSide, taskId: string): Promise<void> {
-    const row = await this.require(comparisonId);
-    await this.write({
-      ...row,
-      [side]: { ...row[side], taskId, submittedAt: new Date().toISOString() },
-    } as ComparisonView);
+    await this.withRowLock(comparisonId, async () => {
+      const row = await this.require(comparisonId);
+      await this.write({
+        ...row,
+        [side]: { ...row[side], taskId, submittedAt: new Date().toISOString() },
+      } as ComparisonView);
+    });
   }
 
   async patchRender(
@@ -192,14 +246,18 @@ export class FileComparisonStore implements ComparisonStore {
     side: ComparisonSide,
     patch: RenderPatch,
   ): Promise<ComparisonView> {
-    const row = await this.require(comparisonId);
-    const merged = { ...row, [side]: { ...row[side], ...patch } } as ComparisonView;
-    // The comparison finishes when both of its renders have, and not before. A pair with
-    // one clip still running is not a finished comparison however good the other one is.
-    const bothDone = isRenderTerminal(merged.before.status) && isRenderTerminal(merged.after.status);
-    merged.finishedAt = bothDone ? (merged.finishedAt ?? new Date().toISOString()) : null;
-    await this.write(merged);
-    return merged;
+    return this.withRowLock(comparisonId, async () => {
+      const row = await this.require(comparisonId);
+      const merged = { ...row, [side]: { ...row[side], ...patch } } as ComparisonView;
+      // The comparison finishes when both of its renders have, and not before. A pair
+      // with one clip still running is not a finished comparison however good the other
+      // one is.
+      const bothDone =
+        isRenderTerminal(merged.before.status) && isRenderTerminal(merged.after.status);
+      merged.finishedAt = bothDone ? (merged.finishedAt ?? new Date().toISOString()) : null;
+      await this.write(merged);
+      return merged;
+    });
   }
 
   async get(comparisonId: string): Promise<ComparisonView | null> {
@@ -254,7 +312,12 @@ export class FileComparisonStore implements ComparisonStore {
     // was rendered; bytes with no metadata are recoverable by hand.
     await writeFile(path.join(this.dir(comparisonId), file), bytes);
     const meta: ClipMeta = { mediaType, file };
-    await writeFile(this.clipMetaPath(comparisonId, side), JSON.stringify(meta), "utf8");
+    // Same atomic-rename discipline as `write`: `readClip` parses this, so a torn read
+    // would report "no clip" for a clip that is sitting right beside it.
+    const metaPath = this.clipMetaPath(comparisonId, side);
+    const temp = `${metaPath}.${process.pid}.${randomUUID().slice(0, 8)}.tmp`;
+    await writeFile(temp, JSON.stringify(meta), "utf8");
+    await rename(temp, metaPath);
   }
 
   async readClip(
