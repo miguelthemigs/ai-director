@@ -289,13 +289,27 @@ text is unchanged by construction, and the splice asserts it.
 
 ---
 
-## 3. The three screens
+## 3. The four screens
 
 | Screen | File | What it is for |
 |---|---|---|
 | Run | `apps/frontend/src/screens/RunScreen.tsx` | Paste a description, watch the checks arrive, click a failing check to light up the exact words, compare pass 1 / 2 / 3 |
 | Architecture | `ArchitectureScreen.tsx` | The pipeline above, live. Each node lights as its step runs, and holds the real payload it sent |
-| Versions | `VersionsScreen.tsx` | Rubric version history. The visible feedback cycle: v1 scored a gold set, the agreement study said which checks were unreliable, v2 changes those and is re-scored against the same frozen set |
+| Versions | `VersionsScreen.tsx` | Rubric and prompt version history. The visible feedback cycle: v1 scored a gold set, the agreement study said which checks were unreliable, v2 changes those and is re-scored against the same frozen set |
+| Compare | `CompareScreen.tsx` | Two Seedance clips from one avatar, side by side: the description before the repair passes and after. Added 2026-09-16. The ONLY screen that spends a render credit, and it grades nothing |
+
+Compare is walled off from the other three deliberately. It writes no rubric score and adds
+no event to the nine the run stream carries, so a reader who distrusts the render numbers
+can discard it whole and every number on Run, Architecture and Versions still stands. It
+renders through OpenRouter rather than Runway: same model, same weights, 23% less per
+second (`docs/decision-log.md`, 2026-09-16).
+
+One command renders a pair without the UI, and it is the owner who runs it:
+
+```bash
+npm run compare -- --avatar <id> --run <id> --dry-run   # resolves both descriptions, spends nothing
+npm run compare -- --avatar <id> --run <id>             # about $0.82; needs RUN_LIVE_API=1, a key, and a typed "yes"
+```
 
 The backend streams progress over server-sent events (`apps/backend/src/server/sse.ts`),
 so the Run screen fills in check by check rather than waiting for all three groups.
