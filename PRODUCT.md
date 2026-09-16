@@ -38,9 +38,11 @@ what it cost — without leaving the screen or trusting a number they cannot tra
 
 ## Positioning
 
-The identity of a character survives only as prose, because Seedance 2.5 on Runway refuses a real
-human face as any kind of input and two generations from the same description return two different
-people. So the tool measures and repairs prose, and nothing in it spends a render credit. Its
+The identity of a character survives only as prose, because Seedance 2.5 refuses a real human face
+as any kind of input and two generations from the same description return two different people. So
+the tool measures and repairs prose. Grading spends no render credit; the Compare screen, added
+2026-09-16, is the one surface that does, and it renders the same avatar twice to test whether a
+repaired description buys anything a viewer can see. Its
 mechanism a neighbouring product could not truthfully copy: every failing score carries verbatim
 quotes that are verified in code with `description.indexOf(quote)`, and every repair is a spliced
 range with a post-splice assertion that untouched text is byte-identical. The scores are not the
@@ -54,8 +56,8 @@ Cohen's kappa.
 - The run streams. Progress arrives as server-sent events: `run.started`, `pass.started`,
   `evaluator.group.started`, `evaluator.group.completed`, `repairer.started`, `repairer.completed`,
   `pass.completed`, `run.completed`, `run.failed`, each with an id of the form `<pass>-<step>`.
-- Three screens: Run, Architecture, Versions. The Architecture screen is an audit view driven by the
-  same event stream as Run.
+- Four screens: Run, Architecture, Versions, Compare. The Architecture screen is an audit view
+  driven by the same event stream as Run; Compare polls, and adds no event to that stream.
 - Rubric and prompt files are append-only. A new version is a new file, which is what makes the
   Versions screen honest.
 - The tool is also demonstrated live to assessors, so its screens are read by people who did not
@@ -79,7 +81,12 @@ Cohen's kappa.
 - The description is read-only once submitted.
 - Designed but unbuilt agents — Interrogator, Director, Identity Meter — appear on the Architecture
   graph as planned, and must be visually distinguishable from built ones.
-- Out of scope in v1: database, any Runway call, any render, auth, deployment, multi-user.
+- Out of scope in v1: database, auth, deployment, multi-user.
+- Rendering is out of scope for the grading surface and always will be: no screen that scores a
+  description may spend a render credit. The Compare screen is a separate fourth screen, added
+  2026-09-16, which grades nothing and exists to evaluate failure-condition clause 2. It renders
+  through OpenRouter rather than Runway — the same model and the same weights, a different vendor
+  billing for it.
 - Motion is tied to real state changes only: checks revealing as scores land, flow along graph edges
   between agents, fragment diff transitions. No looping or ambient motion, no animation of unchanged
   scores, none while typing.

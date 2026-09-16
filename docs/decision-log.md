@@ -1,5 +1,92 @@
 # Decision log
 
+## 2026-09-16 — The render comparison is being built, on OpenRouter, outside the graded surface
+
+Spec §2 put "any render" out of scope for v1, and `PRODUCT.md` said nothing in the tool spends a
+render credit. Both are amended today rather than quietly contradicted, because the entry below —
+2026-09-11, **Unbuildable in v1** — already said why they would have to be: failure-condition clause
+2 asks whether a repaired description reduces identity drift in an actual render, and nothing that
+only scores text can answer it.
+
+Two decisions inside that.
+
+**The transport is OpenRouter, not Runway.** Same model (`bytedance/seedance-2.5`), same weights, a
+different vendor billing for it. Mentic migrated its own UGC video the same way on 2026-09-15 and
+measured about 23% less for an identical clip, and the client, the pricing and the claim discipline
+are ported from there rather than written again. `PRODUCT.md`'s positioning line said "Seedance 2.5
+on Runway" and now names the model without the vendor, because the vendor was never the claim.
+
+**The rendering surface is walled off from the grading surface.** Compare is a fourth screen. It
+grades nothing, it writes no rubric score, and it adds no event to the nine the run stream carries
+(see the 2026-09-11 entry on why adding an event name is a spec change). A reader who distrusts the
+render numbers can discard this screen whole and every number on the other three still stands.
+
+No render has been made yet. The first one is Task 11 of the plan, one pair at 480x854 for four
+seconds, estimated at about $0.82, and this entry gets a follow-up with what it actually billed and
+what the two clips actually showed. If the two clips look equally unlike the sheet, that is the
+result to report.
+
+## 2026-09-16 — Video provider moved from Runway to OpenRouter
+
+Reopened after a conversation with my teacher about a decision I had already closed.
+
+Same model, different route. OpenRouter serves the same Seedance 2.5 weights at $0.231 per second
+at 720p against Runway's $0.30 — 23 percent off, measured by Mentic on a real eight-second render
+on 15 September rather than read off a price page. My own recollection was "about a third"; the
+measured figure is 23 percent and that is the figure that gets reported.
+
+The 1080p rung does not come across. That costs nothing: SQ2 had already put the film in 720p
+native, in medium and wide framing, so the rung being given up is one this project had already
+decided not to render.
+
+For this repo specifically the vertical rung is 480x854 at 4 seconds, which OpenRouter publishes
+for this model — about $0.42 a clip, $0.83 for a before/after pair. 720x1280 stays available as the
+second option at $1.85 a pair.
+
+Not yet established: whether Seedance refuses a human likeness in an input image on the OpenRouter
+transport. Mentic measured that refusal over nine calls on Runway in August, and it is the reason a
+description travels as text rather than as a picture. A different vendor in front of the same
+weights is not the same test, and until it is run the text-only path stays.
+
+## 2026-09-16 — Repairer prompt v2: the Repairer is shown the character sheet
+
+v1 fabricates the details the rubric asks it for, because it has never been given the image. Run
+`bee3bcd6` produced six invented facts across two repair passes — shoulder-length hair on a
+medium-length head, 5 foot 8 on a 1.78m man, a narrow-shouldered build on an average one, plus a
+mole, a scar and a ring — and terminated `passed` at 100 percent. Full trace in
+`docs/repairer-cannot-see.md`.
+
+The cause is structural rather than wording. A check demanding specificity, put to a model with no
+source of specifics, can only be satisfied by fabrication. So v2 sends the sheet with the failing
+fragments and adds one rule: a check asking for a detail the sheet does not show is left
+unsatisfied rather than filled in.
+
+v1 ships unedited and stays reachable. It is the prompt that produced the evidence above, and a
+result that can no longer be reproduced is not a result. The run manifest now records which prompt
+repaired it, so a v1 and a v2 description are never confused.
+
+Height is carried, and is the one fact v2 takes from outside the picture. A photograph has no
+height in it, but a video model needs one: it sets how far off the ground the head sits in a
+standing frame. So v2 is also given the avatar's brief (`avatar/statedFacts.ts`) and may state a
+height only when that brief states one, copied without adjustment, never estimated from pixels. For
+a generated avatar the brief is the text the sheet was rendered from, so its figures describe the
+picture by construction. An uploaded sheet has no brief, no height is known, and the Repairer is
+held to proportion cues. This makes part of the pipeline circular; the circle is bounded to the
+failing fragments, `describeImage` never sees the brief, and the agreement study grades
+`describeImage`, so what the study measures is untouched.
+
+Expected effect, read off the rubric rather than guessed: band 5 on `hair_spec`, `face_skin` and
+`wardrobe` asks only for what a character sheet shows, so v2 should hold all three and be true for
+the first time. `age_build` band 5 is reachable through either arm, the stated height or a
+visible proportion. `anchor_marker`, which wants two or more
+localised markers, is the only check that can honestly fall. A large drop anywhere else would mean
+v2 is withholding detail it can see, which is a defect in v2 rather than a finding about the
+rubric.
+
+This is adjacent to clause 2 of the pre-registered failure condition below, and is deliberately not
+being claimed as it. That clause requires a render comparison and no renders have been made. What
+exists is a mechanism plus six worked examples of it operating.
+
 ## 2026-09-10 — Pre-registered failure condition for the character rubric
 
 Written before the first agreement run, so it cannot be adjusted to fit the result.
