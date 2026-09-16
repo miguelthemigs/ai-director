@@ -119,8 +119,19 @@ export type RenderView = {
   /** This server's own path for the stored clip, never OpenRouter's content URL, which is
    *  ephemeral and needs a bearer token the browser must never hold. */
   clipUrl: string | null;
-  /** The exact text sent, stored verbatim so the comparison is reproducible. */
+  /** The exact description sent, stored verbatim so the comparison is reproducible. */
   description: string;
+  /**
+   * The WHOLE prompt as it went on the wire: the shared shot wrapper with this side's
+   * description spliced into it.
+   *
+   * Stored rather than re-derived for display. A screen that rebuilt this from
+   * `description` would be showing what the wrapper says TODAY, which after a `v2.ts`
+   * ships is not what this row was rendered from. The claim the whole screen makes is
+   * "these two prompts differ in one place", and the only way to let someone check that
+   * claim is to keep both prompts exactly as they were sent.
+   */
+  prompt: string;
   /** The discriminator that works without any version record: two descriptions from two
    *  prompt versions hash differently. */
   descriptionSha256: string;

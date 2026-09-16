@@ -29,7 +29,10 @@ export async function gotoFixture(page: Page, scenario: FixtureScenario, speedMs
  *  click on a tab times out. This still exercises `App`'s real client-side router (`ScreenTabs`'s
  *  `onClick` -> `navigate` -> `setScreen` + `history.pushState`) -- no page reload, so it does not
  *  run into the dev-proxy 502 a direct URL navigation would (see `gotoFixture`). */
-export async function navigateToScreen(page: Page, tab: "Run" | "Architecture" | "Versions"): Promise<void> {
+export async function navigateToScreen(
+  page: Page,
+  tab: "Run" | "Architecture" | "Versions" | "Compare",
+): Promise<void> {
   await page.getByRole("link", { name: tab }).dispatchEvent("click");
 }
 

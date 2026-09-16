@@ -11,10 +11,12 @@ const SOURCES = {
   before: {
     description: "The raw description.",
     descriptionSha256: "a".repeat(64),
+    prompt: "WRAPPER\n\nThe raw description.\n\nTAIL",
   },
   after: {
     description: "The repaired description.",
     descriptionSha256: "b".repeat(64),
+    prompt: "WRAPPER\n\nThe repaired description.\n\nTAIL",
   },
 };
 
@@ -62,6 +64,9 @@ describe("create", () => {
     expect(row.before.description).toBe("The raw description.");
     expect(row.after.description).toBe("The repaired description.");
     expect(row.before.descriptionSha256).not.toBe(row.after.descriptionSha256);
+    // The whole prompt, kept as sent, so a screen can show the two side by side.
+    expect(row.before.prompt).toBe(SOURCES.before.prompt);
+    expect(row.after.prompt).toBe(SOURCES.after.prompt);
   });
 
   it("stamps the provenance both sides share", async () => {

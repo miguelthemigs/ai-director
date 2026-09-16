@@ -122,6 +122,33 @@ describe("readComparisonSources", () => {
     expect(result.repairerPromptVersion).toBe("v2");
   });
 
+  it("trusts the recorded avatarId over a description match when the manifest has one", async () => {
+    // A run written since 2026-09-16 records which avatar it graded. That is the answer,
+    // so a description that happens to differ (the same person re-described, say) no
+    // longer refuses a comparison that is genuinely about that avatar.
+    const recorded = { ...MANIFEST, avatarId: "avatar-1" } as RunManifest;
+    const result = await readComparisonSources(
+      {
+        runStore: stubRunStore({ getRun: async () => recorded }),
+        avatarStore: stubAvatarStore({ ...AVATAR, description: "re-described differently" }),
+      },
+      { runId: "run-1", avatarId: "avatar-1" },
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("refuses when the recorded avatarId names a different person", async () => {
+    const recorded = { ...MANIFEST, avatarId: "avatar-other" } as RunManifest;
+    const result = await readComparisonSources(
+      {
+        runStore: stubRunStore({ getRun: async () => recorded }),
+        avatarStore: stubAvatarStore(AVATAR),
+      },
+      { runId: "run-1", avatarId: "avatar-1" },
+    );
+    expect(result).toEqual({ ok: false, reason: expect.stringContaining("avatar-other") });
+  });
+
   it("refuses a run whose description is not the avatar's", async () => {
     const other = { ...AVATAR, description: "Somebody else entirely." };
     const result = await readComparisonSources(

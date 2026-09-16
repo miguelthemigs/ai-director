@@ -199,6 +199,7 @@ export async function main(argv: string[]): Promise<number> {
         description,
         runId,
         repairerPromptVersion: grounding ? "v2" : DEFAULT_REPAIRER_PROMPT_VERSION,
+        ...(avatarId === undefined ? {} : { avatarId }),
       },
     );
   } catch (err) {

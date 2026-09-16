@@ -16,6 +16,10 @@ function renderView(side: "before" | "after", over: Partial<RenderView> = {}): R
     actualMicroUsd: 410_000,
     clipUrl: `/compare/cmp-1/${side}/clip`,
     description: side === "before" ? "The raw text." : "The repaired text.",
+    prompt:
+      side === "before"
+        ? "SHOT WRAPPER\n\nThe raw text.\n\nTAIL"
+        : "SHOT WRAPPER\n\nThe repaired text.\n\nTAIL",
     descriptionSha256: (side === "before" ? "a" : "b").repeat(64),
     rubricVersion: "v1",
     repairerPromptVersion: null,

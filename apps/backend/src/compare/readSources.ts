@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { ComparisonSide } from "@ai-director/contract";
 import { rebuildRunView } from "../present/rebuildRunView.js";
+import { buildShotPrompt } from "../video/shotPrompt/v1.js";
 import type { AvatarStore } from "../store/AvatarStore.js";
 import type { ComparisonSource } from "../store/ComparisonStore.js";
 import type { RunStore } from "../store/RunStore.js";
@@ -73,7 +74,21 @@ export async function readComparisonSources(
 
   const view = rebuildRunView(manifest, passes);
 
-  if (view.originalDescription !== avatar.description) {
+  // Which avatar a run graded is now RECORDED on the manifest, so when it is there it is
+  // the answer and no inference is needed. For runs written before 2026-09-16 the field is
+  // absent, and the only link is the one that was always true: the run's original
+  // description is exactly what the describe step wrote onto the avatar record. Both
+  // paths refuse rather than guess, because a comparison built from a different person's
+  // run looks completely normal on screen.
+  const recordedAvatar = (manifest as { avatarId?: unknown }).avatarId;
+  if (typeof recordedAvatar === "string") {
+    if (recordedAvatar !== args.avatarId) {
+      return {
+        ok: false,
+        reason: `run "${args.runId}" graded avatar "${recordedAvatar}", not "${args.avatarId}"`,
+      };
+    }
+  } else if (view.originalDescription !== avatar.description) {
     return {
       ok: false,
       reason: `run "${args.runId}" did not come from avatar "${args.avatarId}": its original description is not the one stored on that avatar`,
@@ -99,10 +114,15 @@ export async function readComparisonSources(
       before: {
         description: view.originalDescription,
         descriptionSha256: sha256(view.originalDescription),
+        // Built here, once, from the one wrapper both sides share. Building it at submit
+        // time instead would mean the stored prompt and the sent prompt were two
+        // expressions that merely happened to agree.
+        prompt: buildShotPrompt(view.originalDescription),
       },
       after: {
         description: view.finalDescription,
         descriptionSha256: sha256(view.finalDescription),
+        prompt: buildShotPrompt(view.finalDescription),
       },
     },
     rubricVersion: manifest.rubricVersion,

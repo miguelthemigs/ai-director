@@ -109,6 +109,23 @@ export type RunSummary = {
   startedAt: string;
   finishedAt?: string;
   passes: number;
+  /**
+   * Which stored avatar this run graded, when it came from one.
+   *
+   * Absent for a description typed or pasted by hand, and for every run written before
+   * 2026-09-16. The Compare screen filters its run picker on this: a comparison whose
+   * "after" came from a different person is worthless, and nothing about it would look
+   * wrong on screen.
+   */
+  avatarId?: string;
+  /**
+   * Which Repairer prompt repaired it: "v1" blind, "v2" with the character sheet in hand.
+   *
+   * Absent means the run predates the record, which is a different claim from "v1" and is
+   * shown as such. This is the difference between a comparison that tests a repair and one
+   * that tests a fabrication — see `docs/repairer-cannot-see.md`.
+   */
+  repairerPromptVersion?: string;
 };
 
 export type RunView = {

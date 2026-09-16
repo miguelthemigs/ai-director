@@ -138,7 +138,9 @@ export function App({ client }: { client: RunClient }): React.JSX.Element {
             <ArchitectureScreen run={run} status={status} events={events} error={error} />
           ) : null}
           {screen === "versions" ? <VersionsScreen client={client} /> : null}
-          {screen === "compare" ? <CompareScreen live={!client.isFixture} /> : null}
+          {screen === "compare" ? (
+            <CompareScreen live={!client.isFixture} client={client} />
+          ) : null}
         </main>
       </AppShell>
     </MotionConfig>

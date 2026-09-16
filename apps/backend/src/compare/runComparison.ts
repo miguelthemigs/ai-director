@@ -11,7 +11,7 @@ import type {
   ComparisonStore,
   RenderPatch,
 } from "../store/ComparisonStore.js";
-import { buildShotPrompt, SHOT_PROMPT_VERSION } from "../video/shotPrompt/v1.js";
+import { SHOT_PROMPT_VERSION } from "../video/shotPrompt/v1.js";
 import type { VideoTransport } from "../video/openrouterClient.js";
 
 /**
@@ -138,7 +138,9 @@ async function submitSide(
   try {
     const { taskId } = await deps.transport.submit({
       model: row.model,
-      prompt: buildShotPrompt(render.description),
+      // The stored prompt, not a freshly built one. What the screen shows and what the
+      // vendor received are then the same string by construction rather than by luck.
+      prompt: render.prompt,
       duration: row.seconds,
       size: row.size,
       generate_audio: false,

@@ -19,8 +19,16 @@ const START = {
   rubricVersion: "v1",
   repairerPromptVersion: null,
   sources: {
-    before: { description: "The raw description.", descriptionSha256: "a".repeat(64) },
-    after: { description: "The repaired description.", descriptionSha256: "b".repeat(64) },
+    before: {
+      description: "The raw description.",
+      descriptionSha256: "a".repeat(64),
+      prompt: "WRAPPER\n\nThe raw description.\n\nTAIL",
+    },
+    after: {
+      description: "The repaired description.",
+      descriptionSha256: "b".repeat(64),
+      prompt: "WRAPPER\n\nThe repaired description.\n\nTAIL",
+    },
   },
 } as const;
 
@@ -89,15 +97,16 @@ describe("driveComparison", () => {
       expect(calls[0]?.size).toBe(calls[1]?.size);
       expect(calls[0]?.duration).toBe(calls[1]?.duration);
 
-      // The ONLY difference between the two prompts is the description.
+      // The ONLY difference between the two prompts is the description, and what went on
+      // the wire is the string stored on the row rather than one rebuilt at submit time.
       const prompts = calls.map((c) => String(c.prompt));
       const beforePrompt = prompts.find((p) => p.includes("The raw description.")) ?? "";
       const afterPrompt = prompts.find((p) => p.includes("The repaired description.")) ?? "";
       expect(beforePrompt.replace("The raw description.", "")).toBe(
         afterPrompt.replace("The repaired description.", ""),
       );
-      expect(beforePrompt).not.toBe("");
-      expect(afterPrompt).not.toBe("");
+      expect(beforePrompt).toBe(START.sources.before.prompt);
+      expect(afterPrompt).toBe(START.sources.after.prompt);
     });
   });
 

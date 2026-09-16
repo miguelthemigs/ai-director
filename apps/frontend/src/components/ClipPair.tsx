@@ -127,7 +127,7 @@ function RenderPanel({ render }: { render: RenderView }): React.JSX.Element {
             {shortHash(render.descriptionSha256)}
           </span>
         </figcaption>
-        <blockquote className="specimen">{render.description}</blockquote>
+        <blockquote className="quoted-text">{render.description}</blockquote>
       </figure>
 
       <p className="clip-panel__provenance">

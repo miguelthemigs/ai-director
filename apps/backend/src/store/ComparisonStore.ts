@@ -47,6 +47,8 @@ export type ClaimResult = "claimed" | "already_claimed";
 export type ComparisonSource = {
   description: string;
   descriptionSha256: string;
+  /** The full wrapped prompt, built once at create time and sent unchanged. */
+  prompt: string;
 };
 
 export type CreateComparisonArgs = {
@@ -125,6 +127,7 @@ function emptyRender(
     clipUrl: null,
     description: source.description,
     descriptionSha256: source.descriptionSha256,
+    prompt: source.prompt,
     rubricVersion: args.rubricVersion,
     repairerPromptVersion: args.repairerPromptVersion,
     polls: 0,

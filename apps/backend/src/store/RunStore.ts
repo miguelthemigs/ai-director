@@ -31,6 +31,17 @@ export const RunManifestSchema = z.object({
    * only "after" would be unreadable evidence.
    */
   repairerPromptVersion: z.string().optional(),
+  /**
+   * The avatar this run graded, when it named one.
+   *
+   * Recorded so a comparison can be built without guessing. Before this, the only link
+   * between a run and an avatar was that the run's original description happened to equal
+   * the one stored on the avatar record (`compare/readSources.ts`), which is a true test
+   * but a fragile one: it cannot survive the same description being graded twice, and it
+   * cannot answer "which runs belong to this avatar" at all, which is exactly what the
+   * Compare screen's run picker has to answer.
+   */
+  avatarId: z.string().optional(),
 });
 export type RunManifest = z.infer<typeof RunManifestSchema>;
 

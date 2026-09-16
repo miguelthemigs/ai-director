@@ -191,6 +191,9 @@ export async function runToCompletion(
      * have to learn what an image is.
      */
     repairerPromptVersion?: RepairerPromptVersion;
+    /** The avatar this run graded, when it named one. Stamped on the manifest so the
+     *  Compare screen can list a person's runs without matching description strings. */
+    avatarId?: string;
   },
 ): Promise<{ status: RunStatus; passes: PassResult[]; finalDescription: string }> {
   const { rubric, runId } = args;
@@ -206,6 +209,7 @@ export async function runToCompletion(
     startedAt: new Date().toISOString(),
     passes: 0,
     repairerPromptVersion: args.repairerPromptVersion ?? DEFAULT_REPAIRER_PROMPT_VERSION,
+    ...(args.avatarId === undefined ? {} : { avatarId: args.avatarId }),
   });
 
   if (emit) {
