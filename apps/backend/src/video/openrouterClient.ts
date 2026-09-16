@@ -46,8 +46,28 @@ const REQUEST_TIMEOUT_MS = 60_000;
  *  what gets written onto a render row. */
 const ERROR_BODY_SNIPPET_LENGTH = 200;
 
-/** What a finished clip is assumed to be when the vendor names no type. */
+/** What a finished clip is assumed to be when the vendor names no usable type. */
 const DEFAULT_CLIP_MEDIA_TYPE = "video/mp4";
+
+/** The only media types this repo will store and replay. */
+const CLIP_MEDIA_TYPES = new Set(["video/mp4", "video/webm"]);
+
+/**
+ * A raw `Content-Type` header to something a `<video>` element will actually decode.
+ *
+ * The header is NOT stored verbatim. Object storage behind a signed URL routinely answers
+ * `video/mp4; charset=binary` or `application/octet-stream`, and this string travels two
+ * hops: the store picks the file extension from it, and `GET /compare/:id/:side/clip`
+ * sends it back as the response type. An unrecognised value therefore produced a saved
+ * clip that the browser refused to play, inside a panel already marked as a success.
+ *
+ * Parameters are stripped, the result is matched against the types this repo stores, and
+ * anything else falls back to mp4 — which is what Seedance actually returns.
+ */
+function clipMediaType(raw: string | null): string {
+  const base = (raw ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
+  return CLIP_MEDIA_TYPES.has(base) ? base : DEFAULT_CLIP_MEDIA_TYPE;
+}
 
 /** The body this client posts. No image field exists, by construction. */
 export type VideoSubmitRequest = {
@@ -298,10 +318,7 @@ export function createOpenRouterVideoTransport(): VideoTransport {
         throw new OpenRouterHttpError(await upstreamErrorMessage(res), res.status);
       }
       const bytes = Buffer.from(await res.arrayBuffer());
-      return {
-        bytes,
-        mediaType: res.headers.get("Content-Type") ?? DEFAULT_CLIP_MEDIA_TYPE,
-      };
+      return { bytes, mediaType: clipMediaType(res.headers.get("Content-Type")) };
     },
   };
 }

@@ -12,6 +12,32 @@
       "kappa": null,
       "perCheckKappa": null,
       "goldSetSize": null
+    },
+    {
+      "id": "repairer-prompt-v1",
+      "kind": "repairer_prompt",
+      "version": "v1",
+      "sealedAt": "2026-09-10T00:00:00.000Z",
+      "why": "First Repairer. It is shown only the fragments that failed a check, never the whole description, so a repair cannot drift into text nobody scored. It is not shown the character sheet either, which was not a decision at the time - the pipeline turns the image into one sentence in the describe step and drops it, and nothing downstream had ever needed a picture.",
+      "meanPercent": null,
+      "deltaPercent": null,
+      "profile": null,
+      "kappa": null,
+      "perCheckKappa": null,
+      "goldSetSize": null
+    },
+    {
+      "id": "repairer-prompt-v2",
+      "kind": "repairer_prompt",
+      "version": "v2",
+      "sealedAt": "2026-09-16T00:00:00.000Z",
+      "why": "v1 invents the details it is asked for, because it cannot see the person. On run bee3bcd6 it wrote shoulder-length hair on a medium-length head, 5 foot 8 on a 1.78m man, a narrow-shouldered build on an average one, and added a mole, a scar and a ring belonging to nobody. hair_spec and age_build both rose 3 to 5 on those inventions and the run terminated passed at 100 percent. The cause is structural, not wording: a check demanding specificity, put to a model with no source of specifics, can only be satisfied by fabrication. v2 sends the character reference sheet with the fragments and binds every detail to what is visible in it, in both directions - name exactly what the sheet shows and aim for the top band, leave out what it does not show, and states a height only when the avatar's own brief gives one, copied without adjustment, never estimated from the picture - height is a render directive for a video model, so it is carried rather than dropped (owner, 16 September). Predicted effect, read off the rubric rather than guessed: band 5 held on hair_spec, face_skin and wardrobe, band 5 reachable on age_build through either arm, the stated height or a visible proportion, and anchor_marker the only check that can honestly fall. Evidence and full trace: docs/repairer-cannot-see.md.",
+      "meanPercent": null,
+      "deltaPercent": null,
+      "profile": null,
+      "kappa": null,
+      "perCheckKappa": null,
+      "goldSetSize": null
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
@@ -69,6 +69,25 @@ export interface AvatarStore {
 
 const RECORD_FILE = "record.json";
 
+/**
+ * Write to a sibling temp file, then rename over the target.
+ *
+ * `writeFile` truncates and then writes, so for a moment the record on disk is empty or
+ * half a JSON document. `get` swallows a parse failure and answers `null`, which means a
+ * reader that lands in that window is told the avatar DOES NOT EXIST: it vanishes from
+ * the gallery mid-`list`, and `readComparisonSources` refuses a comparison for an avatar
+ * sitting right there on disk. The window opens on every `attachDescription`, which is
+ * exactly when the gallery is being watched.
+ *
+ * `rename` within one directory is atomic on POSIX. Same fix, same reason, as
+ * `FileComparisonStore.write`, which found this the hard way — see its header.
+ */
+async function writeFileAtomic(target: string, contents: string): Promise<void> {
+  const temp = `${target}.${process.pid}.${randomUUID().slice(0, 8)}.tmp`;
+  await writeFile(temp, contents, "utf8");
+  await rename(temp, target);
+}
+
 function extensionFor(mediaType: string): string {
   if (mediaType === "image/jpeg") return "jpg";
   if (mediaType === "image/webp") return "webp";
@@ -103,7 +122,7 @@ export class FileAvatarStore implements AvatarStore {
       path.join(this.dir(id), `sheet.${extensionFor(args.mediaType)}`),
       Buffer.from(args.imageBase64, "base64"),
     );
-    await writeFile(path.join(this.dir(id), RECORD_FILE), JSON.stringify(record, null, 2), "utf8");
+    await writeFileAtomic(path.join(this.dir(id), RECORD_FILE), JSON.stringify(record, null, 2));
     return record;
   }
 
@@ -114,7 +133,7 @@ export class FileAvatarStore implements AvatarStore {
     const existing = await this.get(id);
     if (!existing) throw new Error(`avatar ${id} not found`);
     const merged: AvatarRecord = { ...existing, ...fields };
-    await writeFile(path.join(this.dir(id), RECORD_FILE), JSON.stringify(merged, null, 2), "utf8");
+    await writeFileAtomic(path.join(this.dir(id), RECORD_FILE), JSON.stringify(merged, null, 2));
     return merged;
   }
 

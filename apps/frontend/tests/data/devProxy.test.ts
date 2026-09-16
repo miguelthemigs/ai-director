@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 import viteConfigSource from "../../vite.config.ts?raw";
 import httpRunClientSource from "../../src/data/HttpRunClient.ts?raw";
 import avatarApiSource from "../../src/data/avatarApi.ts?raw";
+import compareApiSource from "../../src/data/compareApi.ts?raw";
+import compareScreenSource from "../../src/screens/CompareScreen.tsx?raw";
 
 /**
  * Every backend path prefix the app calls has to be listed in the dev server's proxy table.
@@ -47,6 +49,18 @@ describe("the dev server proxy table", () => {
 
   it("covers every prefix the avatar pipeline calls", () => {
     for (const prefix of calledPrefixes(avatarApiSource)) {
+      expect(proxied.has(prefix), `${prefix} is not proxied in vite.config.ts`).toBe(true);
+    }
+  });
+
+  it("covers every prefix the comparison calls", () => {
+    // `compareApi.ts` and the screen's own direct `fetch("/runs")`. Added after a review
+    // found the derived half of this guard — the half that catches a NEW prefix — had a
+    // hole exactly where the bug it was written for would recur.
+    for (const prefix of [
+      ...calledPrefixes(compareApiSource),
+      ...calledPrefixes(compareScreenSource),
+    ]) {
       expect(proxied.has(prefix), `${prefix} is not proxied in vite.config.ts`).toBe(true);
     }
   });

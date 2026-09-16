@@ -4,6 +4,7 @@ import {
   DEFAULT_VIDEO_SIZE,
   estimateMicroUsd,
   isRenderTerminal,
+  isValidVideoSeconds,
   MAX_VIDEO_SECONDS,
   MIN_VIDEO_SECONDS,
   VIDEO_SIZES,
@@ -80,11 +81,17 @@ export function CompareScreen({ live }: { live: boolean }): React.JSX.Element {
       .catch(() => setRuns([]));
   }, [live]);
 
+  // The contract's own validator, so the screen and the server agree on what is
+  // renderable. Clearing the number field gives `Number("") === 0`, which used to price
+  // the pair at $0.00 beside a button that was still pressable; typing 40 priced a pair
+  // the server would refuse. Neither is allowed to reach the button now.
+  const secondsValid = isValidVideoSeconds(seconds);
+
   // Derived, never stored. Changing a control changes the price in the same frame, and
   // the figure beside the button is always the figure the server will charge against.
   const pairEstimate = useMemo(
-    () => estimateMicroUsd(size, seconds) * 2,
-    [size, seconds],
+    () => (secondsValid ? estimateMicroUsd(size, seconds) * 2 : null),
+    [size, seconds, secondsValid],
   );
 
   const selectedAvatar = avatars.find((a) => a.id === avatarId) ?? null;
@@ -222,13 +229,22 @@ export function CompareScreen({ live }: { live: boolean }): React.JSX.Element {
 
         <div className="compare-field">
           <span className="compare-estimate" data-testid="pair-estimate">
-            Two clips, <strong>{formatMicroUsd(pairEstimate)}</strong>. Pressing this spends
-            it.
+            {pairEstimate === null ? (
+              <>
+                Seconds must be a whole number from {MIN_VIDEO_SECONDS} to{" "}
+                {MAX_VIDEO_SECONDS}.
+              </>
+            ) : (
+              <>
+                Two clips, <strong>{formatMicroUsd(pairEstimate)}</strong>. Pressing this
+                spends it.
+              </>
+            )}
           </span>
           <button
             type="button"
             className="compare-submit"
-            disabled={!avatarId || !runId || submitting}
+            disabled={!avatarId || !runId || !secondsValid || submitting}
             onClick={() => void submit()}
           >
             {submitting ? "Submitting…" : "Render both"}

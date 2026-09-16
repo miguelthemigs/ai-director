@@ -17,7 +17,20 @@ const KEEPALIVE_MS = 15_000;
  * takes tens of seconds and the browser needs the id immediately to open its
  * event stream (Task 18).
  */
-export type StartRun = (args: { runId: string; description: string }) => Promise<RunView>;
+export type StartRun = (args: {
+  runId: string;
+  description: string;
+  /**
+   * Which stored avatar this description was read off, when the caller knows.
+   *
+   * Optional, and absent is the ordinary case: a description typed into the textarea
+   * belongs to no avatar. When it IS present the Repairer is given that avatar's sheet
+   * and brief and runs prompt v2 (`agents/repairer/prompt-v2.ts`); without it the
+   * Repairer is blind and runs v1, which is the prompt that fabricated the hair length,
+   * the height and the build on run `bee3bcd6`. See `docs/repairer-cannot-see.md`.
+   */
+  avatarId?: string;
+}) => Promise<RunView>;
 
 export type RunRouteDeps = {
   store: RunStore;
@@ -32,6 +45,8 @@ const CreateRunBodySchema = z.object({
     .trim()
     .min(1, "description must not be empty")
     .max(20_000, "description must be at most 20000 characters"),
+  /** Naming the avatar is what upgrades the Repairer from blind v1 to sighted v2. */
+  avatarId: z.string().min(1).max(200).optional(),
 });
 
 export function registerRunRoutes(app: FastifyInstance, deps: RunRouteDeps): void {
@@ -59,7 +74,11 @@ export function registerRunRoutes(app: FastifyInstance, deps: RunRouteDeps): voi
     // `startRun` does internally (`finishRun(runId, "failed", ...)`), so
     // there is nothing left to do with it at this layer.
     void deps
-      .startRun({ runId, description: parsed.data.description })
+      .startRun({
+        runId,
+        description: parsed.data.description,
+        ...(parsed.data.avatarId === undefined ? {} : { avatarId: parsed.data.avatarId }),
+      })
       .then((view) => runViews.set(runId, view))
       .catch(() => {});
 

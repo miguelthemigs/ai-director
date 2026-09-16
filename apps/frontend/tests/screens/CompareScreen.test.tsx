@@ -108,6 +108,30 @@ describe("CompareScreen", () => {
     await waitFor(() => expect(screen.getByTestId("pair-estimate")).toHaveTextContent("$1.85"));
   });
 
+  it("refuses to price or spend on a seconds value the server would reject", async () => {
+    const user = userEvent.setup();
+    render(<CompareScreen live />);
+    await user.click(await screen.findByRole("radio", { name: /avatar-1/i }));
+    await user.selectOptions(await screen.findByLabelText(/run/i), "run-1");
+    const button = screen.getByRole("button", { name: /render both/i });
+    await waitFor(() => expect(button).toBeEnabled());
+
+    // Cleared: Number("") is 0, which used to price the pair at $0.00 beside a live button.
+    await user.clear(screen.getByLabelText(/seconds/i));
+    await waitFor(() => expect(button).toBeDisabled());
+    expect(screen.getByTestId("pair-estimate")).not.toHaveTextContent("$0.00");
+    expect(screen.getByTestId("pair-estimate")).toHaveTextContent(/whole number from 4 to 30/i);
+
+    // Above the engine ceiling: priced as a pair the server would refuse.
+    await user.type(screen.getByLabelText(/seconds/i), "40");
+    await waitFor(() => expect(button).toBeDisabled());
+
+    await user.clear(screen.getByLabelText(/seconds/i));
+    await user.type(screen.getByLabelText(/seconds/i), "6");
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(screen.getByTestId("pair-estimate")).toHaveTextContent("$1.23");
+  });
+
   it("keeps submit disabled until an avatar and a run are both chosen", async () => {
     const user = userEvent.setup();
     render(<CompareScreen live />);

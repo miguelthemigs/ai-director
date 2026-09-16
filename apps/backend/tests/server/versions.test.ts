@@ -30,6 +30,7 @@ function stubRunStore(): RunStore {
       throw new Error(`run ${id} not found`);
     },
     listRuns: async () => [],
+    readPasses: async () => [],
   };
 }
 

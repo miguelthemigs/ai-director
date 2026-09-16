@@ -275,6 +275,25 @@ export async function driveComparison(
  * ONE status read per unfinished side, for a row this process lost — a restart under `tsx
  * watch`, a laptop closing, a poll deadline that expired while the clip was still queued.
  * Never submits, whatever state the row is in.
+ *
+ * ── A terminal side is never re-read ────────────────────────────────────────────────
+ * Two review findings landed here and both were about money.
+ *
+ * The first: this used to skip a side only when it was terminal AND had a clip, which
+ * meant the `CLIP_DOWNLOAD_FAILED` shape — succeeded, billed, no clip — was re-checked.
+ * `applyCheck` overwrites `status`, `failureCode` and `actualMicroUsd` from the fresh
+ * read, and by then OpenRouter may well answer `expired`, which classifies as `failed`
+ * and carries no `usage.cost`. So pressing refresh rewrote a render that HAPPENED and WAS
+ * BILLED into one that failed and cost nothing: the exact misreport `storeClip`'s own
+ * comment forbids. A terminal render is a settled fact about the past, and a later status
+ * read is not better evidence about it. Only the missing clip is retried.
+ *
+ * The second: a side whose claim is held with no task id — a process that died between
+ * claiming and stamping — used to be skipped entirely, because the filter required a task
+ * id. Nothing else could reach it either (`driveComparison` only ever runs on a freshly
+ * created row), so the row sat at `queued` forever and the screen polled it for the life
+ * of the tab. That is the UNKNOWN outcome the claim discipline exists to name, so refresh
+ * now names it, exactly as `submitSide` would have.
  */
 export async function refreshComparison(
   deps: RunComparisonDeps,
@@ -284,9 +303,37 @@ export async function refreshComparison(
   if (!row) throw new Error(`comparison ${comparisonId} not found`);
 
   await Promise.allSettled(
-    SIDES.filter((side) => row[side].taskId !== null).map(async (side) => {
-      if (isRenderTerminal(row[side].status) && row[side].clipUrl !== null) return;
-      await applyCheck(deps, comparisonId, side, row[side].polls + 1);
+    SIDES.map(async (side) => {
+      const render = row[side];
+
+      if (render.taskId === null) {
+        // Never submitted, or submitted and lost. A held claim with no id is the
+        // unrecoverable case: OpenRouter has no endpoint that lists tasks by anything we
+        // hold, so it is settled as unknown rather than left to poll forever. An unclaimed
+        // side is simply not this function's job — refresh never submits.
+        if (isRenderTerminal(render.status)) return;
+        // PROBED, never claimed. Calling `claimSubmit` here would take the claim and
+        // permanently block a submit that has every right to happen later.
+        if (await deps.store.isSubmitClaimed(comparisonId, side)) {
+          await deps.store.patchRender(comparisonId, side, {
+            status: "failed",
+            failureCode: "OPENROUTER_UNKNOWN_OUTCOME",
+            failure:
+              "a previous attempt claimed this submit and never recorded a task id, so its outcome is unknown and it must not be resubmitted",
+            finishedAt: new Date().toISOString(),
+          });
+        }
+        return;
+      }
+
+      if (isRenderTerminal(render.status)) {
+        // Settled. Only the clip is worth another attempt, and `storeClip` itself only
+        // acts on a `succeeded` side.
+        if (render.clipUrl === null) await storeClip(deps, comparisonId, side);
+        return;
+      }
+
+      await applyCheck(deps, comparisonId, side, render.polls + 1);
       await storeClip(deps, comparisonId, side);
     }),
   );

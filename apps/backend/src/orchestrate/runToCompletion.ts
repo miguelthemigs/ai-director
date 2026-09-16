@@ -1,6 +1,10 @@
 import { eventId, type CheckId, type ReplacementView } from "@ai-director/contract";
 import type { EvaluatedCheck, GroupEventSink } from "../agents/evaluator/run.js";
 import type { RepairedReplacement } from "../agents/repairer/run.js";
+import {
+  DEFAULT_REPAIRER_PROMPT_VERSION,
+  type RepairerPromptVersion,
+} from "../agents/repairer/version.js";
 import type { Span } from "../enforce/verifySpans.js";
 import type { EventSink } from "./events.js";
 import { toCheckResultView } from "../present/toRunView.js";
@@ -174,7 +178,20 @@ export async function runToCompletion(
     store: RunStore;
     emit?: EventSink;
   },
-  args: { rubric: Rubric; description: string; runId: string; maxPasses?: number },
+  args: {
+    rubric: Rubric;
+    description: string;
+    runId: string;
+    maxPasses?: number;
+    /**
+     * Which Repairer prompt `deps.repair` is wired to. Passed in rather than
+     * inferred, because the sheet that selects the version is bound at the wiring
+     * site (`repairSpans`'s `sheet` argument) and never reaches this function —
+     * `RepairFn` deliberately stays a text-in/text-out seam so `runPass` did not
+     * have to learn what an image is.
+     */
+    repairerPromptVersion?: RepairerPromptVersion;
+  },
 ): Promise<{ status: RunStatus; passes: PassResult[]; finalDescription: string }> {
   const { rubric, runId } = args;
   const { emit } = deps;
@@ -188,6 +205,7 @@ export async function runToCompletion(
     status: "running",
     startedAt: new Date().toISOString(),
     passes: 0,
+    repairerPromptVersion: args.repairerPromptVersion ?? DEFAULT_REPAIRER_PROMPT_VERSION,
   });
 
   if (emit) {
@@ -240,6 +258,10 @@ export async function runToCompletion(
         await deps.store.writePass(runId, pass, "repair", {
           from: result.description,
           to: result.repairedDescription ?? result.description,
+          // The applied replacements, not only the rejected ones. Without these a run
+          // rebuilt from its files after a restart renders as though the Repairer had
+          // changed nothing, even on the passes where it changed something.
+          replacements: result.replacements,
           rejected: result.rejected,
         });
       }

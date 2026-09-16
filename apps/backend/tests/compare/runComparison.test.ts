@@ -312,6 +312,71 @@ describe("refreshComparison", () => {
     });
   });
 
+  it("never rewrites a billed, succeeded render into a failure", async () => {
+    // The CLIP_DOWNLOAD_FAILED shape: the render HAPPENED and WAS BILLED, and only the
+    // bytes are missing. A later status read is not better evidence about a settled past;
+    // OpenRouter may answer `expired` by then, which classifies as failed and carries no
+    // cost, so re-checking would rewrite a $0.41 render as a free failure.
+    await withStore(async (store) => {
+      const transport = fakeTransport({
+        check: vi.fn(async (taskId: string) =>
+          terminal(taskId, { status: "failed", failureCode: "EXPIRED", actualMicroUsd: null }),
+        ),
+      });
+      const row = await startComparison({ store, transport }, START);
+      await store.stampTaskId(row.comparisonId, "before", "task-1");
+      await store.patchRender(row.comparisonId, "before", {
+        status: "succeeded",
+        actualMicroUsd: 410_000,
+        failureCode: "CLIP_DOWNLOAD_FAILED",
+        failure: "the render succeeded and was billed, but its clip could not be downloaded",
+      });
+
+      const done = await refreshComparison({ store, transport }, row.comparisonId);
+
+      expect(done.before.status).toBe("succeeded");
+      expect(done.before.actualMicroUsd).toBe(410_000);
+      expect(transport.check).not.toHaveBeenCalled();
+      // The clip alone is retried, which is the one thing that could still change.
+      expect(transport.fetchClip).toHaveBeenCalled();
+      expect(done.before.clipUrl).toBe(`/compare/${row.comparisonId}/before/clip`);
+    });
+  });
+
+  it("settles a side whose claim is held with no task id, instead of polling it forever", async () => {
+    // A process that died between claiming and stamping. `driveComparison` only ever runs
+    // on a freshly created row, so nothing else can reach this side: without this it stays
+    // `queued` for good and the screen polls it for the life of the tab.
+    await withStore(async (store) => {
+      const transport = fakeTransport();
+      const row = await startComparison({ store, transport }, START);
+      await store.claimSubmit(row.comparisonId, "before");
+
+      const done = await refreshComparison({ store, transport }, row.comparisonId);
+
+      expect(done.before.status).toBe("failed");
+      expect(done.before.failureCode).toBe("OPENROUTER_UNKNOWN_OUTCOME");
+      expect(transport.submit).not.toHaveBeenCalled();
+    });
+  });
+
+  it("does not take the claim for a side nobody ever submitted", async () => {
+    // Probing must not become claiming: a claim taken here would permanently block a
+    // submit that has every right to happen later.
+    await withStore(async (store) => {
+      const transport = fakeTransport();
+      const row = await startComparison({ store, transport }, START);
+
+      await refreshComparison({ store, transport }, row.comparisonId);
+
+      expect(await store.isSubmitClaimed(row.comparisonId, "before")).toBe(false);
+      expect((await store.get(row.comparisonId))?.before.status).toBe("queued");
+      // And a real drive afterwards still works.
+      const done = await driveComparison({ store, transport, sleep: NO_SLEEP }, row.comparisonId);
+      expect(done.before.status).toBe("succeeded");
+    });
+  });
+
   it("never submits, even for a side that was never claimed", async () => {
     await withStore(async (store) => {
       const transport = fakeTransport();

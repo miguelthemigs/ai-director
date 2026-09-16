@@ -179,6 +179,27 @@ describe("fetchClip", () => {
     const clip = await createOpenRouterVideoTransport().fetchClip("task-1");
     expect(clip.mediaType).toBe("video/mp4");
   });
+
+  it("normalises the header rather than replaying it, so the browser always gets a type it plays", async () => {
+    // The stored type picks the file extension AND becomes the response Content-Type on
+    // the clip route. Object storage behind a signed URL routinely answers a parameterised
+    // or generic type, which used to be saved and replayed verbatim: the bytes were fine
+    // and the <video> element refused them, inside a panel already marked a success.
+    const cases: Array<[string, string]> = [
+      ["video/mp4; charset=binary", "video/mp4"],
+      ["VIDEO/MP4", "video/mp4"],
+      ["application/octet-stream", "video/mp4"],
+      ["video/webm", "video/webm"],
+      ["video/webm; codecs=vp9", "video/webm"],
+    ];
+    for (const [header, expected] of cases) {
+      fetchMock.mockResolvedValue(
+        new Response(new Uint8Array([0]), { status: 200, headers: { "Content-Type": header } }),
+      );
+      const clip = await createOpenRouterVideoTransport().fetchClip("task-1");
+      expect(clip.mediaType, header).toBe(expected);
+    }
+  });
 });
 
 describe("the key", () => {

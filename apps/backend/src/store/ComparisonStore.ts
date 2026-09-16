@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
@@ -77,6 +77,15 @@ export interface ComparisonStore {
   create(args: CreateComparisonArgs): Promise<ComparisonView>;
   /** Atomic. `"claimed"` exactly once per (comparison, side), for all time. */
   claimSubmit(comparisonId: string, side: ComparisonSide): Promise<ClaimResult>;
+  /**
+   * Whether a claim is already held, WITHOUT taking one.
+   *
+   * `claimSubmit` cannot answer this question: asking it takes the claim, which would
+   * permanently block a submit that had every right to happen. `refreshComparison` needs
+   * to tell "nobody ever tried to submit this side" from "somebody tried and we never
+   * learned the outcome", and only the second of those is settled as failed.
+   */
+  isSubmitClaimed(comparisonId: string, side: ComparisonSide): Promise<boolean>;
   /** Called the instant a submit returns, before anything waits on the task. */
   stampTaskId(comparisonId: string, side: ComparisonSide, taskId: string): Promise<void>;
   patchRender(
@@ -228,6 +237,15 @@ export class FileComparisonStore implements ComparisonStore {
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "EEXIST") return "already_claimed";
       throw err;
+    }
+  }
+
+  async isSubmitClaimed(comparisonId: string, side: ComparisonSide): Promise<boolean> {
+    try {
+      await access(path.join(this.dir(comparisonId), `${side}.claim`));
+      return true;
+    } catch {
+      return false;
     }
   }
 

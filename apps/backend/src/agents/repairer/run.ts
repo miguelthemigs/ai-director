@@ -1,8 +1,10 @@
-import type { ParseTransport } from "../../api/client.js";
+import type { ParseTransport, TransportImage } from "../../api/client.js";
 import type { Span } from "../../enforce/verifySpans.js";
 import type { RubricCheck } from "../../rubric/load.js";
 import { buildRepairerSystemPrompt } from "./prompt.js";
+import { buildRepairerSystemPromptV2, REPAIRER_V2_SHEET_USER_NOTE } from "./prompt-v2.js";
 import { RepairerOutputSchema } from "./schema.js";
+import type { RepairerPromptVersion } from "./version.js";
 
 /**
  * A replacement as the Repairer actually produced it, rationale included.
@@ -48,22 +50,58 @@ export type RejectedReplacement = {
  */
 export async function repairSpans(
   deps: { transport: ParseTransport },
-  args: { spans: Span[]; checks: RubricCheck[]; reasons: Record<string, string> },
-): Promise<{ replacements: RepairedReplacement[]; rejected: RejectedReplacement[] }> {
-  const { spans, checks, reasons } = args;
-  if (spans.length === 0) return { replacements: [], rejected: [] };
+  args: {
+    spans: Span[];
+    checks: RubricCheck[];
+    reasons: Record<string, string>;
+    /**
+     * The avatar's character reference sheet. Supplying it selects prompt v2 and
+     * sends the image with the fragments; omitting it runs v1 exactly as before.
+     *
+     * The version is chosen by the presence of the sheet rather than by a separate
+     * flag on purpose: v2's entire premise is that the Repairer can see the person
+     * (`prompt-v2.ts`), so a "v2" that was asked for and then run blind would be a
+     * run labelled with a discipline it did not follow. There is no combination of
+     * arguments that produces that run.
+     */
+    sheet?: TransportImage;
+    /**
+     * The avatar's own brief, when it has one (`avatar/statedFacts.ts`). Only read
+     * when `sheet` is present, since it is part of v2's grounding and has no meaning
+     * to the blind v1 prompt.
+     *
+     * This is what lets a repaired description carry a real height. The picture
+     * cannot show one and the Repairer must never estimate one, but the brief the
+     * sheet was rendered from states it, and a video model needs it: height is how
+     * far off the ground the head sits in a standing frame.
+     */
+    statedFacts?: string | null;
+  },
+): Promise<{
+  replacements: RepairedReplacement[];
+  rejected: RejectedReplacement[];
+  /** Which prompt actually ran, for the caller to record on the run manifest. */
+  promptVersion: RepairerPromptVersion;
+}> {
+  const { spans, checks, reasons, sheet, statedFacts } = args;
+  const promptVersion: RepairerPromptVersion = sheet ? "v2" : "v1";
+  if (spans.length === 0) return { replacements: [], rejected: [], promptVersion };
 
-  const user = spans
+  const fragments = spans
     .map(
       (span) =>
         `spanId: ${span.spanId}\ncheck: ${span.checkId}\nwhy it failed: ${reasons[span.spanId] ?? "below pass band"}\nfragment: ${span.quote}`,
     )
     .join("\n\n");
+  const user = sheet ? `${REPAIRER_V2_SHEET_USER_NOTE}\n\n${fragments}` : fragments;
 
   const { parsed_output } = await deps.transport({
-    system: buildRepairerSystemPrompt(checks),
+    system: sheet
+      ? buildRepairerSystemPromptV2(checks, statedFacts)
+      : buildRepairerSystemPrompt(checks),
     user,
     schema: RepairerOutputSchema,
+    ...(sheet ? { image: sheet } : {}),
   });
   if (parsed_output === null || parsed_output === undefined) {
     throw new Error("repairer parse failed");
@@ -90,5 +128,5 @@ export async function repairSpans(
     });
   }
 
-  return { replacements, rejected };
+  return { replacements, rejected, promptVersion };
 }
