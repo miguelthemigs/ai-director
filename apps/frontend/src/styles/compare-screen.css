@@ -456,3 +456,53 @@
   .compare-reference { flex-direction: column; }
   .compare-reference__sheet { width: 100%; max-width: none; }
 }
+
+/* ── The avatar strip ─────────────────────────────────────────────────────── */
+
+.compare-avatars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.compare-avatar {
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-micro);
+  color: var(--ink-2);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+  padding: var(--sp-2) var(--sp-3);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.compare-avatar:hover {
+  border-color: var(--ln-strong);
+  color: var(--ink);
+}
+
+.compare-avatar:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.compare-avatar[data-selected] {
+  color: var(--brand);
+  border-color: var(--brand-edge);
+  background: var(--brand-tint);
+}
+
+.compare-reference__body .specimen {
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-specimen);
+  line-height: var(--lh-spec);
+  color: var(--ink);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln-faint);
+  border-radius: var(--r-2);
+  padding: var(--sp-4) var(--sp-5);
+  margin: 0;
+}

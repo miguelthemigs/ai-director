@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FIXTURE_RUNS, type RunView } from "@ai-director/contract";
 import type { RunClient } from "../../src/data/RunClient.js";
 import { RunScreen } from "../../src/screens/RunScreen.js";
 import { FixtureRunClient } from "../../src/data/FixtureRunClient.js";
@@ -9,8 +10,10 @@ import { useRunStream } from "../../src/hooks/useRunStream.js";
 /** Stands in for `App`, which now owns `useRunStream` (Task 14 lifted it out of `RunScreen` so the
  *  Architecture screen can share one subscription). Mirrors exactly what `App` wires down. */
 function Harness({ client }: { client: RunClient }): React.JSX.Element {
-  const [runId, setRunId] = useState<string | null>(null);
-  const { run, status, events, error } = useRunStream(client, runId);
+  const [open, setOpen] = useState<{ runId: string; live: boolean } | null>(null);
+  const { run, status, events, error } = useRunStream(client, open?.runId ?? null, {
+    live: open?.live ?? true,
+  });
   return (
     <RunScreen
       client={client}
@@ -18,7 +21,9 @@ function Harness({ client }: { client: RunClient }): React.JSX.Element {
       status={status}
       events={events}
       error={error}
-      onRunStarted={setRunId}
+      onRunStarted={(runId) => setOpen({ runId, live: true })}
+      onOpenRun={(runId) => setOpen({ runId, live: false })}
+      onCloseRun={() => setOpen(null)}
     />
   );
 }
@@ -170,6 +175,93 @@ describe("RunScreen", () => {
     expect(
       screen.getByText(/this quote was not found in the description/i),
     ).toBeInTheDocument();
+  });
+
+  /* ── Why the pass rail must drive the whole column ────────────────────────────────────
+     The rail selected which pass's DIFF was shown, and nothing else. The description and
+     the nine checks were read off `passes.at(-1)` unconditionally, so clicking Pass 1 on a
+     finished run showed pass 3's repaired text scored at pass 3's bands. The run's history
+     was on screen as a row of buttons that changed nothing -- the only description you
+     could ever read was the final one, which is precisely the thing a three-pass repair
+     loop exists to show you the opposite of. */
+  it("shows the selected pass's own description, not the final one", async () => {
+    const client = new FixtureRunClient({ speedMs: 1, scenario: "improvedStillFailing" });
+    render(<Harness client={client} />);
+    await startAndFinishRun();
+
+    // The run ends on repaired text that no longer names a brand.
+    expect(screen.queryByText(/Nike hoodie/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Pass 1/ }));
+
+    // Pass 1's own description is the weak one the run started from.
+    expect(screen.getByText(/Nike hoodie/)).toBeInTheDocument();
+  });
+
+  it("shows the selected pass's own check scores, not the final pass's", async () => {
+    const client = new FixtureRunClient({ speedMs: 1, scenario: "improvedStillFailing" });
+    render(<Harness client={client} />);
+    await startAndFinishRun();
+
+    expect(screen.getByText("5/9 at \u226580")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Pass 1/ }));
+
+    // `improvedStillFailing` fails 9 checks in pass 1 and 4 in pass 3, so the panel's own
+    // "n/9 at >=80" summary is 0/9 for pass 1 and 5/9 for the last. One number, and it
+    // cannot be satisfied by the final pass's scores.
+    expect(screen.getByText("0/9 at \u226580")).toBeInTheDocument();
+  });
+
+  /* Runs written before the applied replacements were persisted have a repaired
+     description but no fragment-by-fragment record of how it got that way. Reporting that
+     as "0 fragments changed" states the opposite of what happened -- the text plainly
+     changed -- so the pass has to say the record is missing, not that nothing happened.
+     Rendered directly rather than through the stream: this is about one pass's shape. */
+  it("says the fragment record is missing rather than claiming nothing changed", () => {
+    const pass = FIXTURE_RUNS.passed.passes[0]!;
+    const view: RunView = {
+      ...FIXTURE_RUNS.passed,
+      passes: [{ ...pass, replacements: [], repairedDescription: "a repaired description" }],
+    };
+
+    render(
+      <RunScreen
+        client={new FixtureRunClient({ speedMs: 1 })}
+        run={view}
+        status="passed"
+        events={[]}
+        error={null}
+        onRunStarted={vi.fn()}
+        onOpenRun={vi.fn()}
+        onCloseRun={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText(/0 fragments changed/)).not.toBeInTheDocument();
+    // The pass rail must not claim it either.
+    expect(screen.queryByText("0 changed")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /fragments not recorded/i })).toBeInTheDocument();
+    expect(screen.getByText(/only the text before and after this pass survives/i)).toBeInTheDocument();
+  });
+
+  /* The verdict is about the RUN, not about whichever pass you happen to be reading. Once
+     the pass rail started driving the description and the checks, the banner's numeral came
+     along with it -- so clicking Pass 1 on a still-failing run redrew the banner with pass
+     1's nine failures under the run's own terminal word. */
+  it("keeps the verdict on the run when an earlier pass is selected", async () => {
+    const client = new FixtureRunClient({ speedMs: 1, scenario: "improvedStillFailing" });
+    render(<Harness client={client} />);
+    await startAndFinishRun();
+
+    // The run ends with 4 checks still below band 4.
+    expect(screen.getByText("4")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Pass 1/ }));
+
+    // Pass 1 had nine failures, but the banner still reports the run's own outcome.
+    expect(screen.getByText("STILL FAILING")).toBeInTheDocument();
+    expect(screen.getByText("4")).toBeInTheDocument();
   });
 
   it("makes the description read-only once submitted", async () => {

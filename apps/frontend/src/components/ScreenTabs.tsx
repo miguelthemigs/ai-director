@@ -4,10 +4,11 @@ const TABS: ReadonlyArray<{ id: Screen; label: string; path: string }> = [
   { id: "run", label: "Run", path: "/" },
   { id: "architecture", label: "Architecture", path: "/architecture" },
   { id: "versions", label: "Versions", path: "/versions" },
+  { id: "compare", label: "Compare", path: "/compare" },
 ];
 
 /**
- * Three tabs. Carries the failing-check count as a persistent badge on RUN so a failed run stays
+ * Four tabs. Carries the failing-check count as a persistent badge on RUN so a failed run stays
  * visible from any screen (design doc §5 "Shared").
  */
 export function ScreenTabs({

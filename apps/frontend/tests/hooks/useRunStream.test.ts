@@ -134,4 +134,45 @@ describe("useRunStream", () => {
     expect(result.current.error).toBeTruthy();
     expect(typeof result.current.error).toBe("string");
   });
+
+  /* ── Why the hook has a second source ─────────────────────────────────────────────────
+     A finished run has no stream left to join: the server's event bus holds a run's events
+     only for the life of its process, so reopening a run from history -- or simply
+     reloading the page after the laptop closed -- has nothing to subscribe to. The run is
+     on disk, and `getRun` is how it comes back. Every screen reads the same `RunView`
+     either way, which is the point: a reopened run must not render differently. */
+  it("loads a finished run from a snapshot instead of subscribing, when it is not live", async () => {
+    const client = new FixtureRunClient({ speedMs: 1, scenario: "passed" });
+    const subscribe = vi.spyOn(client, "subscribe");
+
+    let runId = "";
+    await act(async () => {
+      const started = await client.startRun("a description");
+      runId = started.runId;
+      // Let the fixture run to completion so there is a finished run to reopen.
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    subscribe.mockClear();
+
+    const { result } = renderHook(() => useRunStream(client, runId, { live: false }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(subscribe).not.toHaveBeenCalled();
+    expect(result.current.run?.runId).toBe(runId);
+    expect(result.current.status).toBe("passed");
+  });
+
+  it("reports why a run could not be reopened rather than sitting on an empty screen", async () => {
+    const client = new FixtureRunClient({ speedMs: 1, scenario: "passed" });
+
+    const { result } = renderHook(() => useRunStream(client, "not-a-run", { live: false }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.error).toMatch(/not-a-run/);
+    expect(result.current.run).toBeNull();
+  });
 });

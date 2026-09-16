@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useMotionPrefs } from "../motion/useMotionPrefs.js";
 import {
   avatarImageUrl,
   describeSheet,
@@ -67,6 +68,24 @@ export function SheetPipeline({
   const [error, setError] = useState<string | null>(null);
   const [gallery, setGallery] = useState<AvatarRecord[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
+  const describedStep = useRef<HTMLLIElement>(null);
+  const { reduce } = useMotionPrefs();
+
+  /* The Run screen's field is a scroll container and a rendered sheet is tall, so the step
+     below lands under the fold, pushed there by the image it was written from. Without this
+     the only visible change after a three-second paid vision call was the button's label
+     going back to what it said before, which reads as a call that never happened -- and is
+     how the same avatar ended up being described, and charged for, twice.
+
+     A real state change, which is the only thing motion is allowed to follow here: the
+     description arriving. `block: "nearest"` leaves the view alone when it is already
+     readable, so nothing moves unless something had to. */
+  useEffect(() => {
+    if (!described) return;
+    const el = describedStep.current;
+    if (!el || typeof el.scrollIntoView !== "function") return;
+    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "nearest" });
+  }, [described, reduce]);
 
   /* Every avatar this server has ever rendered or been given. Loaded on mount and refreshed
      after each write, so a sheet that was paid for is still reachable after a reload, a
@@ -277,18 +296,31 @@ export function SheetPipeline({
             paragraph that reaches the video model, and it is the only thing the nine checks
             ever grade.
           </p>
+          {/* Reopening a described avatar brings its paragraph back for free. Saying so
+              here is what keeps the next press deliberate: the button underneath spends a
+              second vision call to overwrite a description the record already holds. */}
+          {described ? (
+            <p className="sheet-pipeline__already" role="status">
+              This avatar already has a description. Describing it again is another paid
+              call, and it replaces the one below.
+            </p>
+          ) : null}
           <button
             type="button"
             className="sheet-pipeline__button"
             disabled={!canDescribe}
             onClick={() => void onDescribe()}
           >
-            {busy === "describe" ? "Reading the sheet…" : "Describe this person"}
+            {busy === "describe"
+              ? "Reading the sheet…"
+              : described
+                ? "Describe it again"
+                : "Describe this person"}
           </button>
         </li>
 
         {described ? (
-          <li className="sheet-pipeline__step">
+          <li className="sheet-pipeline__step" ref={describedStep}>
             <div className="sheet-pipeline__step-head">
               <span className="sheet-pipeline__step-label">4 · What gets graded</span>
               <span className="sheet-pipeline__cost">

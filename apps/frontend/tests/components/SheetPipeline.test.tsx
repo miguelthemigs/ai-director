@@ -252,4 +252,70 @@ describe("SheetPipeline", () => {
     fireEvent.click(thumbs[0]!.closest("button")!);
     await waitFor(() => expect(onDescription).toHaveBeenCalledWith("A woman in her thirties."));
   });
+
+  /* ── Why these two exist ──────────────────────────────────────────────────────────────
+     The Run screen's field is a scroll container, and the rendered sheet is tall. A
+     description that arrives lands roughly 200px below the fold, under an image that just
+     pushed it there, so the only visible change after a 3-second paid vision call was the
+     button's label going back to what it said before. It looked exactly like a call that
+     had not happened, which is how the same avatar got described twice. */
+  it("brings a new description into view instead of leaving it below the fold", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    stubFetch({
+      sheet: jsonResponse({
+        id: "a1",
+        imageBase64: PIXEL,
+        mediaType: "image/png",
+        model: "gemini-3-pro-image",
+        authoredPrompt: "authored",
+        sheetPrompt: "sheet",
+      }),
+      describe: jsonResponse({
+        description: "A woman in her late twenties, with a blonde bob.",
+        raw: "A woman in her late twenties, with a blonde bob.",
+        trimmed: false,
+        model: "claude-sonnet-5",
+      }),
+    });
+
+    renderPipeline();
+    fireEvent.click(screen.getByRole("button", { name: "Generate sheet" }));
+    await screen.findByAltText("The rendered character reference sheet");
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Describe this person" }));
+    await screen.findByText("A woman in her late twenties, with a blonde bob.");
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+  });
+
+  it("says a second describe is a second charge once one description is on screen", async () => {
+    stubFetch({
+      list: jsonResponse({
+        avatars: [
+          {
+            id: "a1",
+            createdAt: "2026-09-12T10:00:00.000Z",
+            source: "generated",
+            mediaType: "image/png",
+            description: "A woman in her thirties.",
+            describeModel: "claude-sonnet-5",
+          },
+        ],
+      }),
+    });
+    renderPipeline();
+
+    const thumb = await screen.findByRole("img", { name: /Avatar rendered/ });
+    expect(screen.getByRole("button", { name: "Describe this person" })).toBeInTheDocument();
+
+    fireEvent.click(thumb.closest("button")!);
+
+    // Reopened with a description already attached, so the button must not read as the
+    // first, free-looking step: pressing it pays for a vision call the record already has.
+    await screen.findByRole("button", { name: "Describe it again" });
+    expect(
+      screen.getByText(/already has a description|describing it again/i),
+    ).toBeInTheDocument();
+  });
 });

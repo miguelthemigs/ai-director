@@ -789,6 +789,14 @@
   color: var(--sig-alarm-edge);
 }
 
+/* Sits directly above the describe button once a description exists, because that is where
+   the money gets spent a second time. */
+.sheet-pipeline__already {
+  margin: 0;
+  font-size: var(--fs-ui);
+  color: var(--sig-alarm-edge);
+}
+
 /* ── Avatar gallery ───────────────────────────────────────── */
 
 .avatar-gallery {
@@ -1381,4 +1389,95 @@ h3.section-label {
   font-size: var(--fs-ui);
   color: var(--ink-2);
   margin: 0;
+}
+
+/* ── Run history ──────────────────────────────────────────── */
+
+/* Sits under the composer, next to the avatar gallery, for the same reason that gallery
+   exists: a paid artefact that is on disk but has nowhere visible to be is indistinguishable
+   from one that was never made. Every run in `data/runs/` is reachable from here. */
+.run-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-3);
+}
+.run-history__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.run-history__count,
+.run-history__meta {
+  font-size: var(--fs-ui);
+  color: var(--ink-3);
+}
+.run-history__empty {
+  margin: 0;
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+}
+.run-history__error {
+  margin: 0;
+  font-size: var(--fs-ui);
+  color: var(--sig-alarm-edge);
+}
+.run-history__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.run-history__item {
+  appearance: none;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--sf-ground);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  cursor: pointer;
+  text-align: start;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.run-history__item:hover { border-color: var(--ln-strong); }
+.run-history__item[data-open="true"] { border-color: var(--ln-strong); }
+.run-history__verdict {
+  font-size: var(--fs-label);
+  letter-spacing: var(--tr-caps);
+  color: var(--sig-alarm-edge);
+}
+/* Only a run that actually passed loses the alarm ink. `improved_still_failing` and
+   `no_improvement` are terminal but are NOT success, and must never read as one. */
+.run-history__item[data-passed="true"] .run-history__verdict { color: var(--ink); }
+
+/* The way back out of an open run, to the composer and the list. */
+.run__back {
+  appearance: none;
+  align-self: flex-start;
+  padding: var(--sp-1) var(--sp-2);
+  background: none;
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  color: var(--ink-2);
+  font-size: var(--fs-ui);
+  cursor: pointer;
+}
+.run__back:hover { border-color: var(--ln-strong); color: var(--ink); }
+
+/* Said where the fragment diff would be, for a run whose applied replacements were never
+   written to disk. "0 fragments changed" would assert the opposite of what happened. */
+.run__diff-missing {
+  margin: 0;
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
 }
