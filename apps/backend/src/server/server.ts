@@ -7,14 +7,17 @@ import { createAnthropicTransport, type ParseTransport } from "../api/client.js"
 import { createAnthropicTextTransport } from "../avatar/authorPrompt.js";
 import { createGeminiImageTransport } from "../avatar/generateSheet.js";
 import { createAnthropicVisionTransport } from "../describe/describeImage.js";
+import { driveComparison } from "../compare/runComparison.js";
 import { checksForGroup, loadRubric } from "../rubric/load.js";
 import { toPassView, toRunView } from "../present/toRunView.js";
 import { RunEventBus } from "../orchestrate/events.js";
 import type { RetryVerbatimFn } from "../orchestrate/runPass.js";
 import { runToCompletion } from "../orchestrate/runToCompletion.js";
 import { FileAvatarStore } from "../store/AvatarStore.js";
+import { FileComparisonStore } from "../store/ComparisonStore.js";
 import { FileRunStore } from "../store/FileRunStore.js";
 import { FileVersionStore } from "../store/FileVersionStore.js";
+import { createOpenRouterVideoTransport } from "../video/openrouterClient.js";
 import { buildApp } from "./app.js";
 import type { StartRun } from "./routes/runs.js";
 
@@ -30,6 +33,7 @@ try {
 const RUNS_DIR = "data/runs";
 const AVATARS_DIR = "data/avatars";
 const VERSIONS_DIR = "data/versions";
+const COMPARISONS_DIR = "data/comparisons";
 
 /**
  * Duplicated from `cli/score.ts`'s private `buildRetryVerbatim` rather than
@@ -147,7 +151,43 @@ async function main(): Promise<void> {
     ...(hasGoogle ? { image: createGeminiImageTransport() } : {}),
   };
 
-  const app = buildApp({ store, rubric, startRun, bus, versionStore, avatar, logger: true });
+  // The video comparison. Same shape as `avatar` above and for the same reason: the store
+  // is always wired, because a pair rendered last week is still worth listing and playing
+  // today, while the transport exists only when a key does.
+  const comparisonStore = new FileComparisonStore(COMPARISONS_DIR);
+  const videoTransport = process.env.OPENROUTER_API_KEY
+    ? createOpenRouterVideoTransport()
+    : undefined;
+
+  // Assigned immediately below. The `drive` closure reads it lazily rather than closing
+  // over a value that does not exist yet: `buildApp` needs `compare`, and `compare` needs
+  // somewhere to log a failed drive. The closure only ever runs from inside a request,
+  // long after the assignment.
+  let app: ReturnType<typeof buildApp>;
+
+  const compare = {
+    store: comparisonStore,
+    runStore: store,
+    avatarStore: avatar.store,
+    ...(videoTransport
+      ? {
+          transport: videoTransport,
+          drive: (comparisonId: string) => {
+            // Unawaited by design, like `startRun`. `driveComparison` records every
+            // outcome on the row, so a rejection here has already been written down;
+            // logging it is all that is left to do with it.
+            void driveComparison(
+              { store: comparisonStore, transport: videoTransport },
+              comparisonId,
+            ).catch((err: unknown) => {
+              app.log.error({ err, comparisonId }, "comparison drive failed");
+            });
+          },
+        }
+      : {}),
+  };
+
+  app = buildApp({ store, rubric, startRun, bus, versionStore, avatar, compare, logger: true });
 
   const port = Number(process.env.PORT ?? 8787);
   await app.listen({ port });

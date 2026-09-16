@@ -19,6 +19,7 @@ export default defineConfig({
       // fails, and the UI reports a bare 404 against a route that exists and is running.
       // That is exactly what `/avatar` did when it shipped.
       "/avatar": BACKEND_ORIGIN,
+      "/compare": BACKEND_ORIGIN,
     },
   },
 });

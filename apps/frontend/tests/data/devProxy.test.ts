@@ -51,9 +51,9 @@ describe("the dev server proxy table", () => {
     }
   });
 
-  it("proxies the three prefixes the backend actually registers", () => {
+  it("proxies the four prefixes the backend actually registers", () => {
     // Named explicitly as well as derived, so deleting a call site does not quietly shrink
-    // what this test checks.
-    expect([...proxied].sort()).toEqual(["/avatar", "/runs", "/versions"]);
+    // what this test checks. `/compare` joined on 2026-09-16 with the Compare screen.
+    expect([...proxied].sort()).toEqual(["/avatar", "/compare", "/runs", "/versions"]);
   });
 });

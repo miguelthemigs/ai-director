@@ -196,10 +196,13 @@ describe("driveComparison", () => {
 
   it("finishes the losing side even when the other side's submit throws", async () => {
     await withStore(async (store) => {
-      let calls = 0;
+      // Keyed to the SIDE, not to call order: both sides submit concurrently by design,
+      // so "the first call" is whichever one won the race that run.
       const transport = fakeTransport({
-        submit: vi.fn(async () => {
-          if (++calls === 1) throw new OpenRouterHttpError("size not supported", 400);
+        submit: vi.fn(async (req: { prompt: string }) => {
+          if (req.prompt.includes("The raw description.")) {
+            throw new OpenRouterHttpError("size not supported", 400);
+          }
           return { taskId: "task-2" };
         }),
       });

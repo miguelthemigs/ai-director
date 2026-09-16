@@ -5,6 +5,7 @@ import type { Rubric } from "../rubric/load.js";
 import type { RunStore } from "../store/RunStore.js";
 import type { VersionStore } from "../store/VersionStore.js";
 import { registerAvatarRoutes, type AvatarRouteDeps } from "./routes/avatar.js";
+import { registerCompareRoutes, type CompareRouteDeps } from "./routes/compare.js";
 import { registerRunRoutes, type StartRun } from "./routes/runs.js";
 import { registerVersionRoutes } from "./routes/versions.js";
 
@@ -24,6 +25,10 @@ export type AppDeps = {
    *  well, it just cannot render a sheet, and `/avatar/*` says so with a 503 instead of
    *  failing somewhere deeper with a provider error. */
   avatar?: AvatarRouteDeps;
+  /** The video comparison. Optional, and absent is a real state: a server with no
+   *  OPENROUTER_API_KEY grades and repairs exactly as before, it simply cannot render, and
+   *  `POST /compare` says so with a 503 rather than failing somewhere deeper. */
+  compare?: CompareRouteDeps;
   /** Fastify's request/error logger. Off by default so the test suite stays quiet, and ON
    *  in the real server: the error handler below deliberately redacts a 500's message to
    *  the client, so without a logger a provider failure was written precisely nowhere.
@@ -64,6 +69,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerRunRoutes(app, { ...deps, bus: deps.bus ?? new RunEventBus() });
   registerVersionRoutes(app, { versionStore: deps.versionStore });
   registerAvatarRoutes(app, deps.avatar ?? {});
+  registerCompareRoutes(app, deps.compare ?? {});
 
   return app;
 }
