@@ -132,10 +132,13 @@ describe("SheetPipeline", () => {
     fireEvent.click(screen.getByRole("button", { name: "Describe this person" }));
 
     await waitFor(() =>
-      expect(onDescription).toHaveBeenCalledWith("A woman in her late twenties, with a blonde bob."),
+      expect(onDescription).toHaveBeenCalledWith(
+        "A woman in her late twenties, with a blonde bob.",
+        "a1",
+      ),
     );
     // The whole point: what gets graded is what came back off the sheet, not the seed.
-    expect(onDescription).not.toHaveBeenCalledWith("A 29-year-old woman.");
+    expect(onDescription).not.toHaveBeenCalledWith("A 29-year-old woman.", "a1");
   });
 
   it("flags a description the cap had to cut, and explains what that means", async () => {
@@ -250,7 +253,9 @@ describe("SheetPipeline", () => {
     // Reopening an already-described avatar brings its description back without paying for
     // a second vision call.
     fireEvent.click(thumbs[0]!.closest("button")!);
-    await waitFor(() => expect(onDescription).toHaveBeenCalledWith("A woman in her thirties."));
+    await waitFor(() =>
+      expect(onDescription).toHaveBeenCalledWith("A woman in her thirties.", "a1"),
+    );
   });
 
   /* ── Why these two exist ──────────────────────────────────────────────────────────────

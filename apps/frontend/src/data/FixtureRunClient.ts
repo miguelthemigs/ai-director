@@ -141,7 +141,9 @@ export class FixtureRunClient implements RunClient {
     this.scenario = options?.scenario ?? DEFAULT_SCENARIO;
   }
 
-  async startRun(description: string): Promise<{ runId: string }> {
+  // `avatarId` is accepted and ignored: fixtures replay a recorded run, so there is no
+  // Repairer to ground and nothing honest to do with an avatar here.
+  async startRun(description: string, _avatarId?: string): Promise<{ runId: string }> {
     this.counter += 1;
     const runId = `fixture-${this.counter}-${Date.now()}`;
     const finalRun = FIXTURE_RUNS[this.scenario];

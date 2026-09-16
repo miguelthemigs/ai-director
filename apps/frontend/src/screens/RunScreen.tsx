@@ -201,11 +201,17 @@ export function RunScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
-  async function handleSubmit(description: string): Promise<void> {
+  async function handleSubmit(description: string, avatarId: string | null): Promise<void> {
     if (submitting) return;
     setSubmitting(true);
     try {
-      const { runId: newRunId } = await client.startRun(description);
+      // The avatar id, when the description came from one, is what gets the run Repairer
+      // v2: the server loads that sheet and its brief so a repair can only claim what it
+      // can see. Without it the Repairer is blind, which is a real and honest v1 run.
+      const { runId: newRunId } = await client.startRun(
+        description,
+        avatarId ?? undefined,
+      );
       onRunStarted(newRunId);
     } finally {
       setSubmitting(false);
@@ -299,7 +305,7 @@ export function RunScreen({
               body="Nine checks, three groups, up to three repair passes. Nothing here spends a render credit."
             />
             <AvatarComposer
-              onSubmit={(description) => void handleSubmit(description)}
+              onSubmit={(description, avatarId) => void handleSubmit(description, avatarId)}
               disabled={submitting}
               maxChars={MAX_CHARS}
               live={!client.isFixture}

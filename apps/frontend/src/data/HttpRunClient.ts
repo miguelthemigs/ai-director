@@ -47,11 +47,14 @@ export class HttpRunClient implements RunClient {
 
   constructor(private readonly baseUrl: string) {}
 
-  async startRun(description: string): Promise<{ runId: string }> {
+  async startRun(description: string, avatarId?: string): Promise<{ runId: string }> {
     const body = await requestJson<{ runId: string }>(`${this.baseUrl}/runs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ description }),
+      // Omitted rather than sent as undefined: the route's schema treats an absent
+      // avatarId as "this description belongs to no avatar", which is the honest reading
+      // of a pasted one, and that is what selects blind v1.
+      body: JSON.stringify(avatarId === undefined ? { description } : { description, avatarId }),
     });
     return { runId: body.runId };
   }

@@ -18,8 +18,14 @@ export type SheetPipelineProps = {
   seedDescription: string;
   /** Called with the description the DESCRIBE step produced: what a vision model wrote
    *  after looking at the generated avatar. This is the string the nine checks grade, and
-   *  it is emphatically not the one that went in. */
-  onDescription: (description: string) => void;
+   *  it is emphatically not the one that went in.
+   *
+   *  The stored avatar's id travels with it. The description alone is not enough for the
+   *  Repairer: reading it back off the sheet is what v1 does, and v1 has no way to check a
+   *  claim against the person. The id is how the run gets the sheet and the brief, which
+   *  is the whole of prompt v2. Null when the server kept no record, and the run is then
+   *  honestly a v1 run. */
+  onDescription: (description: string, avatarId: string | null) => void;
   disabled: boolean;
   /** Fixture mode has no backend. Both steps here spend real money, so there is nothing
    *  honest to fake, and the tab says so instead. */
@@ -184,7 +190,7 @@ export function SheetPipeline({
           trimmed: record.descriptionTrimmed ?? false,
           model: record.describeModel ?? "unknown",
         });
-        onDescription(record.description);
+        onDescription(record.description, record.id);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -198,7 +204,7 @@ export function SheetPipeline({
     try {
       const result = await describeSheet(loaded.imageBase64, loaded.mediaType, loaded.id);
       setDescribed(result);
-      onDescription(result.description);
+      onDescription(result.description, loaded.id);
       refreshGallery();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

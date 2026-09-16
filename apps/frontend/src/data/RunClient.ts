@@ -17,8 +17,17 @@ export interface RunClient {
    * `FixtureRunClient` any more, nothing renders the marker either.
    */
   readonly isFixture: boolean;
-  /** Kick off a new run. Resolves once the server (or fixture) has accepted it. */
-  startRun(description: string): Promise<{ runId: string }>;
+  /**
+   * Kick off a new run. Resolves once the server (or fixture) has accepted it.
+   *
+   * `avatarId` names the stored avatar this description was read off, when there is one.
+   * It is what upgrades the Repairer from blind v1 to sighted v2: the server loads that
+   * avatar's sheet and brief and sends them with the failing fragments. Omitted for a
+   * description typed or pasted by hand, which belongs to no avatar, and the run then
+   * records `v1` — the prompt that fabricated the hair length, the height and the build on
+   * run `bee3bcd6`. See `docs/repairer-cannot-see.md`.
+   */
+  startRun(description: string, avatarId?: string): Promise<{ runId: string }>;
   /** Fetch a run's current state as a snapshot, e.g. for the Versions screen's history. */
   getRun(runId: string): Promise<RunView>;
   /**

@@ -92,7 +92,9 @@ describe("AvatarComposer", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Run" }));
 
-    expect(onSubmit).toHaveBeenCalledWith("A 29-year-old woman in a grey wool coat.");
+    // Null avatar: this description was typed, so it belongs to no stored sheet and the
+    // run is honestly a blind v1 one.
+    expect(onSubmit).toHaveBeenCalledWith("A 29-year-old woman in a grey wool coat.", null);
   });
 
   it("keeps each tab's draft, and the fields never leak into the pasted run", () => {
@@ -105,7 +107,7 @@ describe("AvatarComposer", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Run" }));
 
-    expect(onSubmit).toHaveBeenCalledWith("pasted text");
+    expect(onSubmit).toHaveBeenCalledWith("pasted text", null);
     fireEvent.click(screen.getByRole("tab", { name: "Build an avatar" }));
     expect(screen.getByLabelText("Gender")).toHaveValue("man");
   });
@@ -205,11 +207,14 @@ describe("AvatarComposer, the full build flow", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Run" }));
 
+    // The avatar id travels WITH the description. Without it the server cannot hand the
+    // Repairer the sheet, and prompt v2 is unreachable however well it is written.
     expect(onSubmit).toHaveBeenCalledWith(
       "A woman in her late twenties, blonde bob, grey wool coat.",
+      "a1",
     );
     // The assembled prompt is on screen throughout and is never what runs.
-    expect(onSubmit).not.toHaveBeenCalledWith("A woman, with blonde bob");
+    expect(onSubmit).not.toHaveBeenCalledWith("A woman, with blonde bob", "a1");
   });
 
   it("counts the characters of the described text, not of the assembled prompt", async () => {

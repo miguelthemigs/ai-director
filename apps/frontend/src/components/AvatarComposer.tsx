@@ -18,7 +18,7 @@ export type AvatarComposerProps = {
    *  two independent drafts, and which one is live depends on the active tab, so lifting it into
    *  the parent would mean either syncing state during render (which updates a component while
    *  another is rendering) or an effect whose only job is to copy a value downward and back. */
-  onSubmit: (description: string) => void;
+  onSubmit: (description: string, avatarId: string | null) => void;
   disabled: boolean;
   maxChars: number;
   /** False in fixture mode. The Pipeline tab's two steps both spend real money, so with no
@@ -167,6 +167,11 @@ export function AvatarComposer({
    *  user typed: it is the pipeline's output, and overwriting their pasted draft with it
    *  would lose work they did by hand. */
   const [pipelined, setPipelined] = useState("");
+  /** The stored avatar `pipelined` was read off, when there is one. Kept beside the text
+   *  rather than derived from it, because it is what selects Repairer v2 and the two must
+   *  never disagree: a description from the Pipeline tab carries its avatar, and a
+   *  description typed into the Direct tab carries none because it belongs to none. */
+  const [pipelinedAvatarId, setPipelinedAvatarId] = useState<string | null>(null);
 
   const assembled = useMemo(() => assembleDescription(fields), [fields]);
   const anyFieldSet = Object.values(fields).some((entry) => (entry ?? "").trim().length > 0);
@@ -183,6 +188,9 @@ export function AvatarComposer({
   // prompt instead of the product of the prompt, which is a different string about a
   // different thing, and it is the single easiest mistake to make about this pipeline.
   const activeText = tab === "build" ? pipelined : direct;
+  // Only the Pipeline tab can name an avatar. Pasted text is a v1 run by construction, and
+  // saying so is more useful than guessing which stored sheet it might have come from.
+  const activeAvatarId = tab === "build" ? pipelinedAvatarId : null;
 
   const overLimit = activeText.length > maxChars;
   const canSubmit = !disabled && activeText.trim().length > 0 && !overLimit;
@@ -208,7 +216,7 @@ export function AvatarComposer({
       className="avatar-composer"
       onSubmit={(event) => {
         event.preventDefault();
-        if (canSubmit) onSubmit(activeText);
+        if (canSubmit) onSubmit(activeText, activeAvatarId);
       }}
     >
       <div className="avatar-composer__tabs" role="tablist" aria-label="How to supply the description">
@@ -285,7 +293,10 @@ export function AvatarComposer({
 
           <SheetPipeline
             seedDescription={anyFieldSet ? assembled : ""}
-            onDescription={setPipelined}
+            onDescription={(description, avatarId) => {
+              setPipelined(description);
+              setPipelinedAvatarId(avatarId);
+            }}
             disabled={disabled}
             live={live}
           />
