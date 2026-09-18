@@ -1,4 +1,5 @@
 import type {
+  ClipSummary,
   ComparisonSummary,
   ComparisonView,
   VideoSize,
@@ -72,6 +73,12 @@ export function getComparison(comparisonId: string): Promise<ComparisonView> {
 
 export function listComparisons(): Promise<ComparisonSummary[]> {
   return request<ComparisonSummary[]>("/compare");
+}
+
+/** Every clip on disk, flattened out of its pair. Answers "what have I produced", which
+ *  the pair-at-a-time history cannot. */
+export function listClips(): Promise<ClipSummary[]> {
+  return request<ClipSummary[]>("/compare/clips");
 }
 
 /** One status read per unfinished side, for a pair this browser lost track of. */

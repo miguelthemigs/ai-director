@@ -6,6 +6,7 @@ import {
   MIN_VIDEO_SECONDS,
   SEEDANCE_MODEL,
   VIDEO_SIZES,
+  type ClipSummary,
   type ComparisonSide,
 } from "@ai-director/contract";
 import { readComparisonSources } from "../../compare/readSources.js";
@@ -151,6 +152,46 @@ export function registerCompareRoutes(app: FastifyInstance, deps: CompareRouteDe
   app.get("/compare", async (_request, reply) => {
     if (!deps.store) return reply.code(200).send([]);
     return reply.code(200).send(await deps.store.list());
+  });
+
+  /**
+   * EVERY clip on disk, flattened out of its pair, newest first.
+   *
+   * Registered before `/compare/:id` on purpose: Fastify would otherwise match "clips" as
+   * an id and answer 404 for a route that exists.
+   *
+   * Only sides with a `clipUrl` appear. A render that succeeded and whose bytes never
+   * downloaded is real and is reported on its own pair's page; putting it in a gallery of
+   * playable clips as an empty tile would be a gallery lying about what it holds.
+   */
+  app.get("/compare/clips", async (_request, reply) => {
+    if (!deps.store) return reply.code(200).send([]);
+
+    const summaries = await deps.store.list();
+    const rows = await Promise.all(summaries.map((s) => deps.store!.get(s.comparisonId)));
+
+    const clips: ClipSummary[] = [];
+    for (const row of rows) {
+      if (!row) continue;
+      for (const side of COMPARISON_SIDES) {
+        const render = row[side];
+        if (render.clipUrl === null) continue;
+        clips.push({
+          comparisonId: row.comparisonId,
+          side,
+          createdAt: row.createdAt,
+          clipUrl: render.clipUrl,
+          avatarId: row.avatarId,
+          runId: row.runId,
+          seconds: row.seconds,
+          size: row.size,
+          repairerPromptVersion: render.repairerPromptVersion,
+          description: render.description,
+          actualMicroUsd: render.actualMicroUsd,
+        });
+      }
+    }
+    return reply.code(200).send(clips);
   });
 
   app.get<{ Params: { id: string } }>("/compare/:id", async (request, reply) => {

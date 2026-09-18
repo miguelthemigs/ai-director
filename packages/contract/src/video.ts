@@ -179,6 +179,32 @@ export type ComparisonSummary = {
   actualMicroUsd: number | null;
 };
 
+/**
+ * One playable clip, flattened out of its pair.
+ *
+ * The history table answers "what comparisons have I run"; this answers "what have I
+ * actually produced". They are different questions and the second one needs the clips off
+ * their rows, because five renders of one identical prompt only look like five different
+ * faces when they are beside each other rather than one page apart.
+ */
+export type ClipSummary = {
+  comparisonId: string;
+  side: ComparisonSide;
+  createdAt: string;
+  /** This server's own path. Never the vendor's, which is ephemeral and needs a token. */
+  clipUrl: string;
+  avatarId: string;
+  runId: string;
+  seconds: number;
+  size: VideoSize;
+  /** Which repairer wrote the description behind this clip. Null when the run predates the
+   *  record, which is a different claim from "v1". */
+  repairerPromptVersion: string | null;
+  /** The exact text this clip was rendered from. */
+  description: string;
+  actualMicroUsd: number | null;
+};
+
 /** The pair's bill, or null when either side has not reported one. Exported rather than
  *  inlined at each call site so the "both or nothing" rule has exactly one definition. */
 export function pairActualMicroUsd(

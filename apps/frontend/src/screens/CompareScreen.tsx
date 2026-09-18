@@ -8,12 +8,14 @@ import {
   MAX_VIDEO_SECONDS,
   MIN_VIDEO_SECONDS,
   VIDEO_SIZES,
+  type ClipSummary,
   type ComparisonSummary,
   type ComparisonView,
   type RunSummary,
   type VideoSize,
 } from "@ai-director/contract";
 import { AvatarPicker } from "../components/AvatarPicker.js";
+import { ClipGallery } from "../components/ClipGallery.js";
 import { ClipPair } from "../components/ClipPair.js";
 import { ComparisonHistory } from "../components/ComparisonHistory.js";
 import { RunEventFeed } from "../components/RunEventFeed.js";
@@ -24,6 +26,7 @@ import { listAvatars, type AvatarRecord } from "../data/avatarApi.js";
 import {
   formatMicroUsd,
   getComparison,
+  listClips,
   listComparisons,
   previewComparison,
   refreshComparison,
@@ -103,6 +106,7 @@ export function CompareScreen({
   const [avatars, setAvatars] = useState<AvatarRecord[]>([]);
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [history, setHistory] = useState<ComparisonSummary[]>([]);
+  const [clips, setClips] = useState<ClipSummary[]>([]);
   const [avatarId, setAvatarId] = useState<string | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
   const [seconds, setSeconds] = useState<number>(DEFAULT_VIDEO_SECONDS);
@@ -130,6 +134,11 @@ export function CompareScreen({
       setHistory(await listComparisons());
     } catch {
       setHistory([]);
+    }
+    try {
+      setClips(await listClips());
+    } catch {
+      setClips([]);
     }
   }, []);
 
@@ -488,7 +497,16 @@ export function CompareScreen({
       ) : null}
 
       <section className="step">
-        <h2 className="step__title">Everything rendered so far</h2>
+        <h2 className="step__title">Every clip rendered</h2>
+        <p className="step__note">
+          All of them at once, so five renders of one identical prompt can be read as five
+          faces rather than five pages. Nothing here plays on its own.
+        </p>
+        <ClipGallery clips={clips} onOpenPair={(id) => void poll(id, true)} />
+      </section>
+
+      <section className="step">
+        <h2 className="step__title">Every comparison</h2>
         <ComparisonHistory
           rows={history}
           selectedId={comparison?.comparisonId ?? null}

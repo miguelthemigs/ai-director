@@ -997,3 +997,127 @@
   padding: var(--sp-4) var(--sp-5);
   margin: 0;
 }
+
+/* ── The clip gallery ─────────────────────────────────────────────────────── */
+
+.gallery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.gallery__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+}
+
+.gallery__filters { display: flex; gap: var(--sp-2); }
+
+.gallery__filter {
+  font-family: var(--ff-ui);
+  font-size: var(--fs-micro);
+  color: var(--ink-2);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+  padding: var(--sp-2) var(--sp-4);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.gallery__filter:hover { border-color: var(--ln-strong); }
+.gallery__filter:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.gallery__filter[data-active] {
+  color: var(--brand);
+  border-color: var(--brand-edge);
+  background: var(--brand-tint);
+}
+
+.gallery__total { font-size: var(--fs-micro); color: var(--ink-3); margin: 0; }
+
+.gallery__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  /* Vertical clips, so the tiles are narrow and many fit across. */
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--sp-5);
+}
+
+.gallery__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  min-width: 0;
+}
+
+.gallery__video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 480 / 854;
+  object-fit: contain;
+  background: #000;
+  border-radius: var(--r-1);
+}
+
+.gallery__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+/* Which side a clip came from is the single fact that makes the grid readable, so it is
+   the one thing in a tile that carries colour. */
+.gallery__side {
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+}
+.gallery__side[data-side="before"] { color: var(--band-3); }
+.gallery__side[data-side="after"] { color: var(--brand); }
+
+.gallery__version { font-size: var(--fs-micro); color: var(--ink-3); font-style: italic; }
+.gallery__version[data-known] { font-style: normal; color: var(--ink-2); }
+
+.gallery__shape { font-size: var(--fs-micro); color: var(--ink-3); margin: 0; }
+
+/* Clamped, not truncated to one line: enough of the description to tell two tiles apart,
+   with the whole of it in the title. */
+.gallery__description {
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-micro);
+  line-height: var(--lh-ui);
+  color: var(--ink-2);
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.gallery__open {
+  align-self: flex-start;
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-micro);
+  color: var(--brand);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.gallery__open:focus-visible { outline: none; box-shadow: var(--focus-ring); }
