@@ -228,6 +228,14 @@ shows, and `age_build` is reachable through either the stated height or a visibl
 fall. If v2 drops much further than that, the prompt is being read as "say less" rather than
 "say what you see", and that is a defect in v2 rather than a finding about the rubric.
 
+**A gallery of every clip ever rendered.** Not built, and deliberately so: this is an idea
+for later rather than a gap in what exists. The history table lists pairs as rows and you
+open one at a time, which is right for reading a single comparison and wrong for the
+question "what have I actually produced". Every clip is already on disk under
+`data/comparisons/<id>/`, so the material is there; what is missing is a screen that shows
+them all as playable thumbnails, which is how you would spot that five renders of one
+identical prompt gave five different faces without opening five pages.
+
 **Whether Seedance refuses a human likeness on the OpenRouter wire is unprobed.** Mentic
 measured that refusal over nine calls on Runway in August, and it is the reason a description
 travels as text at all. A different vendor in front of the same weights is not the same test.
