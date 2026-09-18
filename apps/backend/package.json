@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@ai-director/contract": "workspace:*",
     "@anthropic-ai/sdk": "^0.125.0",
     "@fastify/cors": "^11.3.0",
     "@google/genai": "^2.22.0",

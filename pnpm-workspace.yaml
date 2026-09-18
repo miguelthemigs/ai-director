@@ -1,0 +1,24 @@
+# The workspace, for pnpm.
+#
+# `packages` mirrors package.json's own `workspaces` field, which npm reads and pnpm does
+# not. Without it pnpm treats this repo as one package and never links
+# `@ai-director/contract` into apps/backend and apps/frontend, so every
+# `import ... from "@ai-director/contract"` fails to resolve. The symlinks under
+# node_modules/@ai-director were left behind by npm; pnpm needs to be told.
+packages:
+  - packages/*
+  - apps/*
+
+# Which dependencies may run install scripts.
+#
+# pnpm 11 blocks all of them by default and writes this list with a placeholder rather than
+# choosing for you, which is the right default: an install script runs arbitrary code on
+# this machine.
+#
+# esbuild is allowed because its postinstall is what fetches and links the platform-native
+# binary (`@esbuild/darwin-arm64`). Vite, Vitest and tsx all shell out to that binary, so
+# with the script blocked the dev server, the test suite and the CLIs all fail at startup
+# rather than at some later edge. It is a first-party script from the esbuild package
+# itself, doing the one thing esbuild cannot ship prebuilt.
+allowBuilds:
+  esbuild: true
