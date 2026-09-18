@@ -4,6 +4,7 @@ import {
   COMPARISON_SIDES,
   MAX_VIDEO_SECONDS,
   MIN_VIDEO_SECONDS,
+  SEEDANCE_MODEL,
   VIDEO_SIZES,
   type ComparisonSide,
 } from "@ai-director/contract";
@@ -12,6 +13,7 @@ import { refreshComparison, startComparison } from "../../compare/runComparison.
 import type { AvatarStore } from "../../store/AvatarStore.js";
 import type { ComparisonStore } from "../../store/ComparisonStore.js";
 import type { RunStore } from "../../store/RunStore.js";
+import { SHOT_PROMPT_VERSION } from "../../video/shotPrompt/v1.js";
 import type { VideoTransport } from "../../video/openrouterClient.js";
 
 /**
@@ -102,6 +104,49 @@ export function registerCompareRoutes(app: FastifyInstance, deps: CompareRouteDe
 
     return reply.code(202).send(row);
   });
+
+  /**
+   * WHAT WOULD BE SENT, without sending it.
+   *
+   * Reads the two descriptions off a run and builds both prompts with the very same
+   * function the submit path uses (`readComparisonSources` -> `buildShotPrompt`), so the
+   * preview is the request rather than a rendering of what the request probably looks
+   * like. Creates no row, claims nothing, calls no vendor and costs nothing.
+   *
+   * It exists because the screen asks someone to spend about $0.82 on a claim — "these two
+   * prompts differ in one place" — and until this endpoint the only way to check that claim
+   * was to pay it first and read the row afterwards. Checking before is strictly better and
+   * free.
+   *
+   * Deliberately available with no transport configured: reading what WOULD be sent needs
+   * no key, and a server without one should still be able to answer it.
+   */
+  app.get<{ Querystring: { avatarId?: string; runId?: string } }>(
+    "/compare/preview",
+    async (request, reply) => {
+      if (!deps.runStore || !deps.avatarStore) {
+        return reply.code(503).send({ error: "the run and avatar stores are not configured" });
+      }
+      const { avatarId, runId } = request.query;
+      if (!avatarId || !runId) {
+        return reply.code(400).send({ error: "avatarId and runId are both required" });
+      }
+
+      const sources = await readComparisonSources(
+        { runStore: deps.runStore, avatarStore: deps.avatarStore },
+        { runId, avatarId },
+      );
+      if (!sources.ok) return reply.code(400).send({ error: sources.reason });
+
+      return reply.code(200).send({
+        sources: sources.sources,
+        rubricVersion: sources.rubricVersion,
+        repairerPromptVersion: sources.repairerPromptVersion,
+        model: SEEDANCE_MODEL,
+        shotPromptVersion: SHOT_PROMPT_VERSION,
+      });
+    },
+  );
 
   app.get("/compare", async (_request, reply) => {
     if (!deps.store) return reply.code(200).send([]);

@@ -3,6 +3,7 @@ import type {
   ComparisonView,
   VideoSize,
 } from "@ai-director/contract";
+import type { ComparisonPreview } from "../components/PromptPreview.js";
 
 /**
  * The five `/compare` endpoints.
@@ -49,6 +50,20 @@ export function startComparison(args: StartComparisonArgs): Promise<ComparisonVi
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(args),
   });
+}
+
+/**
+ * What WOULD be sent, without sending it. Free: no row, no claim, no vendor call.
+ *
+ * The prompts come back built by the same function the submit path uses, so this is the
+ * request rather than a rendering of it.
+ */
+export function previewComparison(
+  avatarId: string,
+  runId: string,
+): Promise<ComparisonPreview> {
+  const query = new URLSearchParams({ avatarId, runId });
+  return request<ComparisonPreview>(`/compare/preview?${query.toString()}`);
 }
 
 export function getComparison(comparisonId: string): Promise<ComparisonView> {

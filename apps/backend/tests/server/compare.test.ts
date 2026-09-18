@@ -204,6 +204,74 @@ describe("POST /compare", () => {
   });
 });
 
+describe("GET /compare/preview", () => {
+  it("returns both prompts, built by the same function the submit path uses, and spends nothing", async () => {
+    await withDeps(async (deps) => {
+      const app = await appWith(deps);
+      const res = await app.inject({
+        method: "GET",
+        url: "/compare/preview?avatarId=avatar-1&runId=run-1",
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.sources.before.description).toBe(ORIGINAL);
+      expect(body.sources.after.description).toBe(REPAIRED);
+      // Each prompt carries its own description, wrapped in the shared shot wrapper.
+      expect(body.sources.before.prompt).toContain(ORIGINAL);
+      expect(body.sources.after.prompt).toContain(REPAIRED);
+      expect(body.model).toBe("bytedance/seedance-2.5");
+      expect(body.shotPromptVersion).toBe("v1");
+
+      // The claim the whole screen rests on: strip each side's own description and the
+      // remainders are byte-identical.
+      expect(body.sources.before.prompt.replace(ORIGINAL, "")).toBe(
+        body.sources.after.prompt.replace(REPAIRED, ""),
+      );
+      // Nothing was created and nothing was submitted.
+      expect((await app.inject({ method: "GET", url: "/compare" })).json()).toEqual([]);
+      expect(deps.drive).not.toHaveBeenCalled();
+    });
+  });
+
+  it("answers without a transport, because reading what would be sent needs no key", async () => {
+    await withDeps(async (deps) => {
+      const app = await appWith({ ...deps, transport: undefined });
+      const res = await app.inject({
+        method: "GET",
+        url: "/compare/preview?avatarId=avatar-1&runId=run-1",
+      });
+      expect(res.statusCode).toBe(200);
+    });
+  });
+
+  it("gives the same refusal POST would, free and before the money", async () => {
+    await withDeps(async (deps) => {
+      const app = await appWith({
+        ...deps,
+        avatarStore: {
+          ...avatarStore(),
+          get: async () => ({ ...AVATAR, description: "Somebody else." }),
+        },
+      });
+      const res = await app.inject({
+        method: "GET",
+        url: "/compare/preview?avatarId=avatar-1&runId=run-1",
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toMatch(/avatar/i);
+    });
+  });
+
+  it("needs both ids", async () => {
+    await withDeps(async (deps) => {
+      const app = await appWith(deps);
+      const res = await app.inject({ method: "GET", url: "/compare/preview?avatarId=avatar-1" });
+      expect(res.statusCode).toBe(400);
+    });
+  });
+});
+
 describe("GET /compare and /compare/:id", () => {
   it("lists nothing for a fresh store and 404s an unknown id", async () => {
     await withDeps(async (deps) => {

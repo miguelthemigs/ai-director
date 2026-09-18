@@ -22,12 +22,14 @@ export function VersionTable({ versions, selected, onToggleSelect }: VersionTabl
     <div className="vtable" role="grid" aria-label="Rubric and prompt version history">
       <div className="vtable__row vtable__row--head" role="row">
         {COLUMN_LABELS.map((label, i) => (
-          <span
-            key={label}
-            className={i === 0 ? "vtable__head sr-only" : "vtable__head"}
-            role="columnheader"
-          >
-            {label}
+          <span key={label} className="vtable__head" role="columnheader">
+            {/* The Select column's header is hidden from sight, not from the grid. It used
+                to carry `sr-only` on the header cell ITSELF, and `sr-only` is
+                `position: absolute` — which takes a grid item out of flow, so all seven
+                remaining headers slid one track left and "Note" was painted on top of
+                "Check profile". Hiding the TEXT inside a cell that still occupies its
+                track keeps both the screen reader and the layout honest. */}
+            {i === 0 ? <span className="sr-only">{label}</span> : label}
           </span>
         ))}
       </div>

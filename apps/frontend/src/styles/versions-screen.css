@@ -26,8 +26,14 @@
   display: grid;
   /* Sealed, mean and delta were each ~20px too narrow for their own content, so every
      date wrapped onto two lines and "not scored yet" onto three. A table whose cells wrap
-     their own values reads as broken before anyone gets to the numbers. */
-  grid-template-columns: 44px 64px 128px 108px 96px 92px 120px minmax(0, 1fr);
+     their own values reads as broken before anyone gets to the numbers.
+
+     Ver went 64px -> 172px on 2026-09-18. It holds a swatch AND the version id, and 64px
+     fitted "rubric-v1" and nothing longer; `repairer-prompt-v2` ran about 140px and, being
+     `nowrap`, painted straight over the Kind column beside it. Sealed shrank to 104px in
+     the same pass because it now prints "10 Sep 2026" rather than a 24-character ISO
+     instant. */
+  grid-template-columns: 44px 172px 128px 120px 120px 64px 132px minmax(0, 1fr);
   align-items: start;
   border: var(--bd-hair) solid var(--ln);
   border-radius: var(--r-3);
@@ -60,6 +66,10 @@
 .vtable__row[data-missing-note] {
   box-shadow: inset 2px 0 0 var(--sig-alarm-edge);
 }
+/* The same overflow guard the cells get, and for the same reason: "CHECK PROFILE" is
+   wider than its own column once uppercase and letter-spacing are applied, and without
+   this it painted over "NOTE" beside it. A header that outgrows its column should look
+   clipped, not look like two headers printed on one another. */
 .vtable__head {
   font-size: var(--fs-micro);
   font-weight: var(--fw-semi);
@@ -67,6 +77,10 @@
   text-transform: uppercase;
   color: var(--ink-3);
   padding-inline: var(--sp-4);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   white-space: nowrap;
 }
 .vtable__cell {
@@ -75,9 +89,20 @@
   color: var(--ink-2);
 }
 /* Every cell but the note holds a short value that must not wrap. The note is the one
-   column that is prose, and it keeps `minmax(0, 1fr)` so it takes whatever is left. */
+   column that is prose, and it keeps `minmax(0, 1fr)` so it takes whatever is left.
+
+   `overflow: hidden` and the ellipsis are the guard rail rather than the layout. A grid
+   track is a width, not a clip: `nowrap` content wider than its track spills out and is
+   PAINTED OVER THE NEXT COLUMN, which is what put a version id on top of its own kind and
+   a timestamp on top of "not scored yet". Truncation makes an outgrown column look
+   outgrown instead of looking like two cells fighting, and `min-width: 0` is what lets a
+   grid item shrink below its content at all. Every truncatable cell carries the full value
+   in a `title`. */
 .vtable__cell:not(.vtable__cell--note) {
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .vtable__cell--kind {
   text-transform: none;
@@ -100,6 +125,15 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
+  min-width: 0;
+  max-width: 100%;
+}
+/* The swatch is a fixed square and must never be the thing that shrinks; the id is. */
+.revision-chip__id {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .revision-chip__swatch {
   display: inline-flex;
@@ -298,7 +332,7 @@
 
 @media (max-width: 1024px) {
   .vtable {
-    grid-template-columns: 36px 48px 80px 72px 60px 76px 92px minmax(0, 1fr);
+    grid-template-columns: 36px 132px 80px 104px 104px 52px 96px minmax(0, 1fr);
   }
   .version-compare__panes {
     grid-template-columns: minmax(0, 1fr);

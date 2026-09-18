@@ -825,3 +825,162 @@
 .history td[data-status="succeeded"] { color: var(--band-5); }
 .history td[data-status="failed"] { color: var(--sig-alarm-edge); }
 .history td[data-unmeasured] { color: var(--ink-3); font-style: italic; }
+
+/* ── The pre-flight preview ───────────────────────────────────────────────── */
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  padding: var(--sp-5);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+}
+
+.preview__title {
+  font-size: var(--fs-label);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+/* The claim the spend rests on, stated as a verdict and coloured by whether it holds. */
+.preview__verdict {
+  font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-2);
+  color: var(--sig-alarm-ink);
+  background: var(--sig-alarm-tint);
+  border: var(--bd-hair) solid var(--sig-alarm-edge);
+}
+
+.preview__verdict[data-match] {
+  color: var(--ink-2);
+  background: var(--brand-tint);
+  border-color: var(--brand-edge);
+}
+
+.preview__diff {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.preview__diff h4,
+.preview__side h4 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+.preview__meta {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--brand);
+}
+
+.preview__diffbody {
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-specimen);
+  line-height: var(--lh-spec);
+  color: var(--ink);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln-faint);
+  border-radius: var(--r-2);
+  padding: var(--sp-4) var(--sp-5);
+  margin: 0;
+}
+
+/* Never colour alone: the removal is struck through and the addition underlined, so the
+   diff survives red-green colour blindness and a black-and-white printout of a report. */
+.preview__diffbody [data-kind="removed"],
+.preview__legend [data-kind="removed"] {
+  color: var(--diff-del);
+  background: var(--diff-del-ground);
+  text-decoration: line-through;
+}
+
+.preview__diffbody [data-kind="added"],
+.preview__legend [data-kind="added"] {
+  color: var(--diff-add);
+  background: var(--diff-add-ground);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.preview__legend {
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+  margin: 0;
+}
+
+.preview__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-5);
+}
+
+@media (max-width: 1024px) {
+  .preview__pair { grid-template-columns: minmax(0, 1fr); }
+}
+
+.preview__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.preview__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
+  margin: 0;
+}
+
+.preview__facts div { display: flex; gap: var(--sp-2); align-items: baseline; }
+.preview__facts dt { font-size: var(--fs-micro); color: var(--ink-3); }
+.preview__facts dd {
+  margin: 0;
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-micro);
+  color: var(--ink-2);
+}
+
+.preview__prompt {
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-micro);
+  line-height: var(--lh-ui);
+  color: var(--ink-2);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln-faint);
+  border-radius: var(--r-2);
+  padding: var(--sp-4);
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+/* The one variable, marked inside the prompt that carries it. Everything around it is the
+   shared wrapper, and being able to see that is the point of printing both in full. */
+.preview__inserted {
+  color: var(--ink);
+  background: var(--brand-tint);
+  border-radius: var(--r-1);
+  padding: 1px 2px;
+  box-shadow: inset 0 -1px 0 var(--brand-edge);
+}

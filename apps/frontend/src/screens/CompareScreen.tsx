@@ -17,6 +17,7 @@ import { AvatarPicker } from "../components/AvatarPicker.js";
 import { ClipPair } from "../components/ClipPair.js";
 import { ComparisonHistory } from "../components/ComparisonHistory.js";
 import { RunEventFeed } from "../components/RunEventFeed.js";
+import { PromptPreview, type ComparisonPreview } from "../components/PromptPreview.js";
 import { RunPicker } from "../components/RunPicker.js";
 import { WireInspector } from "../components/WireInspector.js";
 import { listAvatars, type AvatarRecord } from "../data/avatarApi.js";
@@ -24,6 +25,7 @@ import {
   formatMicroUsd,
   getComparison,
   listComparisons,
+  previewComparison,
   refreshComparison,
   startComparison,
 } from "../data/compareApi.js";
@@ -80,6 +82,9 @@ export function CompareScreen({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  /** What would be sent for the current (avatar, run). Fetched free, before spending. */
+  const [preview, setPreview] = useState<ComparisonPreview | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   /** The grading run this screen started, if any. Streams live into `RunEventFeed`. */
   const [gradingRunId, setGradingRunId] = useState<string | null>(null);
@@ -122,6 +127,31 @@ export function CompareScreen({
     () => (secondsValid ? estimateMicroUsd(size, seconds) * 2 : null),
     [size, seconds, secondsValid],
   );
+
+  // The preview is the answer to "what am I about to pay for", so it is fetched the moment
+  // both halves of that question are known and never on a button press.
+  useEffect(() => {
+    if (!live || !avatarId || !runId) {
+      setPreview(null);
+      setPreviewError(null);
+      return;
+    }
+    let cancelled = false;
+    setPreviewError(null);
+    void previewComparison(avatarId, runId)
+      .then((next) => {
+        if (!cancelled) setPreview(next);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setPreview(null);
+        // The same refusals POST would give, arriving free and before the money.
+        setPreviewError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [live, avatarId, runId]);
 
   const selectedAvatar = avatars.find((a) => a.id === avatarId) ?? null;
   const selectedRun = runs.find((r) => r.runId === runId) ?? null;
@@ -339,6 +369,13 @@ export function CompareScreen({
             </button>
           </div>
         </fieldset>
+
+        {preview ? <PromptPreview preview={preview} /> : null}
+        {previewError ? (
+          <p className="compare-message" data-tone="alarm" data-testid="preview-error">
+            {previewError}
+          </p>
+        ) : null}
 
         {selectedRun ? (
           <p className="step__note" data-testid="render-source">
