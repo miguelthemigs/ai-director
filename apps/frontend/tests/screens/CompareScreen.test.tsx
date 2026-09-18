@@ -316,6 +316,65 @@ describe("step 3, render", () => {
     });
   });
 
+  it("cannot buy a second pair while the first is still rendering", async () => {
+    // The defect this pins: the button was disabled on `submitting`, which is only true
+    // while the POST is in the air. The route answers 202 in milliseconds and the render
+    // runs for minutes, so the button went live again with two paid renders behind it.
+    // Five clicks in two and a half seconds bought five pairs and about $4.15.
+    let posts = 0;
+    fetchMock = routeFetch({
+      "POST /compare": () => {
+        posts += 1;
+        return json(row(), 202);
+      },
+      "GET /compare/cmp-1": () => json(row()),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<CompareScreen live client={client} />);
+    await pickAvatar(user);
+    await user.click(await screen.findByRole("radio", { name: "run-v2" }));
+
+    const button = screen.getByRole("button", { name: /render both/i });
+    await user.click(button);
+
+    await waitFor(() => expect(screen.getByTestId("render-before")).toBeInTheDocument());
+    // Both sides are queued, so the pair is in flight and the button is shut.
+    const rendering = screen.getByRole("button", { name: /rendering/i });
+    expect(rendering).toBeDisabled();
+    expect(screen.getByTestId("in-flight")).toBeInTheDocument();
+
+    await user.click(rendering).catch(() => {});
+    await user.click(rendering).catch(() => {});
+    await user.click(rendering).catch(() => {});
+
+    expect(posts).toBe(1);
+  });
+
+  it("opens the button again once both sides are terminal", async () => {
+    const settled = row({
+      finishedAt: "2026-09-16T10:02:00.000Z",
+      before: { ...row().before, status: "succeeded", clipUrl: "/compare/cmp-1/before/clip" },
+      after: { ...row().after, status: "succeeded", clipUrl: "/compare/cmp-1/after/clip" },
+    });
+    fetchMock = routeFetch({
+      "POST /compare": () => json(settled, 202),
+      "GET /compare/cmp-1": () => json(settled),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<CompareScreen live client={client} />);
+    await pickAvatar(user);
+    await user.click(await screen.findByRole("radio", { name: "run-v2" }));
+    await user.click(screen.getByRole("button", { name: /render both/i }));
+
+    await waitFor(() => expect(screen.getByTestId("render-before")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /render both/i })).toBeEnabled(),
+    );
+    expect(screen.queryByTestId("in-flight")).not.toBeInTheDocument();
+  });
+
   it("shows the server's refusal instead of a pair", async () => {
     fetchMock = routeFetch({
       "POST /compare": () => json({ error: 'run "run-v2" repaired nothing' }, 400),

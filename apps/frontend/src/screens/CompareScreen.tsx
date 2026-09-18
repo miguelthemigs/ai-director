@@ -64,6 +64,35 @@ function bothSidesTerminal(row: ComparisonView): boolean {
   return isRenderTerminal(row.before.status) && isRenderTerminal(row.after.status);
 }
 
+/**
+ * A side that rendered and whose clip is not on disk yet.
+ *
+ * `succeeded` is not the end of the story. The bytes are fetched in a separate step after
+ * the status read, so there is a window where OpenRouter says done and this server has
+ * nothing to play. `CLIP_DOWNLOAD_FAILED` means that fetch was tried and failed, which IS
+ * the end of the story, and is excluded so a genuinely missing clip does not poll forever.
+ */
+function awaitingClip(render: ComparisonView["before"]): boolean {
+  return (
+    render.status === "succeeded" &&
+    render.clipUrl === null &&
+    render.failureCode !== "CLIP_DOWNLOAD_FAILED"
+  );
+}
+
+/**
+ * Whether there is still anything to wait for.
+ *
+ * Deliberately NOT `bothSidesTerminal`. Stopping there was a real defect: once both sides
+ * settled the interval was cleared, and any clip that had not landed by that exact tick
+ * never appeared. The screen sat on "Rendered, but the clip is not on disk" for a clip
+ * that was downloaded seconds later, with no way back except knowing to press a button.
+ * A pair is finished when it is PLAYABLE, not when the vendor stopped working.
+ */
+function stillSettling(row: ComparisonView): boolean {
+  return !bothSidesTerminal(row) || awaitingClip(row.before) || awaitingClip(row.after);
+}
+
 export function CompareScreen({
   live,
   client,
@@ -156,9 +185,19 @@ export function CompareScreen({
   const selectedAvatar = avatars.find((a) => a.id === avatarId) ?? null;
   const selectedRun = runs.find((r) => r.runId === runId) ?? null;
 
-  const poll = useCallback(async (comparisonId: string) => {
+  /**
+   * One tick.
+   *
+   * `getComparison` only READS the row; the clip download lives in `refreshComparison`,
+   * server-side. So a tick that finds a succeeded side with no clip has to ask for the
+   * refresh, or the bytes are never fetched and the player never appears. Both are free —
+   * a status read costs nothing and a download costs nothing — and neither can submit.
+   */
+  const poll = useCallback(async (comparisonId: string, fetchClips = false) => {
     try {
-      setComparison(await getComparison(comparisonId));
+      setComparison(
+        fetchClips ? await refreshComparison(comparisonId) : await getComparison(comparisonId),
+      );
     } catch {
       // A failed poll is not a failed render. The row on the server is the truth and the
       // next tick re-reads it.
@@ -166,8 +205,12 @@ export function CompareScreen({
   }, []);
 
   useEffect(() => {
-    if (!comparison || bothSidesTerminal(comparison)) return;
-    const id = window.setInterval(() => void poll(comparison.comparisonId), POLL_MS);
+    if (!comparison || !stillSettling(comparison)) return;
+    const needsClips = awaitingClip(comparison.before) || awaitingClip(comparison.after);
+    const id = window.setInterval(
+      () => void poll(comparison.comparisonId, needsClips),
+      POLL_MS,
+    );
     return () => window.clearInterval(id);
   }, [comparison, poll]);
 
@@ -186,8 +229,23 @@ export function CompareScreen({
     }
   }
 
+  /**
+   * A comparison is IN FLIGHT: submitted and not yet settled on both sides.
+   *
+   * This is what the spend button is disabled on, and `submitting` is not. `submitting`
+   * is only true while the POST itself is in the air, which is about 200 milliseconds,
+   * because the route answers 202 the moment the row is written and the render runs for
+   * minutes afterwards. So the button went live again almost immediately with two paid
+   * renders still running behind it, and five clicks in two and a half seconds bought five
+   * pairs. Found the hard way on 2026-09-18; it cost about $4.15.
+   */
+  const inFlight = comparison !== null && stillSettling(comparison);
+
   async function render(): Promise<void> {
-    if (!avatarId || !runId) return;
+    // Belt as well as braces. The disabled attribute is the affordance; this is the
+    // guarantee, because a disabled button is a rendering decision and a double submit is
+    // money.
+    if (!avatarId || !runId || submitting || inFlight) return;
     setError(null);
     setSubmitting(true);
     try {
@@ -362,13 +420,28 @@ export function CompareScreen({
             <button
               type="button"
               className="compare-submit"
-              disabled={!avatarId || !runId || !secondsValid || submitting}
+              disabled={!avatarId || !runId || !secondsValid || submitting || inFlight}
               onClick={() => void render()}
             >
-              {submitting ? "Submitting…" : "Render both"}
+              {submitting ? "Submitting…" : inFlight ? "Rendering…" : "Render both"}
             </button>
           </div>
         </fieldset>
+
+        {inFlight && comparison ? (
+          <p className="compare-inflight" role="status" data-testid="in-flight">
+            Two clips are rendering now, submitted{" "}
+            {comparison.before.submittedAt
+              ? new Date(comparison.before.submittedAt).toLocaleTimeString()
+              : "just now"}
+            . Seedance takes one to three minutes. Status reads so far:{" "}
+            <span className="tnum">
+              {comparison.before.polls} and {comparison.after.polls}
+            </span>
+            . This button stays disabled until both sides finish, so a second click cannot
+            buy a second pair.
+          </p>
+        ) : null}
 
         {preview ? <PromptPreview preview={preview} /> : null}
         {previewError ? (

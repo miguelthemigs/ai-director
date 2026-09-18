@@ -21,4 +21,11 @@ packages:
 # rather than at some later edge. It is a first-party script from the esbuild package
 # itself, doing the one thing esbuild cannot ship prebuilt.
 allowBuilds:
+  # Declined. Neither fetches a platform-native binary the way esbuild does: protobufjs's
+  # postinstall wires up its optional CLI dependencies, and @google/genai's runs a bundling
+  # step it also ships prebuilt. Verified after declining that the backend still boots, the
+  # avatar routes still answer and the whole suite still passes, which is the only reason
+  # to believe a skipped script was skippable.
+  '@google/genai': false
   esbuild: true
+  protobufjs: false
