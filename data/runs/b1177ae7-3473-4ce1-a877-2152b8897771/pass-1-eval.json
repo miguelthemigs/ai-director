@@ -1,0 +1,152 @@
+{
+  "description": "A guy who is cool and mysterious, wearing dark clothes, looks tough.",
+  "results": [
+    {
+      "status": "scored",
+      "checkId": "age_build",
+      "band": 1,
+      "reason": "The description gives no age bracket and no body build, only \"A guy\".",
+      "quotes": [
+        "A guy who is cool and mysterious"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "face_skin",
+      "band": 2,
+      "reason": "Only evaluative impressions of appearance are given, with no concrete facial or skin feature.",
+      "quotes": [
+        "looks tough"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "hair_spec",
+      "band": 1,
+      "reason": "Hair is never mentioned in any form.",
+      "quotes": [
+        "A guy who is cool and mysterious, wearing dark clothes, looks tough."
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "wardrobe",
+      "band": 2,
+      "reason": "Clothing is named only as a vague category with no individual garments or footwear.",
+      "quotes": [
+        "wearing dark clothes"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "anchor_marker",
+      "band": 1,
+      "reason": "No small reusable identity marker such as a mole, scar, or accessory is named.",
+      "quotes": [
+        "A guy who is cool and mysterious, wearing dark clothes, looks tough."
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_real_person",
+      "band": 4,
+      "reason": "The description refers only to an unnamed generic \"guy\" with no celebrity, public figure, or lookalike framing, and does not state the character is fictional.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_brand_name",
+      "band": 4,
+      "reason": "No brand, franchise, or trademarked name appears; wardrobe is only called \"dark clothes\", which is too vague to count as a re-renderable garment description.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "drawable_only",
+      "band": 2,
+      "reason": "The description leans on judgement and mood words rather than visible traits, with only \"dark clothes\" being drawable.",
+      "quotes": [
+        "cool and mysterious",
+        "looks tough"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_cross_slot",
+      "band": 5,
+      "reason": "No camera, lighting, grade or audio directions appear; it is one self-contained sentence describing only the person.",
+      "quotes": [],
+      "missingEvidence": false
+    }
+  ],
+  "failing": [
+    "age_build",
+    "face_skin",
+    "hair_spec",
+    "wardrobe",
+    "anchor_marker",
+    "drawable_only"
+  ],
+  "notEvaluated": [],
+  "spans": [
+    {
+      "spanId": "age_build:0",
+      "checkId": "age_build",
+      "quote": "A guy who is cool and mysterious",
+      "start": 0,
+      "end": 32
+    },
+    {
+      "spanId": "hair_spec:0",
+      "checkId": "hair_spec",
+      "quote": "A guy who is cool and mysterious, wearing dark clothes, looks tough.",
+      "start": 0,
+      "end": 68
+    },
+    {
+      "spanId": "anchor_marker:0",
+      "checkId": "anchor_marker",
+      "quote": "A guy who is cool and mysterious, wearing dark clothes, looks tough.",
+      "start": 0,
+      "end": 68
+    },
+    {
+      "spanId": "drawable_only:0",
+      "checkId": "drawable_only",
+      "quote": "cool and mysterious",
+      "start": 13,
+      "end": 32
+    },
+    {
+      "spanId": "wardrobe:0",
+      "checkId": "wardrobe",
+      "quote": "wearing dark clothes",
+      "start": 34,
+      "end": 54
+    },
+    {
+      "spanId": "face_skin:0",
+      "checkId": "face_skin",
+      "quote": "looks tough",
+      "start": 56,
+      "end": 67
+    },
+    {
+      "spanId": "drawable_only:1",
+      "checkId": "drawable_only",
+      "quote": "looks tough",
+      "start": 56,
+      "end": 67
+    }
+  ],
+  "unverified": [],
+  "negativeConstraintPresent": false
+}

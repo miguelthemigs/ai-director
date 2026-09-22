@@ -29,7 +29,10 @@ export async function gotoFixture(page: Page, scenario: FixtureScenario, speedMs
  *  click on a tab times out. This still exercises `App`'s real client-side router (`ScreenTabs`'s
  *  `onClick` -> `navigate` -> `setScreen` + `history.pushState`) -- no page reload, so it does not
  *  run into the dev-proxy 502 a direct URL navigation would (see `gotoFixture`). */
-export async function navigateToScreen(page: Page, tab: "Run" | "Architecture" | "Versions"): Promise<void> {
+export async function navigateToScreen(
+  page: Page,
+  tab: "Run" | "Architecture" | "Versions" | "Compare",
+): Promise<void> {
   await page.getByRole("link", { name: tab }).dispatchEvent("click");
 }
 
@@ -37,7 +40,14 @@ export async function navigateToScreen(page: Page, tab: "Run" | "Architecture" |
  *  with. Resolves once the submit click has landed; callers wait for their own terminal signal
  *  (the verdict banner's word, a specific check's band, etc.) rather than a fixed sleep. */
 export async function startRun(page: Page): Promise<void> {
-  await page.getByLabel("Description").fill(SAMPLE_DESCRIPTION);
+  // The composer opens on the Build tab (fields, render, describe); this helper drives the paste
+  // tab, which grades a description on its own. `AvatarComposer` keeps both panels mounted,
+  // so the tab has to be selected rather than merely located.
+  await page.getByRole("tab", { name: "Paste a description" }).click();
+  // `exact: true`: Playwright's `getByLabel` matches on a substring by default, and the tab
+  // list's own label ("How to supply the description") contains the word, so a loose match
+  // resolves to two elements and throws.
+  await page.getByLabel("Description", { exact: true }).fill(SAMPLE_DESCRIPTION);
   // `exact: true`: a non-exact match on "Run" also matches every pass-step button, whose
   // accessible name includes its "not yet run" status text.
   //

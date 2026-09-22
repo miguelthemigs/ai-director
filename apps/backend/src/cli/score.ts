@@ -10,8 +10,13 @@ import { checksForGroup, loadRubric, type Rubric } from "../rubric/load.js";
 import type { PassResult, RetryVerbatimFn } from "../orchestrate/runPass.js";
 import { runToCompletion } from "../orchestrate/runToCompletion.js";
 import { FileRunStore } from "../store/FileRunStore.js";
+import { FileAvatarStore } from "../store/AvatarStore.js";
+import { statedFactsFor } from "../avatar/statedFacts.js";
+import { isSupportedMediaType } from "../describe/describeImage.js";
+import { DEFAULT_REPAIRER_PROMPT_VERSION } from "../agents/repairer/version.js";
 
 const RUNS_DIR = "data/runs";
+const AVATARS_DIR = "data/avatars";
 
 /**
  * The production `retryVerbatim` dependency. Not folded into `evaluate`
@@ -119,7 +124,20 @@ const STATUS_LINE: Record<string, string> = {
 export async function main(argv: string[]): Promise<number> {
   const file = argv[2];
   if (!file) {
-    console.error("usage: npm run score -- <path-to-description.txt>");
+    console.error(
+      "usage: npm run score -- <path-to-description.txt> [--avatar <avatarId>]",
+    );
+    return 1;
+  }
+
+  // Naming the avatar is what gets the run Repairer prompt v2: the sheet and the brief
+  // travel with the failing fragments, so a repair can only claim what it can see.
+  // Without it the Repairer is blind and this is a v1 run, which is what every run before
+  // 2026-09-16 was. See `docs/repairer-cannot-see.md`.
+  const avatarIndex = argv.indexOf("--avatar");
+  const avatarId = avatarIndex === -1 ? undefined : argv[avatarIndex + 1];
+  if (avatarIndex !== -1 && !avatarId) {
+    console.error("--avatar needs an avatar id");
     return 1;
   }
 
@@ -140,6 +158,24 @@ export async function main(argv: string[]): Promise<number> {
   const store = new FileRunStore(RUNS_DIR);
   const runId = `run-${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID().slice(0, 8)}`;
 
+  const avatarStore = new FileAvatarStore(AVATARS_DIR);
+  const sheet = avatarId ? await avatarStore.readImage(avatarId) : null;
+  const record = avatarId ? await avatarStore.get(avatarId) : null;
+  if (avatarId && !sheet) {
+    // Refused rather than quietly downgraded to v1: a run labelled v1 when the operator
+    // asked for v2 is worse than one that did not start.
+    console.error(`avatar ${avatarId} has no stored sheet in ${AVATARS_DIR}`);
+    return 1;
+  }
+  const grounding =
+    sheet && isSupportedMediaType(sheet.mediaType)
+      ? {
+          sheet: { imageBase64: sheet.bytes.toString("base64"), mediaType: sheet.mediaType },
+          statedFacts: record ? statedFactsFor(record) : null,
+        }
+      : null;
+  console.log(`repairer prompt ${grounding ? "v2 (sheet in hand)" : "v1 (blind)"}`);
+
   // `runToCompletion` rethrows after marking the run "failed" in the store
   // (Task 9: `finishRun(runId, "failed", passes.length)` happens before the
   // rethrow, precisely so the run is never stranded at "running"). A caught
@@ -156,9 +192,15 @@ export async function main(argv: string[]): Promise<number> {
         store,
         evaluate: (args) => evaluateAllGroups({ transport }, args),
         retryVerbatim: buildRetryVerbatim(transport),
-        repair: (args) => repairSpans({ transport }, args),
+        repair: (args) => repairSpans({ transport }, { ...args, ...(grounding ?? {}) }),
       },
-      { rubric, description, runId },
+      {
+        rubric,
+        description,
+        runId,
+        repairerPromptVersion: grounding ? "v2" : DEFAULT_REPAIRER_PROMPT_VERSION,
+        ...(avatarId === undefined ? {} : { avatarId }),
+      },
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

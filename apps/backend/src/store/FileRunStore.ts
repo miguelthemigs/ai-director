@@ -2,7 +2,13 @@ import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { RunManifestSchema, type RunManifest, type RunStatus, type RunStore } from "./RunStore.js";
+import {
+  RunManifestSchema,
+  type RunManifest,
+  type RunStatus,
+  type RunStore,
+  type StoredPass,
+} from "./RunStore.js";
 
 const MANIFEST_FILE = "manifest.json";
 
@@ -64,6 +70,48 @@ export class FileRunStore implements RunStore {
     );
     const manifests = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
     return manifests.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  }
+
+  /**
+   * Reads back what `writePass` wrote, driven by the directory listing rather than by the
+   * manifest's `passes` count: a run that was interrupted has files for the passes it
+   * finished and a count that never caught up, and the files are the thing that actually
+   * exists. A pass file that is not valid JSON is skipped rather than failing the whole
+   * run, for the same reason `listRuns` skips a corrupt manifest -- one unreadable pass
+   * must not hide the passes either side of it.
+   */
+  async readPasses(runId: string): Promise<StoredPass[]> {
+    let names: string[];
+    try {
+      names = await readdir(this.dir(runId));
+    } catch {
+      return [];
+    }
+
+    const byPass = new Map<number, StoredPass>();
+    for (const name of names.sort()) {
+      const match = /^pass-(\d+)-(eval|repair)\.json$/.exec(name);
+      if (!match) continue;
+      const pass = Number(match[1]);
+      const kind = match[2] as "eval" | "repair";
+
+      let payload: unknown;
+      try {
+        payload = JSON.parse(await readFile(path.join(this.dir(runId), name), "utf8"));
+      } catch {
+        continue;
+      }
+
+      const existing = byPass.get(pass) ?? { pass, evaluation: undefined };
+      byPass.set(
+        pass,
+        kind === "eval" ? { ...existing, evaluation: payload } : { ...existing, repair: payload },
+      );
+    }
+
+    return [...byPass.values()]
+      .filter((stored) => stored.evaluation !== undefined)
+      .sort((a, b) => a.pass - b.pass);
   }
 
   private async save(manifest: RunManifest): Promise<void> {

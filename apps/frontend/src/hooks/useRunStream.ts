@@ -87,12 +87,21 @@ function currentPassView(cp: InProgressPass): PassView {
   };
 }
 
-type Action = RunEvent | { name: "reset" };
+/** A finished run fetched whole, rather than reduced from its events. Carries the same
+ *  `RunView` the stream would have built, so everything downstream is identical. */
+type Snapshot = { name: "snapshot"; run: RunView };
+type Failure = { name: "load.failed"; error: string };
+
+type Action = RunEvent | { name: "reset" } | Snapshot | Failure;
 
 function reduce(state: State, event: Action): State {
   switch (event.name) {
     case "reset":
       return initialState();
+    case "snapshot":
+      return { ...state, finalRun: event.run, terminalStatus: event.run.status };
+    case "load.failed":
+      return { ...state, error: event.error };
     case "run.started": {
       return {
         ...state,
@@ -161,7 +170,12 @@ function reduce(state: State, event: Action): State {
 }
 
 function reducer(state: State, action: Action): State {
-  if (action.name === "reset") return reduce(state, action);
+  // Only real run events go into `events`. A snapshot never produced any -- the Architecture
+  // screen showing an empty event log for a reopened run is the truth, and inventing
+  // plausible events to fill it would be the one thing this product must not do.
+  if (action.name === "reset" || action.name === "snapshot" || action.name === "load.failed") {
+    return reduce(state, action);
+  }
   return { ...reduce(state, action), events: [...state.events, action] };
 }
 
@@ -171,18 +185,46 @@ function reducer(state: State, action: Action): State {
  * Groups are merged by check id (never replaced wholesale), which is what makes out-of-order group
  * arrival safe — see the reducer's `evaluator.group.completed` case.
  */
-export function useRunStream(client: RunClient, runId: string | null): UseRunStreamResult {
+export function useRunStream(
+  client: RunClient,
+  runId: string | null,
+  options: { live?: boolean } = {},
+): UseRunStreamResult {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
+  const live = options.live ?? true;
 
   useEffect(() => {
     if (runId === null) return;
     // A new run id starts from a clean slate — a previous run's checks must never bleed into the
     // next one's rows.
     dispatch({ name: "reset" });
+
+    // A finished run has no stream left to join. The server's event bus holds a run's
+    // events only for the life of its process, so a run reopened from history -- or a page
+    // reloaded after the machine slept -- must be fetched whole instead.
+    if (!live) {
+      let cancelled = false;
+      void client
+        .getRun(runId)
+        .then((run) => {
+          if (!cancelled) dispatch({ name: "snapshot", run });
+        })
+        .catch((err: unknown) => {
+          if (cancelled) return;
+          dispatch({
+            name: "load.failed",
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+
     const unsubscribe = client.subscribe(runId, undefined, dispatch);
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, runId]);
+  }, [client, runId, live]);
 
   const run = useMemo<RunView | null>(() => {
     if (state.finalRun) return state.finalRun;

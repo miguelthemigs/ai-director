@@ -1,0 +1,112 @@
+{
+  "description": "A young man in his mid-twenties with wavy brown hair, green eyes, light stubble and fair skin, a small dark mole below his left eye and a thin pale scar crossing his right eyebrow, of average build and medium height, wearing a black crewneck sweater, dark jeans, black leather shoes and a flat silver ring on his right index finger.",
+  "results": [
+    {
+      "status": "scored",
+      "checkId": "age_build",
+      "band": 3,
+      "reason": "Age is concrete (mid-twenties) but the build and height descriptors are generic.",
+      "quotes": [
+        "average build",
+        "medium height"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "face_skin",
+      "band": 4,
+      "reason": "Names several concrete features — green eyes, light stubble, fair skin, mole and scar — but no skin-texture cue such as pore or capillary detail.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "hair_spec",
+      "band": 3,
+      "reason": "Hair colour and texture are given but no style, length or parting.",
+      "quotes": [
+        "wavy brown hair"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "wardrobe",
+      "band": 4,
+      "reason": "Sweater, jeans and shoes are all named with colours including footwear, but no fit or condition cues are given.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "anchor_marker",
+      "band": 5,
+      "reason": "Three localised markers are given: a mole below the left eye, a scar on the right eyebrow, and a silver ring on the right index finger.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_real_person",
+      "band": 4,
+      "reason": "The description uses only generic physical traits with no celebrity name, lookalike comparison, or named real-world role.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_brand_name",
+      "band": 5,
+      "reason": "No brand or franchise names appear, and the wardrobe items are described in generic, re-renderable terms such as a black crewneck sweater, dark jeans and black leather shoes.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "drawable_only",
+      "band": 5,
+      "reason": "Every detail names a visible feature: hair, eyes, stubble, mole, scar, build, and clothing items, with no mood, backstory, or judgement words.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_cross_slot",
+      "band": 5,
+      "reason": "The single self-contained paragraph describes only the person, with no camera, lighting, colour grade, or audio instruction.",
+      "quotes": [],
+      "missingEvidence": false
+    }
+  ],
+  "failing": [
+    "age_build",
+    "hair_spec"
+  ],
+  "notEvaluated": [],
+  "spans": [
+    {
+      "spanId": "hair_spec:0",
+      "checkId": "hair_spec",
+      "quote": "wavy brown hair",
+      "start": 37,
+      "end": 52
+    },
+    {
+      "spanId": "age_build:0",
+      "checkId": "age_build",
+      "quote": "average build",
+      "start": 184,
+      "end": 197
+    },
+    {
+      "spanId": "age_build:1",
+      "checkId": "age_build",
+      "quote": "medium height",
+      "start": 202,
+      "end": 215
+    }
+  ],
+  "unverified": [],
+  "negativeConstraintPresent": false
+}

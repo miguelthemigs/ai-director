@@ -1,0 +1,82 @@
+{
+  "description": "A young man in his mid-twenties with medium-length wavy brown hair, parted to one side and sweeping back over the ears to the nape, green eyes, a single dimple creasing the left cheek, and faint patchy stubble shadow along the jawline and above the upper lip and fair skin, of average build on a medium frame, about 1.78m tall, with shoulders only slightly wider than the hips, wearing a black crewneck sweater, dark jeans and black leather shoes.",
+  "results": [
+    {
+      "status": "scored",
+      "checkId": "age_build",
+      "band": 5,
+      "reason": "States mid-twenties age, average build on a medium frame, plus height of about 1.78m and shoulder-to-hip proportion.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "face_skin",
+      "band": 5,
+      "reason": "Names green eyes, a left-cheek dimple and fair skin, plus a texture cue in the faint patchy stubble shadow along the jawline and upper lip.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "hair_spec",
+      "band": 5,
+      "reason": "Gives brown colour, wavy texture, side-parted sweeping style, and medium length.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "wardrobe",
+      "band": 4,
+      "reason": "All visible garments are named with colours including footwear, but no fit or condition cues are given.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "anchor_marker",
+      "band": 4,
+      "reason": "One marker is named with count and position, the single dimple creasing the left cheek, but no second localised marker.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_real_person",
+      "band": 4,
+      "reason": "The description contains no celebrity name, public figure, or lookalike framing, only generic physical traits.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_brand_name",
+      "band": 5,
+      "reason": "No brand or franchise is referenced, and the garments are described generically (black crewneck sweater, dark jeans, black leather shoes) in a re-renderable way.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "drawable_only",
+      "band": 5,
+      "reason": "Every clause names a visible physical or clothing feature (hair, eyes, dimple, stubble, build, height, sweater, jeans, shoes) with no mood, backstory, or judgement terms.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_cross_slot",
+      "band": 5,
+      "reason": "The single self-contained paragraph describes only the person, with no camera, lighting, colour grade, or audio direction.",
+      "quotes": [],
+      "missingEvidence": false
+    }
+  ],
+  "failing": [],
+  "notEvaluated": [],
+  "spans": [],
+  "unverified": [],
+  "negativeConstraintPresent": false
+}

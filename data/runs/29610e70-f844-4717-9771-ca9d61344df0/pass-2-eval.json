@@ -1,0 +1,82 @@
+{
+  "description": "A young man in his mid-twenties with wavy brown hair parted on the left, green eyes, light stubble, fair skin, one small dark mole below the right eye, and a thin silver hoop in the left earlobe, of lean, broad-shouldered build, roughly 180 cm tall, with long arms and legs and a narrow waist, wearing a black crewneck sweater, dark jeans and black leather shoes.",
+  "results": [
+    {
+      "status": "scored",
+      "checkId": "age_build",
+      "band": 5,
+      "reason": "Gives a concrete age bracket (mid-twenties), build (lean, broad-shouldered) and height/proportion cues (roughly 180 cm, long arms and legs, narrow waist).",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "face_skin",
+      "band": 5,
+      "reason": "Names green eyes, fair skin and a mole below the right eye, plus a facial skin-surface cue in the light stubble.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "hair_spec",
+      "band": 5,
+      "reason": "States colour (brown), texture (wavy), style and parting (parted on the left).",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "wardrobe",
+      "band": 4,
+      "reason": "All visible garments including footwear are named with colours, but no fit or condition cues are given.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "anchor_marker",
+      "band": 5,
+      "reason": "Two localised markers: a small dark mole below the right eye and a thin silver hoop in the left earlobe.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_real_person",
+      "band": 4,
+      "reason": "The description is a generic physical portrait with no celebrity name, lookalike framing, or named real-world role.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_brand_name",
+      "band": 5,
+      "reason": "No brand or franchise appears, and the garments are described generically enough to re-render (black crewneck sweater, dark jeans, black leather shoes).",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "drawable_only",
+      "band": 5,
+      "reason": "Every clause names a visible physical feature or garment, with no mood, feeling, backstory or judgement words.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_cross_slot",
+      "band": 5,
+      "reason": "The single self-contained paragraph describes only the person's appearance, with no camera, lighting, colour grade or audio direction.",
+      "quotes": [],
+      "missingEvidence": false
+    }
+  ],
+  "failing": [],
+  "notEvaluated": [],
+  "spans": [],
+  "unverified": [],
+  "negativeConstraintPresent": false
+}

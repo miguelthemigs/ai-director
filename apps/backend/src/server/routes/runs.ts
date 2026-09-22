@@ -5,6 +5,7 @@ import { parseEventId, type RunView } from "@ai-director/contract";
 import type { RunEventBus } from "../../orchestrate/events.js";
 import type { Rubric } from "../../rubric/load.js";
 import type { RunStore } from "../../store/RunStore.js";
+import { rebuildRunView } from "../../present/rebuildRunView.js";
 import { formatSse } from "../sse.js";
 
 /** How often to write an SSE keepalive comment on an open `/events` stream. */
@@ -16,7 +17,20 @@ const KEEPALIVE_MS = 15_000;
  * takes tens of seconds and the browser needs the id immediately to open its
  * event stream (Task 18).
  */
-export type StartRun = (args: { runId: string; description: string }) => Promise<RunView>;
+export type StartRun = (args: {
+  runId: string;
+  description: string;
+  /**
+   * Which stored avatar this description was read off, when the caller knows.
+   *
+   * Optional, and absent is the ordinary case: a description typed into the textarea
+   * belongs to no avatar. When it IS present the Repairer is given that avatar's sheet
+   * and brief and runs prompt v2 (`agents/repairer/prompt-v2.ts`); without it the
+   * Repairer is blind and runs v1, which is the prompt that fabricated the hair length,
+   * the height and the build on run `bee3bcd6`. See `docs/repairer-cannot-see.md`.
+   */
+  avatarId?: string;
+}) => Promise<RunView>;
 
 export type RunRouteDeps = {
   store: RunStore;
@@ -31,17 +45,20 @@ const CreateRunBodySchema = z.object({
     .trim()
     .min(1, "description must not be empty")
     .max(20_000, "description must be at most 20000 characters"),
+  /** Naming the avatar is what upgrades the Repairer from blind v1 to sighted v2. */
+  avatarId: z.string().min(1).max(200).optional(),
 });
 
 export function registerRunRoutes(app: FastifyInstance, deps: RunRouteDeps): void {
-  // `RunStore` (Task 8) persists only the manifest as an audit trail -- runId,
-  // status, pass count, timestamps -- and exposes no way to read pass-level
-  // detail back. `startRun` is the only thing that ever holds a run's full
-  // `RunView`, so this cache is the sole source `GET /runs/:id` has for a
-  // run's body. Consequence, flagged in this task's report: a run that is
-  // still in progress, or that failed, or that was in flight when the
-  // process last restarted, has no entry here and 404s even though its
-  // manifest exists in the store.
+  // A completed run's assembled view, kept so the common case -- asking for the
+  // run this process just finished -- answers without touching the disk.
+  //
+  // This map used to be the ONLY source `GET /runs/:id` had, which made every
+  // finished run unreachable the moment the process restarted: under `tsx
+  // watch` that is any file save, and closing a laptop takes the dev server
+  // with it. The run's files were on disk the whole time and nothing could
+  // read them. `rebuildRunView` is now the fallback, so the cache is an
+  // optimisation rather than the system of record.
   const runViews = new Map<string, RunView>();
 
   app.post("/runs", async (request, reply) => {
@@ -57,7 +74,11 @@ export function registerRunRoutes(app: FastifyInstance, deps: RunRouteDeps): voi
     // `startRun` does internally (`finishRun(runId, "failed", ...)`), so
     // there is nothing left to do with it at this layer.
     void deps
-      .startRun({ runId, description: parsed.data.description })
+      .startRun({
+        runId,
+        description: parsed.data.description,
+        ...(parsed.data.avatarId === undefined ? {} : { avatarId: parsed.data.avatarId }),
+      })
       .then((view) => runViews.set(runId, view))
       .catch(() => {});
 
@@ -78,14 +99,30 @@ export function registerRunRoutes(app: FastifyInstance, deps: RunRouteDeps): voi
     const cached = runViews.get(id);
     if (cached) return cached;
 
+    let manifest;
     try {
-      await deps.store.getRun(id);
+      manifest = await deps.store.getRun(id);
     } catch {
       return reply.code(404).send({ error: `run "${id}" not found` });
     }
-    // The manifest exists, but no completed view is cached for it yet (see
-    // the comment on `runViews` above).
-    return reply.code(404).send({ error: `run "${id}" has no completed view yet` });
+
+    const stored = await deps.store.readPasses(id);
+    if (stored.length === 0) {
+      // The manifest exists but the run has written no pass yet -- it is still in its
+      // first pass, or it failed before finishing one. There is nothing to show, and
+      // saying so is better than an empty run that looks like a run with no findings.
+      return reply.code(404).send({ error: `run "${id}" has not finished a pass yet` });
+    }
+
+    try {
+      return rebuildRunView(manifest, stored);
+    } catch (err) {
+      // A pass file that cannot be parsed back into a view is a real failure of this
+      // route, not a missing run: 404 would tell the caller to stop looking for a run
+      // that is right there on disk.
+      request.log.error({ err, runId: id }, "could not rebuild run view from disk");
+      return reply.code(500).send({ error: `run "${id}" could not be read back from disk` });
+    }
   });
 
   // Server-sent events, not WebSocket: traffic here is server to client only,

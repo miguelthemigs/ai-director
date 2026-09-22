@@ -4,6 +4,8 @@ import { RunEventBus } from "../orchestrate/events.js";
 import type { Rubric } from "../rubric/load.js";
 import type { RunStore } from "../store/RunStore.js";
 import type { VersionStore } from "../store/VersionStore.js";
+import { registerAvatarRoutes, type AvatarRouteDeps } from "./routes/avatar.js";
+import { registerCompareRoutes, type CompareRouteDeps } from "./routes/compare.js";
 import { registerRunRoutes, type StartRun } from "./routes/runs.js";
 import { registerVersionRoutes } from "./routes/versions.js";
 
@@ -18,12 +20,38 @@ export type AppDeps = {
   // the same bus that `startRun` publishes to is the one `GET
   // /runs/:id/events` subscribes to.
   bus?: RunEventBus;
+  /** The Mentic-pipeline transports. Optional, and absent is a real state rather than a
+   *  misconfiguration: a server with no GOOGLE_AI_KEY still grades descriptions perfectly
+   *  well, it just cannot render a sheet, and `/avatar/*` says so with a 503 instead of
+   *  failing somewhere deeper with a provider error. */
+  avatar?: AvatarRouteDeps;
+  /** The video comparison. Optional, and absent is a real state: a server with no
+   *  OPENROUTER_API_KEY grades and repairs exactly as before, it simply cannot render, and
+   *  `POST /compare` says so with a 503 rather than failing somewhere deeper. */
+  compare?: CompareRouteDeps;
+  /** Fastify's request/error logger. Off by default so the test suite stays quiet, and ON
+   *  in the real server: the error handler below deliberately redacts a 500's message to
+   *  the client, so without a logger a provider failure was written precisely nowhere.
+   *  That is why a failed render looked like it had silently "disappeared". */
+  logger?: boolean;
 };
 
 const DEV_ORIGIN = "http://localhost:5173";
 
+/**
+ * 12MB, against Fastify's 1MB default.
+ *
+ * `/avatar/describe` carries a character reference sheet as base64 JSON. Mentic renders
+ * those at 2K, which is several megabytes before base64 adds its third, so on the default
+ * limit every real sheet was rejected with a bare 413 and no route ever saw it. This
+ * number sits above `/avatar/describe`'s own 8MB cap on the image field, so an oversized
+ * image is refused by that route with a reason the caller can read, and this limit is only
+ * the outer guard against a body that is not an image at all.
+ */
+const BODY_LIMIT_BYTES = 12 * 1024 * 1024;
+
 export function buildApp(deps: AppDeps): FastifyInstance {
-  const app = Fastify();
+  const app = Fastify({ bodyLimit: BODY_LIMIT_BYTES, logger: deps.logger ?? false });
 
   app.register(cors, { origin: DEV_ORIGIN });
 
@@ -40,6 +68,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   registerRunRoutes(app, { ...deps, bus: deps.bus ?? new RunEventBus() });
   registerVersionRoutes(app, { versionStore: deps.versionStore });
+  registerAvatarRoutes(app, deps.avatar ?? {});
+  registerCompareRoutes(app, deps.compare ?? {});
 
   return app;
 }

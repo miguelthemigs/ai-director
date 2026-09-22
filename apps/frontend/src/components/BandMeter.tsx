@@ -10,6 +10,9 @@ export type BandMeterProps = {
   band: Band | null;
   /** Always the contract's own `percent`; never recomputed here. `null` alongside `band === null`. */
   percent: Percent | null;
+  /** The TRACK's width in px, not the whole meter's. The meter also holds the percentage
+   *  numeral and the band mark, and sizing the whole element to this number clipped both:
+   *  a 72px box cannot hold a 72px track plus `100%` plus a 16px glyph. */
   width?: number;
   showThreshold?: boolean;
   /** Supplied by `CheckRow`'s reveal batching. Always 0 for a row that has already been scored. */
@@ -21,7 +24,7 @@ const TICKS = [20, 40, 60, 80, 100] as const;
 function BandMeterImpl({
   band,
   percent,
-  width = 72,
+  width = 56,
   showThreshold = true,
   delay = 0,
 }: BandMeterProps): React.JSX.Element {
@@ -37,7 +40,7 @@ function BandMeterImpl({
       aria-valuemax={100}
       aria-valuenow={percent ?? 0}
       aria-valuetext={band === null ? "not scored" : `band ${band} of 5, ${percent} percent`}
-      style={{ width }}
+      style={{ "--meter-track-w": `${width}px` } as React.CSSProperties}
     >
       <span className="band-meter__track" aria-hidden="true">
         {TICKS.map((tick) => (

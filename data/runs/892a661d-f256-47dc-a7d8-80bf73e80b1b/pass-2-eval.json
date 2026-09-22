@@ -1,0 +1,124 @@
+{
+  "description": "a woman in her mid-thirties, lean and narrow-shouldered, standing about 5'7\" with long legs and a short torso",
+  "results": [
+    {
+      "status": "scored",
+      "checkId": "age_build",
+      "band": 5,
+      "reason": "Age bracket (mid-thirties), build (lean, narrow-shouldered) and height plus proportion cues (5'7\", long legs, short torso) are all concrete.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "face_skin",
+      "band": 1,
+      "reason": "The description contains only body and height information, with no face or skin features named.",
+      "quotes": [
+        "a woman in her mid-thirties, lean and narrow-shouldered, standing about 5'7\" with long legs and a short torso"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "hair_spec",
+      "band": 1,
+      "reason": "Hair colour, texture and style are entirely absent from the text.",
+      "quotes": [
+        "a woman in her mid-thirties, lean and narrow-shouldered, standing about 5'7\" with long legs and a short torso"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "wardrobe",
+      "band": 1,
+      "reason": "No garments or footwear are mentioned at all.",
+      "quotes": [
+        "a woman in her mid-thirties, lean and narrow-shouldered, standing about 5'7\" with long legs and a short torso"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "anchor_marker",
+      "band": 1,
+      "reason": "No small reusable identity marker such as a mole, scar or accessory is named.",
+      "quotes": [
+        "a woman in her mid-thirties, lean and narrow-shouldered, standing about 5'7\" with long legs and a short torso"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_real_person",
+      "band": 4,
+      "reason": "The description identifies only a generic unnamed woman with age and build details, with no celebrity, public figure, lookalike framing, or statement that she is fictional.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_brand_name",
+      "band": 4,
+      "reason": "No brand, franchise, or product-line name appears, and no wardrobe is described at all.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "drawable_only",
+      "band": 5,
+      "reason": "Every phrase names a visible physical trait: age range, build, shoulder width, height, and limb-to-torso proportions, with no mood, backstory, or judgement.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_cross_slot",
+      "band": 5,
+      "reason": "The text is one self-contained block describing only the person's body, with no camera, lighting, colour grade, or audio direction.",
+      "quotes": [],
+      "missingEvidence": false
+    }
+  ],
+  "failing": [
+    "face_skin",
+    "hair_spec",
+    "wardrobe",
+    "anchor_marker"
+  ],
+  "notEvaluated": [],
+  "spans": [
+    {
+      "spanId": "face_skin:0",
+      "checkId": "face_skin",
+      "quote": "a woman in her mid-thirties, lean and narrow-shouldered, standing about 5'7\" with long legs and a short torso",
+      "start": 0,
+      "end": 109
+    },
+    {
+      "spanId": "hair_spec:0",
+      "checkId": "hair_spec",
+      "quote": "a woman in her mid-thirties, lean and narrow-shouldered, standing about 5'7\" with long legs and a short torso",
+      "start": 0,
+      "end": 109
+    },
+    {
+      "spanId": "wardrobe:0",
+      "checkId": "wardrobe",
+      "quote": "a woman in her mid-thirties, lean and narrow-shouldered, standing about 5'7\" with long legs and a short torso",
+      "start": 0,
+      "end": 109
+    },
+    {
+      "spanId": "anchor_marker:0",
+      "checkId": "anchor_marker",
+      "quote": "a woman in her mid-thirties, lean and narrow-shouldered, standing about 5'7\" with long legs and a short torso",
+      "start": 0,
+      "end": 109
+    }
+  ],
+  "unverified": [],
+  "negativeConstraintPresent": false
+}

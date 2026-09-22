@@ -73,7 +73,7 @@ a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; 
   height: 100dvh;
   overflow: hidden;
 }
-.shell > * { padding-inline: var(--sp-5); }
+.shell > * { padding-inline: var(--sp-6); }
 
 .top-bar {
   display: flex;
@@ -81,15 +81,31 @@ a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; 
   gap: var(--sp-6);
   height: var(--h-topbar);
   border-bottom: var(--bd-hair) solid var(--ln);
+  background: var(--sf-panel);
 }
+/* The wordmark carries the one brand dot in the product. A logotype in all-caps
+   letterspaced 13px was the single strongest "this is a terminal" signal in the old
+   chrome, so it is sentence case at reading size with the accent doing the work. */
 .top-bar__mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
   font-family: var(--ff-ui);
   font-weight: var(--fw-semi);
-  font-size: var(--fs-label);
-  letter-spacing: var(--tr-caps);
-  text-transform: uppercase;
+  font-size: var(--fs-body);
+  letter-spacing: var(--tr-title);
+  text-transform: none;
   color: var(--ink);
   white-space: nowrap;
+}
+.top-bar__mark::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-tint);
+  flex-shrink: 0;
 }
 .top-bar__right {
   display: flex;
@@ -98,35 +114,47 @@ a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; 
   margin-inline-start: auto;
 }
 
+/* Segmented control rather than underlined caps. Same three destinations, but it reads as
+   a control you press instead of a row of section headings. */
 .screen-tabs {
   display: flex;
-  gap: var(--sp-4);
+  gap: var(--sp-1);
+  padding: var(--sp-1);
+  background: var(--sf-ground);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
 }
 .screen-tab {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  padding-block: var(--sp-2);
-  font-size: var(--fs-label);
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--r-1);
+  font-size: var(--fs-ui);
   font-weight: var(--fw-med);
-  letter-spacing: var(--tr-caps);
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--ink-3);
   text-decoration: none;
-  border-bottom: var(--bd-mark) solid transparent;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
+.screen-tab:hover { color: var(--ink-2); background: var(--sf-hover); }
 .screen-tab[data-active] {
   color: var(--ink);
-  border-bottom-color: var(--focus);
+  background: var(--sf-panel-raised);
+  box-shadow: var(--sh-raise);
 }
 .screen-tab__badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: var(--sp-6);
+  min-width: 20px;
+  height: 20px;
   padding-inline: var(--sp-2);
-  border-radius: var(--r-1);
+  border-radius: 999px;
   font-size: var(--fs-micro);
+  font-weight: var(--fw-semi);
 }
 /* `no_improvement` only (design doc §6.2) — the product's one solid-fill-behind-text treatment. */
 .screen-tab__badge[data-tone="fill"] {
@@ -171,30 +199,102 @@ a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; 
 /* Sample-data marker (fix round 1, task 16). Never the alarm tokens — this names provenance, not a
  * failure — and never conveyed by colour alone: the text itself is the signal. */
 .fixture-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
   font-family: var(--ff-ui);
   font-size: var(--fs-micro);
   font-weight: var(--fw-med);
-  letter-spacing: var(--tr-caps);
-  text-transform: uppercase;
-  color: var(--ink);
-  background: var(--sf-panel);
-  border: var(--bd-hair) solid var(--mark);
-  border-radius: var(--r-1);
-  padding: var(--sp-1) var(--sp-3);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-2);
+  background: var(--brand-tint);
+  border: var(--bd-hair) solid var(--brand-edge);
+  border-radius: 999px;
+  padding: var(--sp-2) var(--sp-4);
   white-space: nowrap;
+}
+.fixture-notice::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brand);
+  flex-shrink: 0;
 }
 
 .theme-toggle {
   font-family: var(--ff-ui);
-  font-size: var(--fs-label);
+  font-size: var(--fs-ui);
+  font-weight: var(--fw-med);
   color: var(--ink-2);
-  background: var(--sf-panel);
+  background: var(--sf-panel-raised);
   border: var(--bd-hair) solid var(--ln);
-  border-radius: var(--r-1);
+  border-radius: var(--r-2);
   padding: var(--sp-2) var(--sp-4);
   cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
-.theme-toggle:hover { color: var(--ink); border-color: var(--ln-strong); }
+.theme-toggle:hover { color: var(--ink); border-color: var(--ln-strong); background: var(--sf-hover); }
+
+/*
+ * ── The button treatment, shared ──────────────────────────────────────────────────
+ * Every control in the product used to be a hairline rectangle on the panel colour,
+ * which is why nothing looked pressable. Three levels now: `--primary` is the one
+ * action a screen is for, the default is everything else, and `--quiet` is a control
+ * that should not compete. All three lift on hover and settle on press, because a
+ * control with no response to the pointer reads as disabled.
+ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  font-family: var(--ff-ui);
+  font-size: var(--fs-ui);
+  font-weight: var(--fw-med);
+  line-height: 1;
+  /* 36px tall at this padding: comfortably over the 44px target once the row's own
+     spacing is counted, and never below 32px on the densest control. */
+  padding: var(--sp-3) var(--sp-5);
+  border-radius: var(--r-2);
+  border: var(--bd-hair) solid var(--ln);
+  background: var(--sf-panel-raised);
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.btn:hover:not(:disabled) { background: var(--sf-hover); border-color: var(--ln-strong); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.btn:disabled { cursor: not-allowed; opacity: 0.45; }
+
+.btn--primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--brand-ink);
+  font-weight: var(--fw-semi);
+}
+.btn--primary:hover:not(:disabled) {
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
+  box-shadow: var(--sh-glow);
+}
+
+.btn--quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink-2);
+}
+.btn--quiet:hover:not(:disabled) { background: var(--sf-hover); color: var(--ink); border-color: var(--ln); }
+
+@media (prefers-reduced-motion: reduce) {
+  .btn:active:not(:disabled) { transform: none; }
+}
 
 .screen-body {
   min-height: 0;

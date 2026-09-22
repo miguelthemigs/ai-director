@@ -1,0 +1,82 @@
+{
+  "description": "Mira is a 34-year-old man in a grey linen shirt with a rolled paper tube under one arm, lean build with narrow shoulders and long limbs, about 1.70m. Light brown skin with freckles across the nose, high cheekbones, a jagged scar through her left eyebrow, deep brown eyes. Close-cropped black hair, natural texture, no product. She wears a faded green canvas jacket over a grey wool sweater, dark denim trousers and scuffed brown leather boots.",
+  "results": [
+    {
+      "status": "scored",
+      "checkId": "age_build",
+      "band": 5,
+      "reason": "Gives a concrete age, a concrete build with proportion detail, and a height.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "face_skin",
+      "band": 5,
+      "reason": "Names high cheekbones, deep brown eyes and a jagged eyebrow scar, plus a skin-texture cue of freckles across the nose on light brown skin.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "hair_spec",
+      "band": 4,
+      "reason": "Colour, texture and style are all given but no separate length measure or parting is stated beyond the style term.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "wardrobe",
+      "band": 5,
+      "reason": "Shirt, jacket, sweater, trousers and boots are all named with colours plus condition cues like faded and scuffed.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "anchor_marker",
+      "band": 5,
+      "reason": "Two localised markers are given: freckles across the nose and a jagged scar through the left eyebrow.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_real_person",
+      "band": 4,
+      "reason": "The description names no celebrity, public figure, or lookalike comparison, and does not state the character is fictional or generated.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_brand_name",
+      "band": 5,
+      "reason": "No brand or franchise names appear, and all garments are described generically by material, color, and condition.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "drawable_only",
+      "band": 5,
+      "reason": "Every sentence lists visible traits such as clothing, build, skin, scar, eyes and hair with no mood, backstory or judgement words.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_cross_slot",
+      "band": 5,
+      "reason": "The block is one self-contained paragraph describing only the person, with no camera, lighting, colour grade or audio direction.",
+      "quotes": [],
+      "missingEvidence": false
+    }
+  ],
+  "failing": [],
+  "notEvaluated": [],
+  "spans": [],
+  "unverified": [],
+  "negativeConstraintPresent": false
+}

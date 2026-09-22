@@ -1,0 +1,82 @@
+{
+  "description": "A young man in his mid-twenties with medium-length wavy brown hair in a side part, swept back off the forehead and falling over the ears, green eyes, a dimple in the left cheek and a faint stubble shadow along the jawline and above the upper lip and fair skin, of a man in his early twenties, 1.78m tall, of average build on a medium frame with shoulders and hips close to the same width and legs roughly even in length with the torso, about 1.78m tall, with even shoulders and straight posture, wearing a black crewneck sweater, dark jeans and black leather shoes.",
+  "results": [
+    {
+      "status": "scored",
+      "checkId": "age_build",
+      "band": 5,
+      "reason": "Gives a concrete age bracket (mid-twenties), a build with frame and proportion detail, and a stated height of 1.78m.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "face_skin",
+      "band": 5,
+      "reason": "Names green eyes, a left-cheek dimple and fair skin, plus a faint stubble shadow along the jaw and upper lip as a surface-texture cue.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "hair_spec",
+      "band": 5,
+      "reason": "States colour (brown), texture (wavy), style (side part swept back) and length (medium-length).",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "wardrobe",
+      "band": 4,
+      "reason": "All visible garments are named with colours including footwear, but no fit or condition cues are given.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "anchor_marker",
+      "band": 4,
+      "reason": "One marker is named and localised, the dimple in the left cheek, with no second localised marker.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_real_person",
+      "band": 4,
+      "reason": "The description contains only generic physical traits with no celebrity, public figure, or lookalike framing, and no statement that the character is fictional.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_brand_name",
+      "band": 5,
+      "reason": "Wardrobe is described in fully generic, re-renderable terms such as a black crewneck sweater, dark jeans, and black leather shoes with no brand or franchise reference.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "drawable_only",
+      "band": 5,
+      "reason": "Every detail named—hair, eyes, dimple, stubble, height, build, posture, clothing—is a visible physical trait with no mood, feeling, backstory or judgement wording.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_cross_slot",
+      "band": 5,
+      "reason": "The single paragraph describes only the person's appearance and clothing, with no camera, lighting, colour grade or audio direction.",
+      "quotes": [],
+      "missingEvidence": false
+    }
+  ],
+  "failing": [],
+  "notEvaluated": [],
+  "spans": [],
+  "unverified": [],
+  "negativeConstraintPresent": false
+}

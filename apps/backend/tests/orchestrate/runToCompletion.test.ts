@@ -306,6 +306,49 @@ describe("runToCompletion", () => {
     );
   });
 
+  /* The rejected replacements were persisted; the APPLIED ones never were. That gap only
+     showed once a run had to be rebuilt from its files after a restart: every reopened run
+     rendered as though the Repairer had changed nothing, even the passes where it had. */
+  it("writes the applied replacements into the repair payload, not only the rejected ones", async () => {
+    const rubric = await loadRubric("v1");
+    // Pass 2 passes, so the run ends on the repaired text rather than going round again
+    // against a description its own quotes no longer match.
+    const evaluate: EvaluateFn = vi
+      .fn()
+      .mockResolvedValueOnce(failDrawable(rubric))
+      .mockResolvedValueOnce(allPass(rubric));
+    const repair: RepairFn = vi.fn().mockResolvedValue({
+      replacements: [
+        {
+          spanId: "drawable_only:0",
+          newText: "a plain grey hoodie",
+          rationale: "names what is drawable",
+        },
+      ],
+      rejected: [],
+    });
+    const s = await store();
+    const spy = vi.spyOn(s, "writePass");
+    await runToCompletion(
+      { evaluate, retryVerbatim: noRetry, repair, store: s },
+      { rubric, description, runId: "run-applied-1" },
+    );
+    expect(spy).toHaveBeenCalledWith(
+      "run-applied-1",
+      1,
+      "repair",
+      expect.objectContaining({
+        replacements: [
+          {
+            spanId: "drawable_only:0",
+            newText: "a plain grey hoodie",
+            rationale: "names what is drawable",
+          },
+        ],
+      }),
+    );
+  });
+
   it("classifies a run as improved_still_failing when a band rose even though the failing count did not shrink", async () => {
     const rubric = await loadRubric("v1");
     const evaluate: EvaluateFn = vi

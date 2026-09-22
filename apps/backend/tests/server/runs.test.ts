@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { FIXTURE_RUNS } from "@ai-director/contract";
 import { buildApp } from "../../src/server/app.js";
 import { loadRubric } from "../../src/rubric/load.js";
-import type { RunManifest, RunStatus, RunStore } from "../../src/store/RunStore.js";
+import type { RunManifest, RunStatus, RunStore, StoredPass } from "../../src/store/RunStore.js";
 import type { VersionStore } from "../../src/store/VersionStore.js";
 
 // This suite exercises run routes only; version routes have their own
@@ -22,6 +22,7 @@ function stubVersionStore(): VersionStore {
 
 function stubStore(): RunStore {
   const runs = new Map<string, RunManifest>();
+  const passes = new Map<string, StoredPass[]>();
   return {
     createRun: async (m) => void runs.set(m.runId, m),
     writePass: async () => {},
@@ -32,7 +33,11 @@ function stubStore(): RunStore {
       return found;
     },
     listRuns: async () => [...runs.values()],
-  };
+    readPasses: async (id: string) => passes.get(id) ?? [],
+    // Test-only handle, so a test can put a finished run's files in place without
+    // running one. Not part of `RunStore`.
+    ...({ __seedPasses: (id: string, p: StoredPass[]) => passes.set(id, p) } as object),
+  } as RunStore;
 }
 
 describe("run routes", () => {
@@ -122,7 +127,55 @@ describe("run routes", () => {
       expect(getRes.json()).toEqual(FIXTURE_RUNS.passed);
     });
 
-    it("404s for a run whose manifest exists but has no cached view yet", async () => {
+    /* The bug this closes: a finished run's assembled view lived only in this route's own
+       in-memory map, so restarting the server -- a file save under `tsx watch`, a laptop
+       closing -- made every completed run unreachable while its files sat on disk. */
+    it("rebuilds a finished run from its files when nothing is cached", async () => {
+      await store.createRun({
+        runId: "run-on-disk",
+        rubricVersion: "v1",
+        model: "claude-opus-5",
+        status: "passed" satisfies RunStatus,
+        startedAt: "2026-09-11T20:47:00.985Z",
+        passes: 1,
+      });
+      (store as unknown as { __seedPasses: (id: string, p: StoredPass[]) => void }).__seedPasses(
+        "run-on-disk",
+        [
+          {
+            pass: 1,
+            evaluation: {
+              description: "A man in a grey hoodie.",
+              results: [
+                {
+                  status: "scored",
+                  checkId: "drawable_only",
+                  band: 5,
+                  reason: "All drawable.",
+                  quotes: [],
+                  missingEvidence: false,
+                },
+              ],
+              failing: [],
+              notEvaluated: [],
+              spans: [],
+              unverified: [],
+              negativeConstraintPresent: false,
+            },
+          },
+        ],
+      );
+
+      const res = await app.inject({ method: "GET", url: "/runs/run-on-disk" });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        runId: "run-on-disk",
+        status: "passed",
+        originalDescription: "A man in a grey hoodie.",
+      });
+    });
+
+    it("404s for a run whose manifest exists but has written no passes yet", async () => {
       await store.createRun({
         runId: "run-in-progress",
         rubricVersion: "1.0.0",

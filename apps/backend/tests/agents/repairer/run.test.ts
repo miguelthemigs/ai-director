@@ -23,6 +23,9 @@ describe("repairSpans", () => {
         { spanId: "drawable_only:0", newText: "square jaw", rationale: "replaced a mood word" },
       ],
       rejected: [],
+      // No sheet was passed, so this ran the blind v1 prompt. See
+      // `agents/repairer/version.ts` on why v1 stays reachable.
+      promptVersion: "v1",
     });
   });
 

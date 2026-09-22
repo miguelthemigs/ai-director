@@ -1,7 +1,7 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
-import type { RunEvent, RunSummary, RunView, VersionCompare, VersionRow } from "@ai-director/contract";
+import { FIXTURE_RUNS, type RunEvent, type RunSummary, type RunView, type VersionCompare, type VersionRow } from "@ai-director/contract";
 import { App } from "../src/App.js";
 import type { RunClient } from "../src/data/RunClient.js";
 import { FixtureRunClient } from "../src/data/FixtureRunClient.js";
@@ -124,6 +124,9 @@ describe("App shell — RUN tab failing badge (design doc §6.2)", () => {
     // The file-level `beforeEach` above already starts every test on `/`.
     const client = new FixtureRunClient({ speedMs: 1, scenario });
     render(<App client={client} />);
+    // The composer opens on the Build tab (fields, render, describe); this helper drives the Direct
+    // tab, which grades a description on its own.
+    fireEvent.click(screen.getByRole("tab", { name: "Paste a description" }));
     fireEvent.change(screen.getByPlaceholderText("Paste the character description."), {
       target: { value: "a description long enough to submit" },
     });
@@ -154,5 +157,56 @@ describe("App shell — RUN tab failing badge (design doc §6.2)", () => {
   it("shows no badge at all once the run has passed", async () => {
     await runToCompletion("passed");
     expect(screen.queryByLabelText(/failing/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Which run is on screen is in the URL, because that is the only thing a reload keeps.
+ * Real timers here: these two wait on a promise, not on the fixture's event clock.
+ */
+describe("App shell — reopening a run", () => {
+  /* ── Why the run id is in the URL ─────────────────────────────────────────────────────
+     It used to live in one `useState` and nowhere else, so any reload -- closing the
+     laptop, Chrome discarding the tab on wake -- forgot which run was on screen, and the
+     run itself was unreachable after that. The URL is what survives a reload. */
+  it("reopens the run named in the URL after a reload", async () => {
+    const view = { ...FIXTURE_RUNS.passed, runId: "run-on-disk" } as RunView;
+    const getRun = vi.fn().mockResolvedValue(view);
+    class Client extends NonFixtureStubClient {
+      override getRun = getRun;
+    }
+    window.history.pushState({}, "", "/?run=run-on-disk");
+
+    render(<App client={new Client()} />);
+
+    await waitFor(() => expect(getRun).toHaveBeenCalledWith("run-on-disk"));
+    // The composer is what shows when no run is open; a restored run replaces it.
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /^Run$/ })).not.toBeInTheDocument(),
+    );
+  });
+
+  it("puts a run in the URL when one is opened from the history", async () => {
+    const user = userEvent.setup();
+    const view = { ...FIXTURE_RUNS.passed, runId: "run-older" } as RunView;
+    class Client extends NonFixtureStubClient {
+      override getRun = vi.fn().mockResolvedValue(view);
+      override listRuns = vi.fn().mockResolvedValue([
+        {
+          runId: "run-older",
+          rubricVersion: "v1",
+          model: "claude-opus-5",
+          status: "passed" as const,
+          startedAt: "2026-09-11T20:47:00.985Z",
+          finishedAt: "2026-09-11T20:47:43.168Z",
+          passes: 3,
+        },
+      ]);
+    }
+
+    render(<App client={new Client()} />);
+
+    await user.click(await screen.findByRole("button", { name: /PASSED/ }));
+    await waitFor(() => expect(window.location.search).toBe("?run=run-older"));
   });
 });

@@ -3,15 +3,22 @@
  * `RunScreen.tsx`; the shared chrome in `base.css` is untouched.
  */
 
+/* Three cards on the ground rather than three panes divided by hairlines. The seam-only
+   treatment is what made every screen read as one undifferentiated instrument panel; a
+   gap plus a radius is what separates a document from a chrome. */
 .run {
   display: grid;
   grid-template-columns: var(--w-rail) minmax(0, 1fr) var(--w-checks);
-  gap: 0;
+  gap: var(--sp-4);
   min-height: 0;
   height: 100%;
+  padding-block: var(--sp-4);
 }
-.run > * + * {
-  border-inline-start: var(--bd-hair) solid var(--ln);
+.run > * {
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-3);
+  overflow: hidden;
 }
 
 @media (max-width: 1024px) {
@@ -23,10 +30,11 @@
 @media (max-width: 720px) {
   .run {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .run > * + * {
-    border-inline-start: none;
-    border-top: var(--bd-hair) solid var(--ln);
+    /* The whole screen scrolls as one at phone width; three independently scrolling
+       cards inside a viewport-height grid is how a phone layout traps content. */
+    grid-template-rows: auto;
+    height: auto;
+    overflow-y: auto;
   }
 }
 
@@ -35,11 +43,10 @@
 .run__rail {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   gap: var(--sp-5);
   min-height: 0;
   overflow-y: auto;
-  padding: var(--sp-4) var(--sp-2);
+  padding: var(--sp-5) var(--sp-3);
   background: var(--sf-panel);
 }
 
@@ -98,6 +105,7 @@
   outline: none;
   box-shadow: var(--focus-ring);
 }
+.pass-step:hover:not([data-selected]) { color: var(--ink); }
 .pass-step[data-selected] {
   color: var(--ink);
 }
@@ -105,6 +113,8 @@
   position: absolute;
   inset: 0;
   background: var(--sf-panel-raised);
+  border-radius: var(--r-2);
+  box-shadow: inset 0 0 0 1px var(--ln);
   z-index: 0;
 }
 .pass-step__frame,
@@ -117,6 +127,7 @@
 .pass-step__frame {
   width: 100%;
   height: 4px;
+  border-radius: 999px;
   border-radius: var(--r-1);
   background: var(--ln);
 }
@@ -164,58 +175,99 @@
 
 /* ── Verdict banner ────────────────────────────────────────── */
 
+/* The headline result. Three states, one shape: a card with a tinted ground, a coloured
+   rule down its leading edge and the numeral as the largest thing on the screen. The old
+   version was a full-bleed colour block with centred all-caps type, which is why it read
+   as an error dump rather than a finding. §6.2's binding table is unchanged: same word,
+   same numeral, same second line, same forbidden tokens. */
 .verdict-banner {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "mark word"
+    "mark count"
+    "mark detail";
   align-items: center;
-  gap: var(--sp-2);
-  text-align: center;
-  padding: var(--sp-4) var(--sp-3);
-  border-radius: var(--r-2);
+  column-gap: var(--sp-5);
+  row-gap: var(--sp-2);
+  text-align: start;
+  padding: var(--sp-6);
+  border-radius: var(--r-4);
+  border: var(--bd-hair) solid var(--ln);
+  border-inline-start-width: 4px;
+  box-sizing: border-box;
+  min-width: 0;
+  flex-shrink: 0;
+  box-shadow: var(--sh-raise);
 }
 .verdict-banner[data-status="passed"] {
-  border: var(--bd-mark) solid var(--band-5);
-  background: var(--sf-panel);
+  border-color: var(--band-5);
+  background: linear-gradient(135deg, var(--band-5-tint), var(--sf-panel-raised) 60%);
   color: var(--band-5);
 }
 .verdict-banner[data-status="improved_still_failing"] {
-  border: var(--bd-mark) solid var(--sig-alarm-edge);
-  background: var(--sig-alarm-tint);
+  border-color: var(--sig-alarm-edge);
+  background: linear-gradient(135deg, var(--sig-alarm-tint), var(--sf-panel-raised) 60%);
   color: var(--sig-alarm-edge);
 }
 .verdict-banner[data-status="no_improvement"] {
-  /* The only solid colour fill behind text in the product (design doc §6.2). */
-  border: none;
-  background: var(--sig-alarm-fill);
+  /* Still the strongest treatment in the product, and still the only one whose ground is
+     the alarm colour at full strength rather than a tint (design doc §6.2). */
+  border-color: var(--sig-alarm-fill);
+  background: linear-gradient(135deg, var(--sig-alarm-fill), #8d1a21 70%);
   color: var(--sig-alarm-ink);
 }
+.verdict-banner > :first-child { grid-area: mark; }
 .verdict-banner__word {
+  grid-area: word;
   margin: 0;
-  font-size: var(--fs-verdict);
-  font-weight: var(--fw-bold);
-  letter-spacing: var(--tr-verdict);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  /* NO IMPROVEMENT is two words and STILL FAILING is two words: both may wrap onto two lines, and
+   * neither may ever spill past the banner's own border. This is the guard, not the fix — the fix
+   * was moving the banner out of the 88px pass rail (see RunScreen) — but the verdict word is the
+   * one string on the screen that must stay readable in any container it is ever put in. */
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 .verdict-banner__count {
+  grid-area: count;
   margin: 0;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-1);
+  align-items: baseline;
+  gap: var(--sp-4);
 }
 .verdict-banner__count-num {
   font-size: var(--fs-count);
   font-weight: var(--fw-bold);
   line-height: 1;
+  letter-spacing: var(--tr-verdict);
 }
+/* §6.2 structural fact 1: on a failed run the biggest number on the screen counts what is
+   still wrong. Its label sits beside it at reading size rather than shouting underneath. */
 .verdict-banner__count-label {
-  font-size: var(--fs-micro);
-  letter-spacing: var(--tr-caps);
-  text-transform: uppercase;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-med);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-2);
+}
+.verdict-banner[data-status="no_improvement"] .verdict-banner__count-label {
+  color: var(--sig-alarm-ink);
+  opacity: 0.85;
 }
 .verdict-banner__detail {
+  grid-area: detail;
   margin: 0;
   font-size: var(--fs-ui);
   color: var(--ink-2);
+  /* §6.2 structural fact 2: the qualifying clause shares this line so no truncation can separate it
+   * from the improvement wording. A clipped line is a truncation, so this line must wrap, never
+   * overflow. */
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 .verdict-banner[data-status="no_improvement"] .verdict-banner__detail {
   color: var(--sig-alarm-ink);
@@ -340,11 +392,11 @@
 .run__field {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-5);
+  gap: var(--sp-6);
   min-height: 0;
   overflow-y: auto;
-  padding: var(--sp-5);
-  background: var(--sf-field);
+  padding: var(--sp-6);
+  background: var(--sf-panel);
 }
 .run__field-header {
   display: flex;
@@ -352,11 +404,491 @@
   justify-content: space-between;
   gap: var(--sp-4);
 }
+.run__field-header .section-label,
+.run__field-header h2 {
+  font-size: var(--fs-title);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--tr-title);
+  text-transform: none;
+  color: var(--ink);
+}
 .run__field-meta {
   font-size: var(--fs-micro);
   color: var(--ink-3);
   text-transform: uppercase;
   letter-spacing: var(--tr-caps);
+}
+
+/* ── Avatar composer ──────────────────────────────────────── */
+
+.avatar-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.avatar-composer__tabs {
+  display: flex;
+  gap: var(--sp-2);
+}
+.avatar-composer__tab {
+  appearance: none;
+  background: none;
+  border: var(--bd-hair) solid transparent;
+  border-radius: var(--r-1);
+  padding: var(--sp-2) var(--sp-4);
+  font-family: var(--ff-ui);
+  font-size: var(--fs-label);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.avatar-composer__tab[data-selected] {
+  color: var(--ink);
+  border-color: var(--ln-strong);
+  background: var(--sf-panel);
+}
+.avatar-composer__tab:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.avatar-composer__note {
+  margin: 0;
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+}
+
+/* Both panels stay mounted so a draft survives a tab switch. They are stacked in one grid
+   cell rather than laid out in sequence, which is what lets the inactive one slide and blur
+   out of the way instead of pushing the footer down the page. */
+.avatar-composer__panels {
+  display: grid;
+  /* The outgoing panel slides sideways on a tab switch, so mid-transition it extends past
+     this box. `.run__field` sets `overflow-y: auto`, which forces `overflow-x` to `auto`
+     too, so without this a horizontal scrollbar flickers on every tab switch. `clip`
+     rather than `hidden`: it does not make this element a scroll container, so it cannot
+     swallow a focus ring by scrolling it into view. */
+  overflow-x: clip;
+}
+.avatar-composer__panel {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+/* The inactive panel is animated to `opacity: 0` but is still in the layout and still
+   focusable, which would let a keyboard user tab into an invisible textarea. Taking it out of
+   the pointer and tab order is what makes the stack behave like one panel. */
+.avatar-composer__panel:not([data-active]) {
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.avatar-composer__toolbar {
+  display: flex;
+  gap: var(--sp-3);
+}
+.avatar-composer__reroll,
+.avatar-composer__clear {
+  appearance: none;
+  font-family: var(--ff-ui);
+  font-size: var(--fs-label);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+  padding: var(--sp-2) var(--sp-4);
+  cursor: pointer;
+}
+.avatar-composer__reroll:focus-visible,
+.avatar-composer__clear:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.avatar-composer__reroll:disabled,
+.avatar-composer__clear:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.avatar-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--sp-4);
+}
+.avatar-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.avatar-field--wide {
+  grid-column: 1 / -1;
+}
+.avatar-field__header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-3);
+}
+.avatar-field__label {
+  font-size: var(--fs-label);
+  color: var(--ink-3);
+}
+/* Which checks this field feeds. The form is a coach, so a blank field should show what it is
+   costing without the user having to run anything first. */
+.avatar-field__checks {
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+  opacity: 0.75;
+}
+/* A field with no counterpart in Mentic today. Marked rather than blended in: the difference
+   between the two field sets is itself a finding (see `avatarFields.ts`). */
+.avatar-field__flag {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+  padding: 0 var(--sp-2);
+}
+.avatar-field__row {
+  display: flex;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.avatar-field__input,
+.avatar-field__textarea {
+  flex: 1;
+  min-width: 0;
+  padding: var(--sp-3);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+  color: var(--ink);
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-ui);
+}
+.avatar-field__textarea {
+  min-height: 64px;
+  resize: vertical;
+}
+.avatar-field__input:focus-visible,
+.avatar-field__textarea:focus-visible,
+.avatar-field__pick:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.avatar-field__input:disabled,
+.avatar-field__textarea:disabled,
+.avatar-field__pick:disabled {
+  opacity: 0.6;
+}
+.avatar-field__pick {
+  width: 32px;
+  flex-shrink: 0;
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+  color: var(--ink-2);
+  text-align: center;
+  cursor: pointer;
+}
+
+/* The assembled sentence, shown before anything is spent. It is set in the specimen face at
+   specimen size because it is the exact string the checks will quote from. */
+.avatar-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+}
+.avatar-preview__label {
+  font-size: var(--fs-label);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.avatar-preview__text {
+  margin: 0;
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-specimen);
+  line-height: var(--lh-spec);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.avatar-preview__text[data-empty] {
+  color: var(--ink-3);
+}
+/* The one line that stops the most likely misreading of this whole screen. */
+.avatar-preview__caveat {
+  margin: 0;
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+}
+
+/* ── Sheet pipeline ───────────────────────────────────────── */
+
+.sheet-pipeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+.sheet-pipeline__offline,
+.sheet-pipeline__error {
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-2);
+  font-size: var(--fs-ui);
+}
+.sheet-pipeline__offline {
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  color: var(--ink-2);
+}
+.sheet-pipeline__error {
+  background: var(--sig-alarm-tint);
+  border: var(--bd-mark) solid var(--sig-alarm-edge);
+  color: var(--sig-alarm-edge);
+}
+.sheet-pipeline__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.sheet-pipeline__step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  min-width: 0;
+}
+.sheet-pipeline__step-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+.sheet-pipeline__step-label {
+  font-size: var(--fs-label);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+/* Every button in this component spends money. The price is named next to the step, not
+   buried in a tooltip, because a paid call that surprises someone is a defect. */
+.sheet-pipeline__cost {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.sheet-pipeline__hint {
+  margin: 0;
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+}
+.sheet-pipeline__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+.sheet-pipeline__button {
+  appearance: none;
+  font-family: var(--ff-ui);
+  font-size: var(--fs-ui);
+  font-weight: var(--fw-semi);
+  color: var(--ink);
+  background: var(--sf-panel-raised);
+  border: var(--bd-hair) solid var(--ln-strong);
+  border-radius: var(--r-1);
+  padding: var(--sp-2) var(--sp-5);
+  cursor: pointer;
+}
+.sheet-pipeline__button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.sheet-pipeline__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+/* The sheet is 16:9 by construction (`ACTOR_SHEET_ASPECT_RATIO`). No fixed height: a
+   portrait container would letterbox a landscape sheet and hide a panel. */
+.sheet-pipeline__image {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--r-2);
+  border: var(--bd-hair) solid var(--ln);
+}
+.sheet-pipeline__prompts {
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+}
+.sheet-pipeline__prompts summary {
+  cursor: pointer;
+  font-size: var(--fs-label);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.sheet-pipeline__prompt-label {
+  margin: var(--sp-4) 0 var(--sp-2);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.sheet-pipeline__prompt {
+  margin: 0;
+  padding: var(--sp-3);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-micro);
+  line-height: var(--lh-spec);
+  color: var(--ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* The paragraph the video model would receive, set in the specimen face because it is the
+   exact string the nine checks will quote from. */
+.sheet-pipeline__description {
+  margin: 0;
+  padding: var(--sp-4);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-specimen);
+  line-height: var(--lh-spec);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.sheet-pipeline__trimmed {
+  margin: 0;
+  font-size: var(--fs-ui);
+  color: var(--sig-alarm-edge);
+}
+
+/* Sits directly above the describe button once a description exists, because that is where
+   the money gets spent a second time. */
+.sheet-pipeline__already {
+  margin: 0;
+  font-size: var(--fs-ui);
+  color: var(--sig-alarm-edge);
+}
+
+/* ── Avatar gallery ───────────────────────────────────────── */
+
+.avatar-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-3);
+}
+.avatar-gallery__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.avatar-gallery__label {
+  font-size: var(--fs-label);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.avatar-gallery__count,
+.avatar-gallery__empty,
+.avatar-gallery__where {
+  margin: 0;
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+}
+.avatar-gallery__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--sp-3);
+}
+.avatar-gallery__item {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: var(--sp-2);
+  background: var(--sf-ground);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  cursor: pointer;
+  text-align: start;
+  transition: border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.avatar-gallery__item:hover { border-color: var(--ln-strong); transform: translateY(-1px); }
+.avatar-gallery__item:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.avatar-gallery__item[data-selected] { border-color: var(--brand); box-shadow: var(--sh-glow); }
+@media (prefers-reduced-motion: reduce) {
+  .avatar-gallery__item:hover { transform: none; }
+}
+/* The sheet is 16:9 by construction, so the thumbnail is too: a square crop would cut a
+   panel out of a three-panel reference. */
+.avatar-gallery__thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--r-1);
+  background: var(--sf-panel-raised);
+}
+.avatar-gallery__meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  font-size: var(--fs-micro);
+}
+.avatar-gallery__state {
+  color: var(--ink-3);
+}
+.avatar-gallery__state[data-described] {
+  color: var(--band-5);
+}
+.avatar-gallery__when {
+  color: var(--ink-3);
+}
+.avatar-gallery__empty {
+  font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
+}
+.avatar-gallery__empty code,
+.avatar-gallery__where code {
+  font-family: var(--ff-specimen);
+  color: var(--ink-2);
 }
 
 /* ── Description composer ─────────────────────────────────── */
@@ -571,12 +1103,24 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  padding: var(--sp-5);
+  gap: var(--sp-4);
+  padding: var(--sp-5) var(--sp-6);
   border-bottom: var(--bd-hair) solid var(--ln);
+  /* Sticks so the "5/9 at ≥80" summary stays readable while the nine rows scroll. */
+  position: sticky;
+  top: 0;
+  background: var(--sf-panel);
+  z-index: 2;
 }
 .check-panel__summary {
   font-size: var(--fs-ui);
+  font-weight: var(--fw-med);
   color: var(--ink-2);
+  background: var(--sf-panel-raised);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: 999px;
+  padding: var(--sp-2) var(--sp-4);
+  white-space: nowrap;
 }
 .check-panel__list {
   list-style: none;
@@ -600,7 +1144,13 @@
 h3.section-label {
   display: flex;
   align-items: baseline;
-  padding: var(--sp-3) var(--sp-5);
+  gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-6);
+  background: var(--sf-ground);
+  border-block: var(--bd-hair) solid var(--ln);
+  position: sticky;
+  top: 60px;
+  z-index: 1;
 }
 
 /* ── Check row ─────────────────────────────────────────────── */
@@ -608,10 +1158,19 @@ h3.section-label {
 .check-row {
   list-style: none;
   border-bottom: var(--bd-hair) solid var(--ln-faint);
-  padding: var(--sp-3) var(--sp-5);
+  padding: var(--sp-4) var(--sp-5);
+  /* The leading rule is what a selected row gets instead of only a tinted ground: a tint
+     alone is a colour-only signal, and these rows are the primary navigation of the screen. */
+  border-inline-start: 3px solid transparent;
+  transition: background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.check-row:hover {
+  background: var(--sf-hover);
 }
 .check-row[data-selected] {
   background: var(--mark-soft);
+  border-inline-start-color: var(--brand);
 }
 .check-row:focus-visible,
 .check-row:focus {
@@ -619,22 +1178,35 @@ h3.section-label {
   box-shadow: var(--focus-ring);
 }
 .check-row__hit {
-  all: unset;
+  /* Not `all: unset`: it clears every property in its own rule including ones written
+     above it, which is how `.pass-step` lost its `position: relative` and made the whole
+     app unclickable. Reset the button chrome explicitly instead. */
+  appearance: none;
+  background: none;
+  border: none;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  text-align: inherit;
   display: flex;
   align-items: center;
   gap: var(--sp-4);
   width: 100%;
+  min-width: 0;
   cursor: pointer;
   color: var(--ink);
 }
 .check-row__title {
   flex: 1;
-  font-size: var(--fs-ui);
+  min-width: 0;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-med);
 }
 .check-row__body {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
+  flex-shrink: 0;
 }
 .check-row__not-evaluated {
   font-size: var(--fs-micro);
@@ -643,8 +1215,9 @@ h3.section-label {
   color: var(--ink-3);
 }
 .check-row__reason {
-  margin: var(--sp-2) 0 0;
+  margin: var(--sp-3) 0 0;
   font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
   color: var(--ink-2);
 }
 .check-row__reason--not-evaluated {
@@ -663,10 +1236,15 @@ h3.section-label {
 }
 .band-meter__track {
   position: relative;
-  width: 100%;
-  height: 6px;
-  border-radius: var(--r-1);
-  background: var(--sf-panel-raised);
+  /* Explicit width. This was `width: 100%` inside an `inline-flex` with no sized ancestor,
+     so it resolved to its content width, which for an empty element is zero plus the
+     fill's own box: every meter in the product rendered as a 12px dash. */
+  width: var(--meter-track-w, 56px);
+  flex-shrink: 0;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--sf-ground);
+  box-shadow: inset 0 0 0 1px var(--ln);
   overflow: hidden;
 }
 .band-meter__tick {
@@ -688,7 +1266,7 @@ h3.section-label {
   display: block;
   height: 100%;
   width: 100%;
-  border-radius: var(--r-0);
+  border-radius: 999px;
   background: var(--ink-3);
 }
 .band-meter[data-band="1"] .band-meter__fill { background: var(--band-1); }
@@ -697,10 +1275,79 @@ h3.section-label {
 .band-meter[data-band="4"] .band-meter__fill { background: var(--band-4); }
 .band-meter[data-band="5"] .band-meter__fill { background: var(--band-5); }
 .band-meter__percent {
-  min-width: 3ch;
+  min-width: 4ch;
+  flex-shrink: 0;
   text-align: right;
+  font-size: var(--fs-ui);
+  font-weight: var(--fw-semi);
   color: var(--ink-2);
 }
+.band-meter[data-band="1"] .band-meter__percent { color: var(--band-1); }
+.band-meter[data-band="2"] .band-meter__percent { color: var(--band-2); }
+.band-meter[data-band="3"] .band-meter__percent { color: var(--band-3); }
+.band-meter[data-band="4"] .band-meter__percent { color: var(--band-4); }
+.band-meter[data-band="5"] .band-meter__percent { color: var(--band-5); }
+
+/* ── Band mark ─────────────────────────────────────────────────
+   The stroke pattern each band carries independently of colour, so the pass threshold
+   survives `grayscale(1)`. It is a genuine accessibility device and it stays, but on its
+   own it rendered as a stray dash floating beside the percentage. Seating it in a small
+   chip is what makes it read as a deliberate swatch. */
+
+.band-mark {
+  flex-shrink: 0;
+  overflow: visible;
+}
+.band-meter .band-mark {
+  box-sizing: content-box;
+  padding: 3px 4px;
+  border-radius: var(--r-1);
+  background: var(--sf-ground);
+  box-shadow: inset 0 0 0 1px var(--ln);
+}
+.band-meter[data-band="1"] .band-mark { color: var(--band-1); }
+.band-meter[data-band="2"] .band-mark { color: var(--band-2); }
+.band-meter[data-band="3"] .band-mark { color: var(--band-3); }
+.band-meter[data-band="4"] .band-mark { color: var(--band-4); }
+.band-meter[data-band="5"] .band-mark { color: var(--band-5); }
+
+/* In the verdict banner the mark is the card's own glyph, at the head of the leading
+   column, so it gets room rather than a chip. */
+.verdict-banner .band-mark {
+  width: 36px;
+  height: auto;
+}
+
+/* ── Delta badge ───────────────────────────────────────────────
+   Had no rule of its own anywhere in the product: it rendered as a bare arrow glyph and
+   a number inheriting whatever surrounded it, and in the check row the unstyled SVG
+   overflowed the panel. The sign is carried by the arrow AND by the word in its
+   `aria-label`, never by colour alone. */
+
+.delta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-shrink: 0;
+  min-width: 4ch;
+  justify-content: flex-end;
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-med);
+  line-height: 1;
+  color: var(--ink-3);
+}
+.delta-badge__arrow {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  fill: currentColor;
+}
+.delta-badge[data-sign="up"] { color: var(--band-5); }
+.delta-badge[data-sign="down"] { color: var(--band-1); }
+.delta-badge[data-sign="flat"],
+.delta-badge[data-sign="none"] { color: var(--ink-3); }
+.delta-badge--unmeasured { font-style: italic; }
+.delta-badge__eq { opacity: 0.7; }
 
 /* ── Quotes ────────────────────────────────────────────────── */
 
@@ -742,4 +1389,95 @@ h3.section-label {
   font-size: var(--fs-ui);
   color: var(--ink-2);
   margin: 0;
+}
+
+/* ── Run history ──────────────────────────────────────────── */
+
+/* Sits under the composer, next to the avatar gallery, for the same reason that gallery
+   exists: a paid artefact that is on disk but has nowhere visible to be is indistinguishable
+   from one that was never made. Every run in `data/runs/` is reachable from here. */
+.run-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-3);
+}
+.run-history__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.run-history__count,
+.run-history__meta {
+  font-size: var(--fs-ui);
+  color: var(--ink-3);
+}
+.run-history__empty {
+  margin: 0;
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+}
+.run-history__error {
+  margin: 0;
+  font-size: var(--fs-ui);
+  color: var(--sig-alarm-edge);
+}
+.run-history__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.run-history__item {
+  appearance: none;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--sf-ground);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  cursor: pointer;
+  text-align: start;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.run-history__item:hover { border-color: var(--ln-strong); }
+.run-history__item[data-open="true"] { border-color: var(--ln-strong); }
+.run-history__verdict {
+  font-size: var(--fs-label);
+  letter-spacing: var(--tr-caps);
+  color: var(--sig-alarm-edge);
+}
+/* Only a run that actually passed loses the alarm ink. `improved_still_failing` and
+   `no_improvement` are terminal but are NOT success, and must never read as one. */
+.run-history__item[data-passed="true"] .run-history__verdict { color: var(--ink); }
+
+/* The way back out of an open run, to the composer and the list. */
+.run__back {
+  appearance: none;
+  align-self: flex-start;
+  padding: var(--sp-1) var(--sp-2);
+  background: none;
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  color: var(--ink-2);
+  font-size: var(--fs-ui);
+  cursor: pointer;
+}
+.run__back:hover { border-color: var(--ln-strong); color: var(--ink); }
+
+/* Said where the fragment diff would be, for a run whose applied replacements were never
+   written to disk. "0 fragments changed" would assert the opposite of what happened. */
+.run__diff-missing {
+  margin: 0;
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
 }

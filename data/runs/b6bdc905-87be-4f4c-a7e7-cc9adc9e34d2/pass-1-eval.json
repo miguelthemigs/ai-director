@@ -1,0 +1,104 @@
+{
+  "description": "Mira is a 34-year-old cartographer, average build, about 1.70m. Light brown skin with freckles across the nose, high cheekbones, a jagged scar through her left eyebrow, deep brown eyes. Close-cropped black hair, natural texture, no product. She wears a faded green canvas jacket over a grey wool sweater, dark denim trousers and scuffed brown leather boots.",
+  "results": [
+    {
+      "status": "scored",
+      "checkId": "age_build",
+      "band": 3,
+      "reason": "Age is concrete (34) and height is given, but the build descriptor is the vague term listed in the band 3 example.",
+      "quotes": [
+        "average build"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "face_skin",
+      "band": 5,
+      "reason": "Names high cheekbones, deep brown eyes and an eyebrow scar plus a skin-texture cue in the freckling across the nose.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "hair_spec",
+      "band": 4,
+      "reason": "Colour (black), texture (natural) and style (close-cropped) are all stated.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "wardrobe",
+      "band": 5,
+      "reason": "Jacket, sweater, trousers and boots are all named with colours plus condition cues like faded and scuffed.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "anchor_marker",
+      "band": 5,
+      "reason": "Two localised markers are given: a jagged scar through the left eyebrow and freckles across the nose.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_real_person",
+      "band": 4,
+      "reason": "The description names an original character with only physical and occupational details, with no celebrity, public figure, or lookalike framing, and no statement that she is fictional.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_brand_name",
+      "band": 5,
+      "reason": "No brand or franchise names appear, and the wardrobe is described in generic, re-renderable terms such as a faded green canvas jacket, grey wool sweater, dark denim trousers, and scuffed brown leather boots.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "drawable_only",
+      "band": 3,
+      "reason": "Nearly all traits are visible, but the occupation label states a life fact that cannot be drawn from appearance alone.",
+      "quotes": [
+        "cartographer"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_cross_slot",
+      "band": 5,
+      "reason": "The block is one self-contained paragraph describing only the person, with no camera, lighting, grade or audio direction.",
+      "quotes": [],
+      "missingEvidence": false
+    }
+  ],
+  "failing": [
+    "age_build",
+    "drawable_only"
+  ],
+  "notEvaluated": [],
+  "spans": [
+    {
+      "spanId": "drawable_only:0",
+      "checkId": "drawable_only",
+      "quote": "cartographer",
+      "start": 22,
+      "end": 34
+    },
+    {
+      "spanId": "age_build:0",
+      "checkId": "age_build",
+      "quote": "average build",
+      "start": 36,
+      "end": 49
+    }
+  ],
+  "unverified": [],
+  "negativeConstraintPresent": false
+}

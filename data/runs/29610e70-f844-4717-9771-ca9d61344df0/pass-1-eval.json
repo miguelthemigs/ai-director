@@ -1,0 +1,114 @@
+{
+  "description": "A young man in his mid-twenties with wavy brown hair, green eyes, light stubble and fair skin, of average build and medium height, wearing a black crewneck sweater, dark jeans and black leather shoes.",
+  "results": [
+    {
+      "status": "scored",
+      "checkId": "age_build",
+      "band": 3,
+      "reason": "Age is concrete (mid-twenties) but the build and height cues are generic rather than specific.",
+      "quotes": [
+        "of average build and medium height"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "face_skin",
+      "band": 4,
+      "reason": "Names green eyes, light stubble and fair skin as checkable facial features.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "hair_spec",
+      "band": 3,
+      "reason": "Hair colour and texture are given but no style, cut or parting is stated.",
+      "quotes": [
+        "wavy brown hair"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "wardrobe",
+      "band": 4,
+      "reason": "Sweater, jeans and footwear are all named with colours but without fit or condition cues.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "anchor_marker",
+      "band": 1,
+      "reason": "No small reusable identity marker such as a mole, scar or piece of jewellery is named.",
+      "quotes": [
+        "wavy brown hair, green eyes, light stubble and fair skin"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_real_person",
+      "band": 4,
+      "reason": "The description uses only generic physical traits with no celebrity name, lookalike framing, or real-world role pointer, and does not state the character is fictional.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_brand_name",
+      "band": 5,
+      "reason": "No brand or franchise is mentioned, and the wardrobe is described in generic re-renderable terms such as a black crewneck sweater, dark jeans and black leather shoes.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "drawable_only",
+      "band": 5,
+      "reason": "Every phrase names a visible attribute: hair, eyes, stubble, skin, build, height and clothing, with no mood, backstory or judgement terms.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_cross_slot",
+      "band": 5,
+      "reason": "The text is one self-contained paragraph describing only the person, with no camera, lighting, colour grade or audio direction.",
+      "quotes": [],
+      "missingEvidence": false
+    }
+  ],
+  "failing": [
+    "age_build",
+    "hair_spec",
+    "anchor_marker"
+  ],
+  "notEvaluated": [],
+  "spans": [
+    {
+      "spanId": "hair_spec:0",
+      "checkId": "hair_spec",
+      "quote": "wavy brown hair",
+      "start": 37,
+      "end": 52
+    },
+    {
+      "spanId": "anchor_marker:0",
+      "checkId": "anchor_marker",
+      "quote": "wavy brown hair, green eyes, light stubble and fair skin",
+      "start": 37,
+      "end": 93
+    },
+    {
+      "spanId": "age_build:0",
+      "checkId": "age_build",
+      "quote": "of average build and medium height",
+      "start": 95,
+      "end": 129
+    }
+  ],
+  "unverified": [],
+  "negativeConstraintPresent": false
+}

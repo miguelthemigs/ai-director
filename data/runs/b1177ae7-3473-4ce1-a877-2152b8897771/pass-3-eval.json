@@ -1,0 +1,82 @@
+{
+  "description": "A man in his late twenties, lean and broad-shouldered, about 1.85 m tall with long legs who is sharp-jawed, with a straight narrow nose and deep-set dark brown eyes, his olive skin showing visible pore texture across the nose and a faint flush over the cheekbones with shoulder-length black hair, thick and wavy, parted on the left and tucked behind both ears, wearing a black leather jacket with the zip half open over a charcoal-grey T-shirt, slim-fit black jeans, and scuffed black lace-up boots, stands with squared shoulders and clenched fists, a 2 cm pale scar through his right eyebrow, a single small mole below his left cheekbone, and a flat silver band on his right thumb.",
+  "results": [
+    {
+      "status": "scored",
+      "checkId": "age_build",
+      "band": 5,
+      "reason": "States a concrete age bracket, build, and height plus a proportion cue.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "face_skin",
+      "band": 5,
+      "reason": "Names jaw shape, nose shape, and eye colour plus skin-texture cues of visible pores and cheekbone flush.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "hair_spec",
+      "band": 5,
+      "reason": "Gives colour, texture, style, plus length and parting.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "wardrobe",
+      "band": 5,
+      "reason": "Names jacket, T-shirt, jeans and boots with colours plus fit and condition cues.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "anchor_marker",
+      "band": 5,
+      "reason": "Lists an eyebrow scar with size and side, a mole below the left cheekbone, and a silver band on the right thumb.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_real_person",
+      "band": 4,
+      "reason": "The description contains no celebrity name, lookalike framing, or named real-world role, but also does not state the character is fictional.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_brand_name",
+      "band": 5,
+      "reason": "No brand or franchise names appear, and all garments are described generically (black leather jacket, charcoal-grey T-shirt, slim-fit black jeans, scuffed black lace-up boots) in re-renderable terms.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "drawable_only",
+      "band": 5,
+      "reason": "Every clause names a visible physical trait, garment, pose or mark with no mood, feeling, backstory or judgement wording.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_cross_slot",
+      "band": 5,
+      "reason": "The block is one self-contained paragraph describing only the person, with no camera, lighting, colour grade or audio direction.",
+      "quotes": [],
+      "missingEvidence": false
+    }
+  ],
+  "failing": [],
+  "notEvaluated": [],
+  "spans": [],
+  "unverified": [],
+  "negativeConstraintPresent": false
+}

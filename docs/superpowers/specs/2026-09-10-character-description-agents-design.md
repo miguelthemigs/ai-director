@@ -28,8 +28,16 @@ In v1:
 - Run and version history on disk as files.
 - An agreement study against a frozen human-marked set.
 
-Out of scope in v1: database, Interrogator agent, Director agent, Identity Meter, any Runway call,
-any render, auth, deployment, multi-user.
+Out of scope in v1: database, Interrogator agent, Director agent, Identity Meter, auth, deployment,
+multi-user.
+
+Amended 2026-09-16. "Any Runway call, any render" was in this list and is now qualified rather than
+deleted. It still binds every screen that scores a description: the Evaluator, the Repairer and the
+Run, Architecture and Versions screens spend no render credit, and that is not negotiable. What it
+never could bind is the pre-registered failure condition's clause 2, which asks whether repaired
+descriptions actually reduce identity drift in a render — a question no amount of scoring can
+answer. `docs/superpowers/plans/2026-09-16-openrouter-video-comparison.md` builds that comparison as
+a fourth screen, outside the graded surface, on OpenRouter rather than Runway.
 
 ## 3. Rubric v1
 

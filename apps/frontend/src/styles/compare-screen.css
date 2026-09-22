@@ -1,0 +1,1123 @@
+/*
+ * The Compare screen.
+ *
+ * Extends the world `tokens.css` establishes: near-neutral dark ground, one green brand
+ * accent, real cards with radius and elevation, humanist sans for UI, and monospace
+ * reserved for the one genuinely code-like thing — here, the description that was sent.
+ *
+ * ── The one structural idea ─────────────────────────────────────────────────────────
+ * Two panels that are as identical as the layout can make them, because the screen's
+ * whole claim is that one variable moved. Anything both clips share is lifted out into
+ * `.held-constant` above them and stated once. Symmetry is the argument.
+ *
+ * ── No ambient motion ───────────────────────────────────────────────────────────────
+ * PRODUCT.md binds motion to real state changes. There is no spinner, no progress bar and
+ * no looping clip on this screen. The only transitions are on hover and focus, which are
+ * state changes a person just caused.
+ */
+
+.compare {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-7);
+  padding: var(--sp-7) var(--sp-7) var(--sp-9);
+  max-width: 1440px;
+  margin-inline: auto;
+}
+
+.compare__title {
+  font-size: var(--fs-title);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--tr-title);
+  color: var(--ink);
+  margin: 0;
+}
+
+.compare__lede {
+  font-size: var(--fs-body);
+  line-height: var(--lh-ui);
+  color: var(--ink-2);
+  max-width: var(--measure);
+  margin: var(--sp-3) 0 0;
+}
+
+/* ── The controls ─────────────────────────────────────────────────────────── */
+
+.compare-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--sp-5);
+  align-items: end;
+  padding: var(--sp-6);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-3);
+  box-shadow: var(--sh-raise);
+}
+
+.compare-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.compare-field > label {
+  font-size: var(--fs-label);
+  font-weight: var(--fw-med);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.compare-field select,
+.compare-field input {
+  font-family: var(--ff-ui);
+  font-size: var(--fs-ui);
+  color: var(--ink);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  padding: var(--sp-3) var(--sp-4);
+  min-height: 38px;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.compare-field select:hover:not(:disabled),
+.compare-field input:hover:not(:disabled) {
+  border-color: var(--ln-strong);
+}
+
+.compare-field select:focus-visible,
+.compare-field input:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.compare-field select:disabled,
+.compare-field input:disabled {
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+
+/* The one paid action on the screen. Brand fill, with the estimate beside it rather
+   than hidden behind it: nothing here is pressed without the price on screen. */
+.compare-submit {
+  /* Sized to its label, not to the grid cell. A spend button stretched to fill whatever
+     column it lands in reads as a page-wide bar rather than a decision. */
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-family: var(--ff-ui);
+  font-size: var(--fs-ui);
+  font-weight: var(--fw-semi);
+  color: var(--brand-ink);
+  background: var(--brand);
+  border: none;
+  border-radius: var(--r-2);
+  padding: var(--sp-3) var(--sp-5);
+  min-height: 38px;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.compare-submit:hover:not(:disabled) {
+  background: var(--brand-hover);
+}
+
+.compare-submit:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.compare-submit:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.compare-submit:disabled {
+  background: var(--sf-hover);
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+
+.compare-estimate {
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+}
+
+.compare-estimate strong {
+  color: var(--ink);
+  font-weight: var(--fw-semi);
+}
+
+/* ── Held constant ────────────────────────────────────────────────────────── */
+
+.held-constant {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3) var(--sp-5);
+  margin: 0;
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--brand-tint);
+  border: var(--bd-hair) solid var(--brand-edge);
+  border-radius: var(--r-2);
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+}
+
+.held-constant__label {
+  font-size: var(--fs-label);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--brand);
+}
+
+.held-constant > span:not(.held-constant__label) {
+  color: var(--ink);
+}
+
+/* ── The pair ─────────────────────────────────────────────────────────────── */
+
+.clip-pair {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.clip-pair__panels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-6);
+}
+
+@media (max-width: 1024px) {
+  .clip-pair__panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.clip-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  padding: var(--sp-6);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-3);
+  box-shadow: var(--sh-raise);
+  min-width: 0;
+}
+
+.clip-panel__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.clip-panel__title {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semi);
+  color: var(--ink);
+  margin: 0;
+}
+
+.clip-panel__note {
+  font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
+  color: var(--ink-3);
+  margin: 0;
+}
+
+.clip-panel__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln-faint);
+  border-radius: var(--r-2);
+  overflow: hidden;
+  min-height: 240px;
+}
+
+.clip-panel__video {
+  display: block;
+  width: 100%;
+  max-height: 60vh;
+  background: #000;
+}
+
+.clip-panel__nostage {
+  font-size: var(--fs-ui);
+  color: var(--ink-3);
+  text-align: center;
+  padding: var(--sp-7) var(--sp-5);
+  margin: 0;
+}
+
+.clip-panel__state,
+.cost-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-6);
+  margin: 0;
+}
+
+.clip-panel__pair,
+.cost-readout__pair {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.clip-panel__pair dt,
+.cost-readout__pair dt {
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-med);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.clip-panel__pair dd,
+.cost-readout__pair dd {
+  font-size: var(--fs-ui);
+  color: var(--ink);
+  margin: 0;
+}
+
+/* "not measured" is a different kind of value from a figure, and reads as one. */
+.cost-readout__pair[data-unmeasured] dd {
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+.clip-panel__status {
+  font-weight: var(--fw-semi);
+}
+
+/* The status word carries the verdict. `succeeded` is the ONLY one that gets the brand;
+   `cancelled` is terminal and is not a win, so it never borrows the success colour. */
+.clip-panel__status[data-status="succeeded"] { color: var(--band-5); }
+.clip-panel__status[data-status="running"],
+.clip-panel__status[data-status="queued"]    { color: var(--ink-2); }
+.clip-panel__status[data-status="cancelled"] { color: var(--band-3); }
+.clip-panel__status[data-status="failed"]    { color: var(--sig-alarm-edge); }
+
+.clip-panel__failure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
+  margin: 0;
+  padding: var(--sp-4);
+  border-radius: var(--r-2);
+}
+
+/* The reserved alarm, for a render that did not succeed. */
+.clip-panel__failure[data-tone="alarm"] {
+  color: var(--sig-alarm-ink);
+  background: var(--sig-alarm-tint);
+  border: var(--bd-hair) solid var(--sig-alarm-edge);
+}
+
+/* A billed render whose clip would not download is a note, not an alarm: the render
+   worked, and styling it as a failure would misreport the money. */
+.clip-panel__failure[data-tone="note"] {
+  color: var(--ink-2);
+  background: var(--sf-panel-raised);
+  border: var(--bd-hair) solid var(--ln);
+}
+
+.clip-panel__code {
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  color: var(--ink-3);
+}
+
+.clip-panel__description {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.clip-panel__description figcaption {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-med);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.clip-panel__hash {
+  font-family: var(--ff-specimen);
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-3);
+}
+
+/* The one monospace on the screen: the text that was actually sent to the model.
+ *
+ * `.quoted-text`, NOT `.specimen`. `run-screen.css` already owns `.specimen` and it is a
+ * very specific component there: a `display: grid` with a line-number column and a span
+ * lane, sized by `--lane-count`. Borrowing the name inherited that grid, and every
+ * character of the description became its own row — a description rendered one letter per
+ * line, 1725px tall. Every unit test passed, because jsdom computes no layout and the text
+ * was all present and in order; it took a real browser and a screenshot to see it.
+ */
+.quoted-text,
+.clip-panel__description .quoted-text {
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-specimen);
+  line-height: var(--lh-spec);
+  color: var(--ink);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln-faint);
+  border-left: var(--bd-mark) solid var(--brand-edge);
+  border-radius: var(--r-2);
+  padding: var(--sp-4) var(--sp-5);
+  margin: 0;
+}
+
+.clip-panel__provenance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+  margin: 0;
+  padding-top: var(--sp-3);
+  border-top: var(--bd-hair) solid var(--ln-faint);
+}
+
+/* ── Messages ─────────────────────────────────────────────────────────────── */
+
+.compare-message {
+  font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
+  color: var(--ink-2);
+  padding: var(--sp-5) var(--sp-6);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-3);
+  margin: 0;
+}
+
+.compare-message[data-tone="alarm"] {
+  color: var(--sig-alarm-ink);
+  background: var(--sig-alarm-tint);
+  border-color: var(--sig-alarm-edge);
+}
+
+@media (max-width: 720px) {
+  .compare { padding: var(--sp-5) var(--sp-5) var(--sp-8); }
+}
+
+
+
+/* ── Steps ────────────────────────────────────────────────────────────────── */
+
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  padding: var(--sp-6);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-3);
+}
+
+.step__title {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semi);
+  color: var(--ink);
+  margin: 0;
+}
+
+.step__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  color: var(--brand);
+  background: var(--brand-tint);
+  border: var(--bd-hair) solid var(--brand-edge);
+  border-radius: var(--r-1);
+}
+
+.step__sub {
+  font-size: var(--fs-label);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: var(--sp-3) 0 0;
+}
+
+.step__note {
+  font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
+  color: var(--ink-2);
+  max-width: var(--measure);
+  margin: 0;
+}
+
+.step__specimen {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.step__specimen figcaption {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.step__feed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.compare-empty {
+  font-size: var(--fs-ui);
+  color: var(--ink-3);
+  margin: 0;
+}
+
+/* The non-spending actions. Visually quieter than the brand fill, which is reserved for
+   the one button on this screen that costs money. */
+.compare-secondary {
+  align-self: flex-start;
+  font-family: var(--ff-ui);
+  font-size: var(--fs-ui);
+  font-weight: var(--fw-med);
+  color: var(--ink);
+  background: var(--sf-panel-raised);
+  border: var(--bd-hair) solid var(--ln-strong);
+  border-radius: var(--r-2);
+  padding: var(--sp-3) var(--sp-5);
+  min-height: 38px;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.compare-secondary:hover:not(:disabled) { border-color: var(--brand-edge); }
+.compare-secondary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.compare-secondary:disabled { color: var(--ink-3); cursor: not-allowed; }
+
+.compare-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+/* ── The avatar picker ────────────────────────────────────────────────────── */
+
+.avatar-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--sp-4);
+}
+
+.avatar-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.avatar-card:hover:not(:disabled) { border-color: var(--ln-strong); }
+.avatar-card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+.avatar-card[data-selected] {
+  border-color: var(--brand-edge);
+  background: var(--brand-tint);
+}
+
+.avatar-card:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.avatar-card__sheet {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--r-1);
+  background: var(--sf-ground);
+}
+
+.avatar-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.avatar-card__id {
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-micro);
+  color: var(--ink);
+}
+
+.avatar-card__state {
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+}
+
+/* ── The run picker ───────────────────────────────────────────────────────── */
+
+.run-picker {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.run-row {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--sp-4);
+  width: 100%;
+  font-family: var(--ff-ui);
+  font-size: var(--fs-ui);
+  color: var(--ink-2);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  padding: var(--sp-3) var(--sp-4);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.run-row:hover:not(:disabled) { border-color: var(--ln-strong); }
+.run-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.run-row[data-selected] { border-color: var(--brand-edge); background: var(--brand-tint); }
+
+.run-row__id { font-family: var(--ff-specimen); font-size: var(--fs-micro); color: var(--ink); }
+
+/* The version is the single most consequential fact about a run on this screen, so it is
+   the only thing in the row that carries colour. */
+.run-row__version { font-weight: var(--fw-med); }
+.run-row__version[data-tone="v2"] { color: var(--brand); }
+.run-row__version[data-tone="v1"] { color: var(--band-3); }
+.run-row__version[data-tone="unknown"] { color: var(--ink-3); font-style: italic; }
+
+.run-row__status { font-size: var(--fs-micro); color: var(--ink-3); }
+.run-row__status[data-status="passed"] { color: var(--band-5); }
+.run-row__passes,
+.run-row__when { font-size: var(--fs-micro); color: var(--ink-3); }
+
+@media (max-width: 900px) {
+  .run-row { grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); }
+}
+
+/* ── The event feed ───────────────────────────────────────────────────────── */
+
+.event-feed {
+  list-style: none;
+  margin: 0;
+  padding: var(--sp-4);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln-faint);
+  border-radius: var(--r-2);
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.event-feed__row {
+  display: grid;
+  grid-template-columns: 3.5rem 11rem minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: baseline;
+  font-size: var(--fs-micro);
+  line-height: var(--lh-ui);
+}
+
+.event-feed__id { font-family: var(--ff-specimen); color: var(--ink-3); }
+.event-feed__label { color: var(--ink); font-weight: var(--fw-med); }
+.event-feed__detail { font-family: var(--ff-specimen); color: var(--ink-2); word-break: break-word; }
+
+.event-feed__row[data-name="repairer.completed"] .event-feed__detail { color: var(--diff-add); }
+.event-feed__row[data-name="run.failed"] .event-feed__label { color: var(--sig-alarm-edge); }
+
+@media (max-width: 900px) {
+  .event-feed__row { grid-template-columns: minmax(0, 1fr); gap: var(--sp-1); }
+}
+
+/* ── The wire inspector ───────────────────────────────────────────────────── */
+
+.wire {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-6);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-3);
+}
+
+.wire__toggle {
+  align-self: flex-start;
+  font-family: var(--ff-ui);
+  font-size: var(--fs-ui);
+  font-weight: var(--fw-med);
+  color: var(--ink);
+  background: none;
+  border: var(--bd-hair) solid var(--ln-strong);
+  border-radius: var(--r-2);
+  padding: var(--sp-3) var(--sp-5);
+  cursor: pointer;
+}
+
+.wire__toggle:hover { border-color: var(--brand-edge); }
+.wire__toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* The claim the whole screen rests on, stated as a verdict rather than implied. */
+.wire__verdict {
+  font-size: var(--fs-ui);
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-2);
+  color: var(--sig-alarm-ink);
+  background: var(--sig-alarm-tint);
+  border: var(--bd-hair) solid var(--sig-alarm-edge);
+}
+
+.wire__verdict[data-match] {
+  color: var(--ink-2);
+  background: var(--sf-field);
+  border-color: var(--ln-faint);
+}
+
+.wire__body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-6);
+}
+
+@media (max-width: 1024px) {
+  .wire__body { grid-template-columns: minmax(0, 1fr); }
+}
+
+.wire__side { min-width: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+
+.wire__side h4 {
+  font-size: var(--fs-label);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--brand);
+  margin: 0;
+}
+
+.wire__side h5 {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: var(--sp-3) 0 0;
+}
+
+.wire__facts { display: flex; flex-direction: column; gap: var(--sp-2); margin: 0; }
+
+.wire__row {
+  display: grid;
+  grid-template-columns: 9rem minmax(0, 1fr);
+  gap: var(--sp-4);
+  font-size: var(--fs-micro);
+}
+
+.wire__row dt { color: var(--ink-3); }
+.wire__row dd { margin: 0; color: var(--ink); font-family: var(--ff-specimen); word-break: break-all; }
+
+.wire__prompt {
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-micro);
+  line-height: var(--lh-ui);
+  color: var(--ink);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln-faint);
+  border-radius: var(--r-2);
+  padding: var(--sp-4);
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+/* ── History ──────────────────────────────────────────────────────────────── */
+
+.history {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-ui);
+}
+
+.history th,
+.history td {
+  text-align: left;
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: var(--bd-hair) solid var(--ln-faint);
+  color: var(--ink-2);
+  font-weight: var(--fw-reg);
+}
+
+.history thead th {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.history tr[data-selected] { background: var(--brand-tint); }
+
+.history__open {
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-micro);
+  color: var(--brand);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.history__open:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+.history td[data-status="succeeded"] { color: var(--band-5); }
+.history td[data-status="failed"] { color: var(--sig-alarm-edge); }
+.history td[data-unmeasured] { color: var(--ink-3); font-style: italic; }
+
+/* ── The pre-flight preview ───────────────────────────────────────────────── */
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  padding: var(--sp-5);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+}
+
+.preview__title {
+  font-size: var(--fs-label);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+/* The claim the spend rests on, stated as a verdict and coloured by whether it holds. */
+.preview__verdict {
+  font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-2);
+  color: var(--sig-alarm-ink);
+  background: var(--sig-alarm-tint);
+  border: var(--bd-hair) solid var(--sig-alarm-edge);
+}
+
+.preview__verdict[data-match] {
+  color: var(--ink-2);
+  background: var(--brand-tint);
+  border-color: var(--brand-edge);
+}
+
+.preview__diff {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.preview__diff h4,
+.preview__side h4 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+.preview__meta {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--brand);
+}
+
+.preview__diffbody {
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-specimen);
+  line-height: var(--lh-spec);
+  color: var(--ink);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln-faint);
+  border-radius: var(--r-2);
+  padding: var(--sp-4) var(--sp-5);
+  margin: 0;
+}
+
+/* Never colour alone: the removal is struck through and the addition underlined, so the
+   diff survives red-green colour blindness and a black-and-white printout of a report. */
+.preview__diffbody [data-kind="removed"],
+.preview__legend [data-kind="removed"] {
+  color: var(--diff-del);
+  background: var(--diff-del-ground);
+  text-decoration: line-through;
+}
+
+.preview__diffbody [data-kind="added"],
+.preview__legend [data-kind="added"] {
+  color: var(--diff-add);
+  background: var(--diff-add-ground);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.preview__legend {
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+  margin: 0;
+}
+
+.preview__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-5);
+}
+
+@media (max-width: 1024px) {
+  .preview__pair { grid-template-columns: minmax(0, 1fr); }
+}
+
+.preview__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.preview__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
+  margin: 0;
+}
+
+.preview__facts div { display: flex; gap: var(--sp-2); align-items: baseline; }
+.preview__facts dt { font-size: var(--fs-micro); color: var(--ink-3); }
+.preview__facts dd {
+  margin: 0;
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-micro);
+  color: var(--ink-2);
+}
+
+.preview__prompt {
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-micro);
+  line-height: var(--lh-ui);
+  color: var(--ink-2);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln-faint);
+  border-radius: var(--r-2);
+  padding: var(--sp-4);
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+/* The one variable, marked inside the prompt that carries it. Everything around it is the
+   shared wrapper, and being able to see that is the point of printing both in full. */
+.preview__inserted {
+  color: var(--ink);
+  background: var(--brand-tint);
+  border-radius: var(--r-1);
+  padding: 1px 2px;
+  box-shadow: inset 0 -1px 0 var(--brand-edge);
+}
+
+/* The in-flight notice. Not a spinner: it carries the submit time and the real poll
+   counts, both of which only move when something actually happened. */
+.compare-inflight {
+  font-size: var(--fs-ui);
+  line-height: var(--lh-ui);
+  color: var(--ink);
+  background: var(--brand-tint);
+  border: var(--bd-hair) solid var(--brand-edge);
+  border-radius: var(--r-2);
+  padding: var(--sp-4) var(--sp-5);
+  margin: 0;
+}
+
+/* ── The clip gallery ─────────────────────────────────────────────────────── */
+
+.gallery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.gallery__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+}
+
+.gallery__filters { display: flex; gap: var(--sp-2); }
+
+.gallery__filter {
+  font-family: var(--ff-ui);
+  font-size: var(--fs-micro);
+  color: var(--ink-2);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-1);
+  padding: var(--sp-2) var(--sp-4);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.gallery__filter:hover { border-color: var(--ln-strong); }
+.gallery__filter:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.gallery__filter[data-active] {
+  color: var(--brand);
+  border-color: var(--brand-edge);
+  background: var(--brand-tint);
+}
+
+.gallery__total { font-size: var(--fs-micro); color: var(--ink-3); margin: 0; }
+
+.gallery__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  /* Vertical clips, so the tiles are narrow and many fit across. */
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--sp-5);
+}
+
+.gallery__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  background: var(--sf-field);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  min-width: 0;
+}
+
+.gallery__video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 480 / 854;
+  object-fit: contain;
+  background: #000;
+  border-radius: var(--r-1);
+}
+
+.gallery__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+/* Which side a clip came from is the single fact that makes the grid readable, so it is
+   the one thing in a tile that carries colour. */
+.gallery__side {
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+}
+.gallery__side[data-side="before"] { color: var(--band-3); }
+.gallery__side[data-side="after"] { color: var(--brand); }
+
+.gallery__version { font-size: var(--fs-micro); color: var(--ink-3); font-style: italic; }
+.gallery__version[data-known] { font-style: normal; color: var(--ink-2); }
+
+.gallery__shape { font-size: var(--fs-micro); color: var(--ink-3); margin: 0; }
+
+/* Clamped, not truncated to one line: enough of the description to tell two tiles apart,
+   with the whole of it in the title. */
+.gallery__description {
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-micro);
+  line-height: var(--lh-ui);
+  color: var(--ink-2);
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.gallery__open {
+  align-self: flex-start;
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-micro);
+  color: var(--brand);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.gallery__open:focus-visible { outline: none; box-shadow: var(--focus-ring); }

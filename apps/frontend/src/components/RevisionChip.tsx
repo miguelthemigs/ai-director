@@ -19,7 +19,9 @@ export function RevisionChip({ index, versionId }: RevisionChipProps): React.JSX
       <span className="revision-chip__swatch tnum" data-rev={rev} aria-hidden="true">
         {rev}
       </span>
-      <span className="revision-chip__id">{versionId}</span>
+      <span className="revision-chip__id" title={versionId}>
+        {versionId}
+      </span>
     </span>
   );
 }

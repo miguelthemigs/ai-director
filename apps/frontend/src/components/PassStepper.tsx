@@ -7,7 +7,10 @@ export type PassStepperProps = {
   /** Passes that have actually run, each with the count of fragments it changed. Always rendered
    *  against three fixed slots — a run with only one pass still shows three take frames, the
    *  unreached ones marked `not yet run` (design doc §4.1). */
-  passes: ReadonlyArray<{ pass: number; changedCount: number }>;
+  /** `changedCount` is absent for a pass whose fragment record was never written to disk:
+   *  a run from before the applied replacements were persisted repaired its description
+   *  without leaving a count, and "0 changed" would state the opposite of what happened. */
+  passes: ReadonlyArray<{ pass: number; changedCount?: number }>;
   /** Which pass's diff the rest of the screen is showing. */
   selected: number;
   onSelect: (pass: number) => void;
