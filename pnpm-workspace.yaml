@@ -29,3 +29,21 @@ allowBuilds:
   '@google/genai': false
   esbuild: true
   protobufjs: false
+
+# Why there is no `nodeLinker` here, and no .npmrc any more.
+#
+# This repo carried `node-linker=hoisted` in .npmrc, asking pnpm for the flat tree npm builds.
+# It was added because pnpm's isolated layout broke the Playwright suite once: the runner and the
+# spec files resolved two different copies of `@playwright/test`, `test.describe` threw
+# "Playwright Test did not expect test.describe() to be called here", and all 31 browser tests
+# reported "No tests found".
+#
+# pnpm 11 does not read its settings from .npmrc, so that line had stopped being in effect:
+# `pnpm config get node-linker` answers `undefined`, and node_modules on disk is the isolated
+# layout — symlinks into `.pnpm` — with pnpm's default hoist pattern behind it. The 599 unit and
+# jsdom tests pass on that layout. The only thing the line still did was make every npm command
+# print `Unknown project config "node-linker"` twice, so it is gone rather than moved.
+#
+# If the duplicate-instance fault ever returns, `nodeLinker: hoisted` in this file is the live
+# equivalent of what .npmrc used to ask for. Verify the browser suite either side of setting it,
+# since that suite is the only reason to want it.

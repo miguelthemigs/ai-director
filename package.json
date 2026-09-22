@@ -5,7 +5,7 @@
   "workspaces": ["packages/*", "apps/*"],
   "scripts": {
     "test": "vitest run && npm run test:web",
-    "dev": "npm run dev:server & npm run dev:web",
+    "dev": "node scripts/dev.mjs",
     "dev:web": "vite --config apps/frontend/vite.config.ts",
     "test:web": "vitest run --config apps/frontend/vitest.config.ts",
     "test:e2e": "playwright test --config apps/frontend/playwright.config.ts",
@@ -25,6 +25,7 @@
     "@types/node": "^22.20.2",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
+    "vite": "^8.3.0",
     "vitest": "^5.0.0"
   }
 }

@@ -46,6 +46,16 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    // Fail on a taken port instead of quietly moving to the next one.
+    //
+    // Vite's default is to print "Port 5173 is in use, trying another one..." and serve on 5174.
+    // That is worse than not starting: a tab left open on the old port still renders the app —
+    // its HTML and modules were already fetched — while every call it makes now goes to a port
+    // with nothing behind it, so the screens fill with "Failed to fetch" and the app looks
+    // broken in a way that has nothing to do with the app. `strictPort` turns that into an
+    // EADDRINUSE at startup, which `scripts/dev.mjs` reports and which names the real problem:
+    // a dev server is already running.
+    strictPort: true,
     // Dev-only proxy: the browser sees one origin, so CORS never enters the picture and
     // `HttpRunClient` can be constructed with `baseUrl: ""` in both dev and production.
     proxy: {
