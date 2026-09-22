@@ -1,0 +1,124 @@
+{
+  "description": "A guy who is sharp-jawed with shoulder-length black hair, wearing a black leather jacket with the zip half open over a charcoal-grey T-shirt, slim-fit black jeans, and scuffed black lace-up boots, stands with squared shoulders and clenched fists.",
+  "results": [
+    {
+      "status": "scored",
+      "checkId": "age_build",
+      "band": 1,
+      "reason": "The subject is identified only as \"A guy\" with no age bracket and no body build stated (slim-fit refers to the jeans, not the body).",
+      "quotes": [
+        "A guy"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "face_skin",
+      "band": 3,
+      "reason": "Only one concrete facial feature is named, the jaw shape, with no second feature or skin-texture cue.",
+      "quotes": [
+        "sharp-jawed"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "hair_spec",
+      "band": 3,
+      "reason": "Hair colour and length/style are given but texture is absent.",
+      "quotes": [
+        "shoulder-length black hair"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "wardrobe",
+      "band": 5,
+      "reason": "Jacket, T-shirt, jeans and boots are all named with colours plus fit and condition cues like the half-open zip, slim fit and scuffing.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "anchor_marker",
+      "band": 1,
+      "reason": "No small reusable identity marker such as a mole, scar or piece of jewellery appears; only pose is described.",
+      "quotes": [
+        "stands with squared shoulders and clenched fists"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_real_person",
+      "band": 4,
+      "reason": "The description uses only generic physical and wardrobe details with no celebrity, public figure, lookalike framing, or statement of fictionality.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_brand_name",
+      "band": 5,
+      "reason": "No brand or franchise names appear, and each garment is described generically with color, fit, and material details that are re-renderable.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "drawable_only",
+      "band": 5,
+      "reason": "Every element named — jawline, hair length, jacket with half-open zip, T-shirt, jeans, boots, squared shoulders and clenched fists — is a visible physical detail with no mood, feeling, or backstory.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_cross_slot",
+      "band": 5,
+      "reason": "The text is a single self-contained paragraph about the person only, with no camera, lighting, colour grade, or audio directions.",
+      "quotes": [],
+      "missingEvidence": false
+    }
+  ],
+  "failing": [
+    "age_build",
+    "face_skin",
+    "hair_spec",
+    "anchor_marker"
+  ],
+  "notEvaluated": [],
+  "spans": [
+    {
+      "spanId": "age_build:0",
+      "checkId": "age_build",
+      "quote": "A guy",
+      "start": 0,
+      "end": 5
+    },
+    {
+      "spanId": "face_skin:0",
+      "checkId": "face_skin",
+      "quote": "sharp-jawed",
+      "start": 13,
+      "end": 24
+    },
+    {
+      "spanId": "hair_spec:0",
+      "checkId": "hair_spec",
+      "quote": "shoulder-length black hair",
+      "start": 30,
+      "end": 56
+    },
+    {
+      "spanId": "anchor_marker:0",
+      "checkId": "anchor_marker",
+      "quote": "stands with squared shoulders and clenched fists",
+      "start": 197,
+      "end": 245
+    }
+  ],
+  "unverified": [],
+  "negativeConstraintPresent": false
+}

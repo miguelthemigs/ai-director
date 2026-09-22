@@ -1,0 +1,12 @@
+{
+  "from": "A young man in his mid-twenties with medium-length wavy brown hair in a side part, swept back off the forehead and falling over the ears, green eyes, a dimple in the left cheek and a faint stubble shadow along the jawline and above the upper lip and fair skin, of average build on a medium frame, about 1.78m tall, with even shoulders and straight posture, wearing a black crewneck sweater, dark jeans and black leather shoes.",
+  "to": "A young man in his mid-twenties with medium-length wavy brown hair in a side part, swept back off the forehead and falling over the ears, green eyes, a dimple in the left cheek and a faint stubble shadow along the jawline and above the upper lip and fair skin, of a man in his early twenties, 1.78m tall, of average build on a medium frame with shoulders and hips close to the same width and legs roughly even in length with the torso, about 1.78m tall, with even shoulders and straight posture, wearing a black crewneck sweater, dark jeans and black leather shoes.",
+  "replacements": [
+    {
+      "spanId": "age_build:0",
+      "newText": "a man in his early twenties, 1.78m tall, of average build on a medium frame with shoulders and hips close to the same width and legs roughly even in length with the torso",
+      "rationale": "Age bracket (20 years old) and height 1.78m and average/medium build come from the stated facts; the shoulder-to-hip width and leg-to-torso proportion are read off the full-length front and back views in the sheet."
+    }
+  ],
+  "rejected": []
+}

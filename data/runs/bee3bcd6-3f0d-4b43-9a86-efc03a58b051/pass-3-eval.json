@@ -1,0 +1,82 @@
+{
+  "description": "A young man in his mid-twenties with chestnut-brown wavy hair, shoulder-length and parted on the left, tucked behind the ears, green eyes, light stubble and fair skin, a small dark mole below his left eye and a thin pale scar crossing his right eyebrow, of lean, narrow-shouldered build with slim arms and about 5 foot 8, with long legs relative to the torso, wearing a black crewneck sweater, dark jeans, black leather shoes and a flat silver ring on his right index finger.",
+  "results": [
+    {
+      "status": "scored",
+      "checkId": "age_build",
+      "band": 5,
+      "reason": "States mid-twenties age, lean narrow-shouldered build, plus height (5 foot 8) and leg-to-torso proportion.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "face_skin",
+      "band": 5,
+      "reason": "Names green eyes, fair skin, a mole and a brow scar, plus the light stubble surface cue on the face.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "hair_spec",
+      "band": 5,
+      "reason": "Gives colour (chestnut-brown), texture (wavy), style (tucked behind the ears) plus length and parting.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "wardrobe",
+      "band": 4,
+      "reason": "All visible garments including footwear are named with colours but no fit or condition cues are given.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "anchor_marker",
+      "band": 5,
+      "reason": "Three localised markers: mole below the left eye, scar crossing the right eyebrow, and silver ring on the right index finger.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_real_person",
+      "band": 4,
+      "reason": "The description contains only invented physical traits with no celebrity name, lookalike phrasing, or named real-world role.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_brand_name",
+      "band": 5,
+      "reason": "Wardrobe items are described generically (black crewneck sweater, dark jeans, black leather shoes, silver ring) with no brand, franchise, or product-line names.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "drawable_only",
+      "band": 5,
+      "reason": "Every clause names a visible physical trait — hair, eyes, mole, scar, build, height, clothing — with no mood, backstory or judgement words.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_cross_slot",
+      "band": 5,
+      "reason": "The text is one self-contained paragraph describing only the person, with no camera, lighting, colour grade or audio direction.",
+      "quotes": [],
+      "missingEvidence": false
+    }
+  ],
+  "failing": [],
+  "notEvaluated": [],
+  "spans": [],
+  "unverified": [],
+  "negativeConstraintPresent": false
+}

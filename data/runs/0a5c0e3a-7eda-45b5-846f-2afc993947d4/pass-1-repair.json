@@ -1,0 +1,22 @@
+{
+  "from": "A young man in his mid-twenties with wavy brown hair, green eyes, light stubble and fair skin, of average build and medium height, wearing a black crewneck sweater, dark jeans and black leather shoes.",
+  "to": "A young man in his mid-twenties with medium-length wavy brown hair, parted to one side and sweeping back over the ears to the nape, green eyes, a single dimple creasing the left cheek, and faint patchy stubble shadow along the jawline and above the upper lip and fair skin, of average build on a medium frame, about 1.78m tall, with shoulders only slightly wider than the hips, wearing a black crewneck sweater, dark jeans and black leather shoes.",
+  "replacements": [
+    {
+      "spanId": "hair_spec:0",
+      "newText": "medium-length wavy brown hair, parted to one side and sweeping back over the ears to the nape",
+      "rationale": "Close-up and rear panels show brown hair with loose waves, length reaching the nape and covering the ears, and a side part with the front swept back."
+    },
+    {
+      "spanId": "anchor_marker:0",
+      "newText": "a single dimple creasing the left cheek, and faint patchy stubble shadow along the jawline and above the upper lip",
+      "rationale": "Dimple on the left side is given in the stated facts and visible as a crease in the close-up; the sparse stubble shading along the jaw and upper lip is visible in the close-up. No moles, scars or jewellery are visible in the sheet, so none are named."
+    },
+    {
+      "spanId": "age_build:0",
+      "newText": "average build on a medium frame, about 1.78m tall, with shoulders only slightly wider than the hips",
+      "rationale": "Average build and medium frame plus the 1.78m height come from the stated facts; the shoulder-to-hip proportion is read off the front and back full-body panels."
+    }
+  ],
+  "rejected": []
+}

@@ -1,0 +1,104 @@
+{
+  "description": "a woman in her mid-thirties, lean and narrow-shouldered, standing about 5'7\" with long legs and a short torso, with a narrow oval face, high flat cheekbones, a straight thin-bridged nose and a small cleft chin; her grey-green eyes sit under straight dark brows, and her fair olive skin shows a scatter of freckles across the nose and upper cheeks, visible pores on the nose and a faint pink flush along the jawline",
+  "results": [
+    {
+      "status": "scored",
+      "checkId": "age_build",
+      "band": 5,
+      "reason": "Age bracket, build, and height with proportion cues are all stated concretely.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "face_skin",
+      "band": 5,
+      "reason": "Multiple concrete facial features are named along with skin-texture cues of freckling, pores and flush.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "hair_spec",
+      "band": 1,
+      "reason": "Hair is never mentioned; the description ends at the skin detail without colour, texture or style.",
+      "quotes": [
+        "a faint pink flush along the jawline"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "wardrobe",
+      "band": 1,
+      "reason": "No garments or footwear are described anywhere in the text.",
+      "quotes": [
+        "standing about 5'7\" with long legs and a short torso"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "anchor_marker",
+      "band": 5,
+      "reason": "Several small markers are given with locations, including freckles across the nose and upper cheeks, pores on the nose, and a flush along the jawline.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_real_person",
+      "band": 4,
+      "reason": "The description consists only of generic physical traits with no celebrity name, lookalike comparison, or named role pointing to a real individual.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_brand_name",
+      "band": 4,
+      "reason": "No brand, franchise, or product-line name appears, though no wardrobe is described at all.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "drawable_only",
+      "band": 5,
+      "reason": "Every clause names a visible physical trait such as face shape, brow line, eye colour, freckles, pores and skin flush, with no mood, backstory or judgement words.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_cross_slot",
+      "band": 5,
+      "reason": "The block is one self-contained paragraph describing only the person, with no camera, lighting, grade or audio direction.",
+      "quotes": [],
+      "missingEvidence": false
+    }
+  ],
+  "failing": [
+    "hair_spec",
+    "wardrobe"
+  ],
+  "notEvaluated": [],
+  "spans": [
+    {
+      "spanId": "wardrobe:0",
+      "checkId": "wardrobe",
+      "quote": "standing about 5'7\" with long legs and a short torso",
+      "start": 57,
+      "end": 109
+    },
+    {
+      "spanId": "hair_spec:0",
+      "checkId": "hair_spec",
+      "quote": "a faint pink flush along the jawline",
+      "start": 378,
+      "end": 414
+    }
+  ],
+  "unverified": [],
+  "negativeConstraintPresent": false
+}

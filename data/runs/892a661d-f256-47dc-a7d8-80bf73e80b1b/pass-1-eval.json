@@ -1,0 +1,134 @@
+{
+  "description": "mmlsmxl",
+  "results": [
+    {
+      "status": "scored",
+      "checkId": "age_build",
+      "band": 1,
+      "reason": "The description is a meaningless string containing no age bracket or build information.",
+      "quotes": [
+        "mmlsmxl"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "face_skin",
+      "band": 1,
+      "reason": "No face or skin features are named anywhere in the text.",
+      "quotes": [
+        "mmlsmxl"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "hair_spec",
+      "band": 1,
+      "reason": "Hair is not mentioned at all.",
+      "quotes": [
+        "mmlsmxl"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "wardrobe",
+      "band": 1,
+      "reason": "No garments or footwear are described.",
+      "quotes": [
+        "mmlsmxl"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "anchor_marker",
+      "band": 1,
+      "reason": "No identifying marker of any kind is present.",
+      "quotes": [
+        "mmlsmxl"
+      ],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_real_person",
+      "band": 4,
+      "reason": "The text is a meaningless string with no celebrity, public figure, or lookalike reference, and no statement that the character is fictional.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_brand_name",
+      "band": 4,
+      "reason": "The text contains no brand, franchise, or product-line name, but also no generic garment description.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "drawable_only",
+      "band": 4,
+      "reason": "The text is a single meaningless token with no mood, feeling, backstory or judgement words, but it also names nothing visible.",
+      "quotes": [],
+      "missingEvidence": false
+    },
+    {
+      "status": "scored",
+      "checkId": "no_cross_slot",
+      "band": 4,
+      "reason": "No camera, lighting, colour grade or audio instruction appears in the text, though it is not a self-contained descriptive paragraph.",
+      "quotes": [],
+      "missingEvidence": false
+    }
+  ],
+  "failing": [
+    "age_build",
+    "face_skin",
+    "hair_spec",
+    "wardrobe",
+    "anchor_marker"
+  ],
+  "notEvaluated": [],
+  "spans": [
+    {
+      "spanId": "age_build:0",
+      "checkId": "age_build",
+      "quote": "mmlsmxl",
+      "start": 0,
+      "end": 7
+    },
+    {
+      "spanId": "face_skin:0",
+      "checkId": "face_skin",
+      "quote": "mmlsmxl",
+      "start": 0,
+      "end": 7
+    },
+    {
+      "spanId": "hair_spec:0",
+      "checkId": "hair_spec",
+      "quote": "mmlsmxl",
+      "start": 0,
+      "end": 7
+    },
+    {
+      "spanId": "wardrobe:0",
+      "checkId": "wardrobe",
+      "quote": "mmlsmxl",
+      "start": 0,
+      "end": 7
+    },
+    {
+      "spanId": "anchor_marker:0",
+      "checkId": "anchor_marker",
+      "quote": "mmlsmxl",
+      "start": 0,
+      "end": 7
+    }
+  ],
+  "unverified": [],
+  "negativeConstraintPresent": false
+}

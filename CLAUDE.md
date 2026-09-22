@@ -17,7 +17,8 @@ character-description Evaluator and Repairer, three screens, and the evidence th
   types a second time anywhere else is a defect.
 - `apps/backend` — rubric, agents, enforcement, orchestration, store, CLI, server.
 - `apps/frontend` — React 19 + Vite. Three screens: Run, Architecture, Versions.
-- `data/` — runs (gitignored), frozen gold set, version notes.
+- `data/` — runs, avatars, comparison clips, frozen gold set, version notes. All committed, so a
+  fresh clone has every artefact.
 
 ## Rules that are not negotiable
 

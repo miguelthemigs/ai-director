@@ -1,0 +1,9 @@
+{
+  "runId": "b6bdc905-87be-4f4c-a7e7-cc9adc9e34d2",
+  "rubricVersion": "v1",
+  "model": "claude-opus-5",
+  "status": "passed",
+  "startedAt": "2026-09-14T12:45:13.878Z",
+  "passes": 2,
+  "finishedAt": "2026-09-14T12:45:42.144Z"
+}

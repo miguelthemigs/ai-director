@@ -1,9 +1,6 @@
 node_modules
 dist
 .env
-data/runs
-data/avatars
-data/comparisons
 .superpowers/
 coverage
 apps/frontend/dist
