@@ -1,8 +1,8 @@
 import type { Page } from "@playwright/test";
 
 /** Any description works: `FixtureRunClient` ignores the submitted text and always replays the
- *  scenario baked into the `?fixture=` query param (see `main.tsx`). Non-trivial only so the
- *  composer's disabled-while-empty submit button is never in play. */
+ *  scenario baked into the `?fixture=` query param (see `main.tsx`). It is `TEST_AVATAR`'s
+ *  description, which is what picking that avatar puts in the composer. */
 export const SAMPLE_DESCRIPTION =
   "A woman with short black hair, blue eyes, and a small mole on her left cheek, wearing a grey wool coat.";
 
@@ -20,7 +20,37 @@ export type FixtureScenario = "passed" | "improvedStillFailing" | "noImprovement
  * `navigateToScreen` below instead, which is also how a real user gets there after the first
  * load. */
 export async function gotoFixture(page: Page, scenario: FixtureScenario, speedMs = 15): Promise<void> {
+  await stubAvatarGallery(page);
   await page.goto(`/?fixture=${scenario}&fixtureSpeed=${speedMs}`);
+}
+
+/** One saved, already-described avatar, served by `stubAvatarGallery`. */
+export const TEST_AVATAR = {
+  id: "avatar-1",
+  createdAt: "2026-10-05T00:00:00.000Z",
+  source: "generated",
+  mediaType: "image/png",
+  seedDescription: "Test avatar",
+  description: SAMPLE_DESCRIPTION,
+  describeModel: "m",
+};
+
+/** A 1x1 transparent PNG, so the gallery thumbnail and the reopened sheet are real images. */
+const PIXEL_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+  "base64",
+);
+
+/** Every run starts from an avatar, and there is no backend in this suite, so the avatar
+ *  gallery's two requests are answered here: the list, and `TEST_AVATAR`'s image. Run requests
+ *  never reach the network either way: the fixture client replays them in memory. */
+export async function stubAvatarGallery(page: Page): Promise<void> {
+  await page.route("**/avatar", (route) =>
+    route.fulfill({ json: { avatars: [TEST_AVATAR] } }),
+  );
+  await page.route(`**/avatar/${TEST_AVATAR.id}/image`, (route) =>
+    route.fulfill({ contentType: "image/png", body: PIXEL_PNG }),
+  );
 }
 
 /** Switches screens by dispatching a "click" DOM event on the tab link directly, rather than a
@@ -40,14 +70,11 @@ export async function navigateToScreen(
  *  with. Resolves once the submit click has landed; callers wait for their own terminal signal
  *  (the verdict banner's word, a specific check's band, etc.) rather than a fixed sleep. */
 export async function startRun(page: Page): Promise<void> {
-  // The composer opens on the Build tab (fields, render, describe); this helper drives the paste
-  // tab, which grades a description on its own. `AvatarComposer` keeps both panels mounted,
-  // so the tab has to be selected rather than merely located.
-  await page.getByRole("tab", { name: "Paste a description" }).click();
-  // `exact: true`: Playwright's `getByLabel` matches on a substring by default, and the tab
-  // list's own label ("How to supply the description") contains the word, so a loose match
-  // resolves to two elements and throws.
-  await page.getByLabel("Description", { exact: true }).fill(SAMPLE_DESCRIPTION);
+  // Every run starts from an avatar. Reopening the described one in the gallery hands its
+  // description and id to the composer, which is what enables Run. `dispatchEvent` for the same
+  // reason as the Run button below: `.pass-step__pill` sits on top of everything.
+  await page.getByRole("button", { name: /Test avatar/ }).dispatchEvent("click");
+  await page.getByText(SAMPLE_DESCRIPTION).first().waitFor();
   // `exact: true`: a non-exact match on "Run" also matches every pass-step button, whose
   // accessible name includes its "not yet run" status text.
   //

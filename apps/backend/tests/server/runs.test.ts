@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { FIXTURE_RUNS } from "@ai-director/contract";
 import { buildApp } from "../../src/server/app.js";
 import { loadRubric } from "../../src/rubric/load.js";
+import type { AvatarStore } from "../../src/store/AvatarStore.js";
 import type { RunManifest, RunStatus, RunStore, StoredPass } from "../../src/store/RunStore.js";
 import type { VersionStore } from "../../src/store/VersionStore.js";
 
@@ -19,6 +20,15 @@ function stubVersionStore(): VersionStore {
     },
   };
 }
+
+// Every run needs an avatar whose sheet loads (tests/server/runs-avatar.test.ts covers the
+// refusals). This one answers for any id, so these tests can stay about the run routes.
+const avatar = {
+  store: {
+    get: async () => null,
+    readImage: async () => ({ bytes: Buffer.from("jpeg"), mediaType: "image/jpeg" }),
+  } as unknown as AvatarStore,
+};
 
 function stubStore(): RunStore {
   const runs = new Map<string, RunManifest>();
@@ -51,6 +61,7 @@ describe("run routes", () => {
       rubric: await loadRubric("v1"),
       startRun: async () => FIXTURE_RUNS.passed,
       versionStore: stubVersionStore(),
+      avatar,
     });
   });
 
@@ -59,14 +70,14 @@ describe("run routes", () => {
       const res = await app.inject({
         method: "POST",
         url: "/runs",
-        payload: { description: "Male, Latino, around 30, lean and tall." },
+        payload: { description: "Male, Latino, around 30, lean and tall.", avatarId: "avatar-1" },
       });
       expect(res.statusCode).toBe(202);
       expect(res.json()).toMatchObject({ runId: expect.any(String), status: "running" });
     });
 
     it("rejects an empty description with 400 rather than starting a run", async () => {
-      const res = await app.inject({ method: "POST", url: "/runs", payload: { description: "   " } });
+      const res = await app.inject({ method: "POST", url: "/runs", payload: { description: "   ", avatarId: "avatar-1" } });
       expect(res.statusCode).toBe(400);
       expect(res.json().error).toMatch(/description/i);
     });
@@ -75,7 +86,7 @@ describe("run routes", () => {
       const res = await app.inject({
         method: "POST",
         url: "/runs",
-        payload: { description: "x".repeat(20_001) },
+        payload: { description: "x".repeat(20_001), avatarId: "avatar-1" },
       });
       expect(res.statusCode).toBe(400);
     });
@@ -91,11 +102,12 @@ describe("run routes", () => {
           return FIXTURE_RUNS.passed;
         },
         versionStore: stubVersionStore(),
+        avatar,
       });
       const res = await slow.inject({
         method: "POST",
         url: "/runs",
-        payload: { description: "A description." },
+        payload: { description: "A description.", avatarId: "avatar-1" },
       });
       expect(res.statusCode).toBe(202);
       // startRun was invoked (fired) but the response did not wait on it.
@@ -114,7 +126,7 @@ describe("run routes", () => {
       const postRes = await app.inject({
         method: "POST",
         url: "/runs",
-        payload: { description: "A description." },
+        payload: { description: "A description.", avatarId: "avatar-1" },
       });
       const { runId } = postRes.json() as { runId: string };
 

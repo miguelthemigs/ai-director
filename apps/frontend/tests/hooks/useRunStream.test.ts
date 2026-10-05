@@ -26,7 +26,7 @@ describe("useRunStream", () => {
 
     let runId = "";
     await act(async () => {
-      const started = await client.startRun("a description");
+      const started = await client.startRun("a description", "avatar-1");
       runId = started.runId;
     });
 
@@ -79,7 +79,7 @@ describe("useRunStream", () => {
 
     let runId = "";
     await act(async () => {
-      const started = await client.startRun("a description");
+      const started = await client.startRun("a description", "avatar-1");
       runId = started.runId;
     });
     rerender({ runId });
@@ -121,7 +121,7 @@ describe("useRunStream", () => {
 
     let runId = "";
     await act(async () => {
-      const started = await client.startRun("a description");
+      const started = await client.startRun("a description", "avatar-1");
       runId = started.runId;
     });
     rerender({ runId });
@@ -147,7 +147,7 @@ describe("useRunStream", () => {
 
     let runId = "";
     await act(async () => {
-      const started = await client.startRun("a description");
+      const started = await client.startRun("a description", "avatar-1");
       runId = started.runId;
       // Let the fixture run to completion so there is a finished run to reopen.
       await vi.advanceTimersByTimeAsync(1000);

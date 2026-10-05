@@ -40,6 +40,6 @@ test.describe("the Compare tab", () => {
   test("keeps the other three screens reachable from it", async ({ page }) => {
     await navigateToScreen(page, "Compare");
     await navigateToScreen(page, "Run");
-    await expect(page.getByRole("tab", { name: "Build an avatar" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Generate sheet" })).toBeVisible();
   });
 });

@@ -6,6 +6,7 @@ import type { RunClient } from "../../src/data/RunClient.js";
 import { RunScreen } from "../../src/screens/RunScreen.js";
 import { FixtureRunClient } from "../../src/data/FixtureRunClient.js";
 import { useRunStream } from "../../src/hooks/useRunStream.js";
+import { pickTestAvatar, stubAvatarGallery } from "../helpers/avatarFlow.js";
 
 /** Stands in for `App`, which now owns `useRunStream` (Task 14 lifted it out of `RunScreen` so the
  *  Architecture screen can share one subscription). Mirrors exactly what `App` wires down. */
@@ -31,12 +32,8 @@ function Harness({ client }: { client: RunClient }): React.JSX.Element {
 /** Submits the composer and advances the fixture stream exactly through pass 1's completion
  *  (`pass.completed`, event index 10) — every check scored, nothing from pass 2 started yet. */
 async function startAndFinishPass1(): Promise<void> {
-  // The composer opens on the Build tab (fields, render, describe). These helpers exercise the
-  // Direct tab, which grades a description on its own, so they switch to it first.
-  fireEvent.click(screen.getByRole("tab", { name: "Paste a description" }));
-  fireEvent.change(screen.getByPlaceholderText("Paste the character description."), {
-    target: { value: "a description long enough to submit" },
-  });
+  // Every run starts from an avatar: reopen a described one from the gallery.
+  await pickTestAvatar();
   // Two separate `act` calls: the click's own promise chain (`handleSubmit` awaiting
   // `client.startRun`) must fully settle and commit — subscribing the stream — before any fake
   // timer advances, or the fixture's first events fire to zero listeners and are lost forever.
@@ -53,12 +50,8 @@ async function startAndFinishPass1(): Promise<void> {
  *  `noImprovement`, at 1ms each) to land. Advancing further than the log is harmless: the fixture
  *  client stops scheduling once it runs out of events. */
 async function startAndFinishRun(): Promise<void> {
-  // The composer opens on the Build tab (fields, render, describe). These helpers exercise the
-  // Direct tab, which grades a description on its own, so they switch to it first.
-  fireEvent.click(screen.getByRole("tab", { name: "Paste a description" }));
-  fireEvent.change(screen.getByPlaceholderText("Paste the character description."), {
-    target: { value: "a description long enough to submit" },
-  });
+  // Every run starts from an avatar: reopen a described one from the gallery.
+  await pickTestAvatar();
   await act(async () => {
     fireEvent.click(screen.getByRole("button", { name: "Run" }));
   });
@@ -70,10 +63,12 @@ async function startAndFinishRun(): Promise<void> {
 describe("RunScreen", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    stubAvatarGallery();
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it("shows all nine checks with their own percentage once a run streams", async () => {
@@ -268,11 +263,11 @@ describe("RunScreen", () => {
     const client = new FixtureRunClient({ speedMs: 1, scenario: "improvedStillFailing" });
     render(<Harness client={client} />);
 
-    expect(screen.getByPlaceholderText("Paste the character description.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Run$/ })).toBeInTheDocument();
 
     await startAndFinishPass1();
 
-    expect(screen.queryByPlaceholderText("Paste the character description.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Run$/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.getByText(/read-only/i)).toBeInTheDocument();
   });

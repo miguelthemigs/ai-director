@@ -38,5 +38,6 @@ character-description Evaluator and Repairer, three screens, and the evidence th
 
 - `npm test` — the full suite. Live API tests are skipped unless `RUN_LIVE_API=1`.
 - `npm run typecheck`
-- `npm run score <file>` — grade and repair one description from the command line.
+- `npm run score -- --avatar <avatarId>` — grade and repair one avatar's description from the
+  command line.
 - `npm run agree` — the agreement study against the frozen gold set.

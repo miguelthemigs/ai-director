@@ -1,5 +1,28 @@
 # Decision log
 
+## 2026-10-05 — Every run starts from an avatar; the paste path is gone
+
+The product has one flow: render or upload a character sheet, describe it, grade the description,
+repair it. Until today there was a second way in, a tab on the Run screen for pasting a description
+by hand. A pasted description belongs to no avatar, so the Repairer had no sheet to look at and
+silently ran prompt v1, the blind prompt that fabricated the hair length, the height and the build on
+run `bee3bcd6` (see the 2026-09-16 entry below and `docs/repairer-cannot-see.md`). The server did the
+same when an avatar's sheet failed to load.
+
+Removed: the paste tab, and the fixture-only "needs the real backend" notice on the pipeline (there is
+no offline use of this tool). Changed: `POST /runs` requires `avatarId` (400 without one) and loads
+that avatar's sheet before it answers, refusing the run with 422 when there is none, rather than
+falling back to v1. `npm run score` takes `--avatar <id>` and grades that avatar's stored
+description. An uploaded sheet must be saved before it can be described, since a run reads the sheet
+back from the store.
+
+v1 is kept, unedited. Prompt files are append-only, and the five v1 runs in `data/runs/` are the
+evidence for why v2 exists, so they must stay readable and reproducible. Nothing new can reach v1:
+every new run records `repairerPromptVersion: "v2"`.
+
+Not changed: the agreement study and the bias check grade descriptions with the Evaluator only and
+never call the Repairer, so they still take descriptions without an avatar.
+
 ## 2026-09-16 — The render comparison is being built, on OpenRouter, outside the graded surface
 
 Spec §2 put "any render" out of scope for v1, and `PRODUCT.md` said nothing in the tool spends a

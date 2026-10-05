@@ -201,17 +201,13 @@ export function RunScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
-  async function handleSubmit(description: string, avatarId: string | null): Promise<void> {
+  async function handleSubmit(description: string, avatarId: string): Promise<void> {
     if (submitting) return;
     setSubmitting(true);
     try {
-      // The avatar id, when the description came from one, is what gets the run Repairer
-      // v2: the server loads that sheet and its brief so a repair can only claim what it
-      // can see. Without it the Repairer is blind, which is a real and honest v1 run.
-      const { runId: newRunId } = await client.startRun(
-        description,
-        avatarId ?? undefined,
-      );
+      // The avatar id is what gets the run Repairer v2: the server loads that sheet and its
+      // brief so a repair can only claim what it can see.
+      const { runId: newRunId } = await client.startRun(description, avatarId);
       onRunStarted(newRunId);
     } finally {
       setSubmitting(false);
@@ -301,14 +297,13 @@ export function RunScreen({
         {!hasStarted ? (
           <>
             <EmptyState
-              title="Build a description, or paste one"
+              title="Build an avatar, then grade its description"
               body="Nine checks, three groups, up to three repair passes. Nothing here spends a render credit."
             />
             <AvatarComposer
               onSubmit={(description, avatarId) => void handleSubmit(description, avatarId)}
               disabled={submitting}
               maxChars={MAX_CHARS}
-              live={!client.isFixture}
             />
             {/* Sits under the composer for the same reason the avatar gallery does: a paid
                 artefact that is on disk but has nowhere visible to be is indistinguishable

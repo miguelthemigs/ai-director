@@ -27,9 +27,12 @@ user-confirmed.)*
 
 ## Product Purpose
 
-A writer pastes a character description for an AI video model. An Evaluator agent scores it against
-a versioned nine-check rubric and quotes verbatim the words that failed. A Repairer agent rewrites
-only those quoted fragments. Up to three passes. The product's job is to make the score, the
+A writer builds an avatar: they render a character sheet (or upload one), and a vision model
+describes the person on it. That description is what goes to the AI video model. An Evaluator agent
+scores it against a versioned nine-check rubric and quotes verbatim the words that failed. A
+Repairer agent rewrites only those quoted fragments, looking at the same sheet so it cannot invent
+what the picture does not show. Up to three passes. Every run starts from an avatar; there is no
+way to grade a description that belongs to none. The product's job is to make the score, the
 evidence for the score, and the repair all inspectable in the same screen, so a claim like "v2 beat
 v1" is legible check by check rather than asserted.
 

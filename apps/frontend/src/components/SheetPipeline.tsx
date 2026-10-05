@@ -20,23 +20,20 @@ export type SheetPipelineProps = {
    *  after looking at the generated avatar. This is the string the nine checks grade, and
    *  it is emphatically not the one that went in.
    *
-   *  The stored avatar's id travels with it. The description alone is not enough for the
-   *  Repairer: reading it back off the sheet is what v1 does, and v1 has no way to check a
-   *  claim against the person. The id is how the run gets the sheet and the brief, which
-   *  is the whole of prompt v2. Null when the server kept no record, and the run is then
-   *  honestly a v1 run. */
-  onDescription: (description: string, avatarId: string | null) => void;
+   *  The stored avatar's id always travels with it. The id is how the run gets the sheet
+   *  and the brief, which is the whole of prompt v2: the Repairer sees the person instead
+   *  of inventing them. A sheet that was never stored cannot be described, so there is no
+   *  description without an id. */
+  onDescription: (description: string, avatarId: string) => void;
   disabled: boolean;
-  /** Fixture mode has no backend. Both steps here spend real money, so there is nothing
-   *  honest to fake, and the tab says so instead. */
-  live: boolean;
 };
 
 type Loaded = {
   imageBase64: string;
   mediaType: string;
   source: "generated" | "uploaded" | "stored";
-  /** The stored record, when there is one. Null only if the server has no avatar store. */
+  /** The stored record. Null only while an upload is still being saved, or if saving it
+   *  failed; either way it cannot be described yet, because a run needs the stored sheet. */
   id: string | null;
 };
 
@@ -65,7 +62,6 @@ export function SheetPipeline({
   seedDescription,
   onDescription,
   disabled,
-  live,
 }: SheetPipelineProps): React.JSX.Element {
   const [sheet, setSheet] = useState<SheetResult | null>(null);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -98,16 +94,15 @@ export function SheetPipeline({
      dev-server restart, or the browser being closed. A gallery that quietly fails to load
      is not worth an error banner over the pipeline itself. */
   const refreshGallery = useCallback(() => {
-    if (!live) return;
     listAvatars()
       .then(setGallery)
       .catch(() => setGallery([]));
-  }, [live]);
+  }, []);
 
   useEffect(refreshGallery, [refreshGallery]);
 
-  const canGenerate = live && !disabled && busy === null && seedDescription.trim().length > 0;
-  const canDescribe = live && !disabled && busy === null && loaded !== null;
+  const canGenerate = !disabled && busy === null && seedDescription.trim().length > 0;
+  const canDescribe = !disabled && busy === null && loaded !== null && loaded.id !== null;
 
   async function onGenerate(): Promise<void> {
     setBusy("sheet");
@@ -152,14 +147,17 @@ export function SheetPipeline({
       setSheet(null);
       setDescribed(null);
       setLoaded({ ...split, source: "uploaded", id: null });
-      // Stored too, so an uploaded sheet joins the gallery instead of living only in this
-      // tab until the next reload. Failing to store it must not block describing it.
+      // Stored before it can be described: a run reads the sheet back from the store to
+      // show it to the Repairer, so an unsaved upload has nothing a run could use.
       uploadSheet(split.imageBase64, split.mediaType)
         .then((stored) => {
           setLoaded({ ...split, source: "uploaded", id: stored.id });
           refreshGallery();
         })
-        .catch(() => {});
+        .catch((err) => {
+          const reason = err instanceof Error ? err.message : String(err);
+          setError(`This avatar could not be saved, so it cannot be graded: ${reason}`);
+        });
     };
     reader.readAsDataURL(file);
   }
@@ -198,13 +196,14 @@ export function SheetPipeline({
   }
 
   async function onDescribe(): Promise<void> {
-    if (!loaded) return;
+    if (!loaded || loaded.id === null) return;
+    const avatarId = loaded.id;
     setBusy("describe");
     setError(null);
     try {
-      const result = await describeSheet(loaded.imageBase64, loaded.mediaType, loaded.id);
+      const result = await describeSheet(loaded.imageBase64, loaded.mediaType, avatarId);
       setDescribed(result);
-      onDescription(result.description, loaded.id);
+      onDescription(result.description, avatarId);
       refreshGallery();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -215,13 +214,6 @@ export function SheetPipeline({
 
   return (
     <div className="sheet-pipeline">
-      {!live ? (
-        <p className="sheet-pipeline__offline">
-          This tab needs the real backend. Run <code>npm run dev</code> rather than a fixture
-          scenario. Both steps below make a paid API call.
-        </p>
-      ) : null}
-
       <ol className="sheet-pipeline__steps">
         <li className="sheet-pipeline__step">
           <div className="sheet-pipeline__step-head">
@@ -358,68 +350,66 @@ export function SheetPipeline({
       {/* Every avatar on disk. This exists because a rendered sheet is a paid artefact that
           used to live only in React state: gone on a reload, gone on a dev-server restart,
           and indistinguishable from a render that never happened. */}
-      {live ? (
-        <section className="avatar-gallery" aria-label="Saved avatars">
-          <div className="avatar-gallery__head">
-            <span className="avatar-gallery__label">Your avatars</span>
-            <span className="avatar-gallery__count tnum">
-              {gallery.length === 0 ? "none yet" : `${gallery.length} saved`}
-            </span>
-          </div>
-          {/* Rendered even when empty, and that is the point. Showing this section only once
-              it has contents means there is no visible place for avatars to be until one
-              exists, so the first question after a failed render is "where do I even look?"
-              rather than "what went wrong?". */}
-          {gallery.length === 0 ? (
-            <p className="avatar-gallery__empty">
-              Nothing saved yet. Every avatar you generate or upload is written to{" "}
-              <code>data/avatars/</code> and appears here, so it survives a reload.
-            </p>
-          ) : null}
-          <ul className="avatar-gallery__grid">
-            {gallery.map((record) => (
-              <li key={record.id}>
-                <button
-                  type="button"
-                  className="avatar-gallery__item"
-                  data-selected={loaded?.id === record.id || undefined}
-                  onClick={() => void onPick(record)}
-                >
-                  <img
-                    className="avatar-gallery__thumb"
-                    src={avatarImageUrl(record.id)}
-                    alt={record.seedDescription ?? `Avatar rendered ${record.createdAt}`}
-                    loading="lazy"
-                  />
-                  <span className="avatar-gallery__meta">
-                    {/* Whether this one has been described yet is the only status worth a
-                        badge: an avatar with no description has nothing to grade. */}
-                    <span
-                      className="avatar-gallery__state"
-                      data-described={record.description ? true : undefined}
-                    >
-                      {record.description ? "described" : "not described"}
-                    </span>
-                    <span className="avatar-gallery__when tnum">
-                      {new Date(record.createdAt).toLocaleString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
+      <section className="avatar-gallery" aria-label="Saved avatars">
+        <div className="avatar-gallery__head">
+          <span className="avatar-gallery__label">Your avatars</span>
+          <span className="avatar-gallery__count tnum">
+            {gallery.length === 0 ? "none yet" : `${gallery.length} saved`}
+          </span>
+        </div>
+        {/* Rendered even when empty, and that is the point. Showing this section only once
+            it has contents means there is no visible place for avatars to be until one
+            exists, so the first question after a failed render is "where do I even look?"
+            rather than "what went wrong?". */}
+        {gallery.length === 0 ? (
+          <p className="avatar-gallery__empty">
+            Nothing saved yet. Every avatar you generate or upload is written to{" "}
+            <code>data/avatars/</code> and appears here, so it survives a reload.
+          </p>
+        ) : null}
+        <ul className="avatar-gallery__grid">
+          {gallery.map((record) => (
+            <li key={record.id}>
+              <button
+                type="button"
+                className="avatar-gallery__item"
+                data-selected={loaded?.id === record.id || undefined}
+                onClick={() => void onPick(record)}
+              >
+                <img
+                  className="avatar-gallery__thumb"
+                  src={avatarImageUrl(record.id)}
+                  alt={record.seedDescription ?? `Avatar rendered ${record.createdAt}`}
+                  loading="lazy"
+                />
+                <span className="avatar-gallery__meta">
+                  {/* Whether this one has been described yet is the only status worth a
+                      badge: an avatar with no description has nothing to grade. */}
+                  <span
+                    className="avatar-gallery__state"
+                    data-described={record.description ? true : undefined}
+                  >
+                    {record.description ? "described" : "not described"}
                   </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          {gallery.length > 0 ? (
-            <p className="avatar-gallery__where">
-              Saved to <code>data/avatars/</code>. Click one to reopen it.
-            </p>
-          ) : null}
-        </section>
-      ) : null}
+                  <span className="avatar-gallery__when tnum">
+                    {new Date(record.createdAt).toLocaleString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        {gallery.length > 0 ? (
+          <p className="avatar-gallery__where">
+            Saved to <code>data/avatars/</code>. Click one to reopen it.
+          </p>
+        ) : null}
+      </section>
     </div>
   );
 }

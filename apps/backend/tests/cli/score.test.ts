@@ -1,6 +1,3 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { PassResult } from "../../src/orchestrate/runPass.js";
 import { loadRubric } from "../../src/rubric/load.js";
@@ -19,6 +16,9 @@ vi.mock("../../src/orchestrate/runToCompletion.js", () => ({
 }));
 
 const { formatPassResult, main } = await import("../../src/cli/score.js");
+
+/** The avatar committed under `data/avatars`: a rendered sheet with its description. */
+const COMMITTED_AVATAR = "eaa18108-4b38-408f-b683-2fc897ce2537";
 
 // A base PassResult with every field the type requires, so each test only
 // overrides what it cares about instead of re-typing the whole shape.
@@ -169,7 +169,7 @@ describe("main", () => {
     const originalError = console.error;
     console.error = (msg: string) => errors.push(String(msg));
     try {
-      const code = await main(["node", "score.ts", "some-file.txt"]);
+      const code = await main(["node", "score.ts", "--avatar", "some-avatar"]);
       expect(code).not.toBe(0);
       expect(errors.join("\n")).toMatch(/ANTHROPIC_API_KEY/);
     } finally {
@@ -178,7 +178,7 @@ describe("main", () => {
     }
   });
 
-  it("returns exit code 1 and prints usage when no file is given", async () => {
+  it("returns exit code 1 and prints usage when no avatar is given", async () => {
     const previous = process.env.ANTHROPIC_API_KEY;
     process.env.ANTHROPIC_API_KEY = "test-key";
     const errors: string[] = [];
@@ -199,10 +199,6 @@ describe("main", () => {
     const previous = process.env.ANTHROPIC_API_KEY;
     process.env.ANTHROPIC_API_KEY = "test-key";
 
-    const dir = await mkdtemp(path.join(tmpdir(), "score-cli-"));
-    const file = path.join(dir, "description.txt");
-    await writeFile(file, "A lean man with a calm expression.", "utf8");
-
     mockRunToCompletion.mockRejectedValueOnce(new Error("simulated failure: rate limited"));
 
     const logs: string[] = [];
@@ -213,7 +209,7 @@ describe("main", () => {
     console.error = (msg?: unknown) => errors.push(String(msg));
 
     try {
-      const code = await main(["node", "score.ts", file]);
+      const code = await main(["node", "score.ts", "--avatar", COMMITTED_AVATAR]);
       const combined = [...logs, ...errors].join("\n");
 
       expect(code).toBe(2);
@@ -222,6 +218,47 @@ describe("main", () => {
       // which nothing we print deliberately includes.
       expect(combined).not.toContain("\n    at ");
       expect(combined).toMatch(/run: data\/runs\//);
+    } finally {
+      console.log = originalLog;
+      console.error = originalError;
+      if (previous === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = previous;
+    }
+  });
+
+  it("refuses an avatar it cannot find rather than running the Repairer blind", async () => {
+    const previous = process.env.ANTHROPIC_API_KEY;
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    const errors: string[] = [];
+    const originalError = console.error;
+    console.error = (msg: string) => errors.push(String(msg));
+    const callsBefore = mockRunToCompletion.mock.calls.length;
+    try {
+      const code = await main(["node", "score.ts", "--avatar", "no-such-avatar"]);
+      expect(code).toBe(1);
+      expect(errors.join("\n")).toMatch(/no character sheet/);
+      expect(mockRunToCompletion.mock.calls.length).toBe(callsBefore);
+    } finally {
+      console.error = originalError;
+      if (previous === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = previous;
+    }
+  });
+
+  it("grades the avatar's own description and records prompt v2 with its sheet", async () => {
+    const previous = process.env.ANTHROPIC_API_KEY;
+    process.env.ANTHROPIC_API_KEY = "test-key";
+    mockRunToCompletion.mockRejectedValueOnce(new Error("stop after capturing the call"));
+    const originalLog = console.log;
+    const originalError = console.error;
+    console.log = () => {};
+    console.error = () => {};
+    try {
+      await main(["node", "score.ts", "--avatar", COMMITTED_AVATAR]);
+      const [, args] = mockRunToCompletion.mock.calls.at(-1)! as [unknown, Record<string, unknown>];
+      expect(args.avatarId).toBe(COMMITTED_AVATAR);
+      expect(args.repairerPromptVersion).toBe("v2");
+      expect(String(args.description)).toMatch(/^A young man in his mid-twenties/);
     } finally {
       console.log = originalLog;
       console.error = originalError;

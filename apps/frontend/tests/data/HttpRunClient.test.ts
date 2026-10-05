@@ -66,17 +66,19 @@ describe("HttpRunClient", () => {
     expect(new HttpRunClient("").isFixture).toBe(false);
   });
 
-  it("POSTs a new run to /runs and returns the runId", async () => {
+  it("POSTs a new run with its avatar to /runs and returns the runId", async () => {
     const fetchMock = stubFetchOnce({ ok: true, status: 202, body: { runId: "run-1", status: "running" } });
     const client = new HttpRunClient("");
 
-    await expect(client.startRun("a weak description")).resolves.toEqual({ runId: "run-1" });
+    await expect(client.startRun("a weak description", "avatar-1")).resolves.toEqual({
+      runId: "run-1",
+    });
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/runs",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ description: "a weak description" }),
+        body: JSON.stringify({ description: "a weak description", avatarId: "avatar-1" }),
       }),
     );
   });
@@ -85,7 +87,7 @@ describe("HttpRunClient", () => {
     stubFetchOnce({ ok: false, status: 400, body: { error: "description must not be empty" } });
     const client = new HttpRunClient("");
 
-    await expect(client.startRun("")).rejects.toThrow("description must not be empty");
+    await expect(client.startRun("", "avatar-1")).rejects.toThrow("description must not be empty");
   });
 
   it("opens an EventSource at /runs/:id/events", () => {

@@ -5,6 +5,7 @@ import { FIXTURE_RUNS, type RunEvent, type RunSummary, type RunView, type Versio
 import { App } from "../src/App.js";
 import type { RunClient } from "../src/data/RunClient.js";
 import { FixtureRunClient } from "../src/data/FixtureRunClient.js";
+import { pickTestAvatar, stubAvatarGallery } from "./helpers/avatarFlow.js";
 
 /**
  * A stub of a future `HttpRunClient`: `isFixture` is the only thing under test here, so every
@@ -112,10 +113,12 @@ describe("App shell", () => {
 describe("App shell — RUN tab failing badge (design doc §6.2)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    stubAvatarGallery();
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   async function runToCompletion(
@@ -124,12 +127,8 @@ describe("App shell — RUN tab failing badge (design doc §6.2)", () => {
     // The file-level `beforeEach` above already starts every test on `/`.
     const client = new FixtureRunClient({ speedMs: 1, scenario });
     render(<App client={client} />);
-    // The composer opens on the Build tab (fields, render, describe); this helper drives the Direct
-    // tab, which grades a description on its own.
-    fireEvent.click(screen.getByRole("tab", { name: "Paste a description" }));
-    fireEvent.change(screen.getByPlaceholderText("Paste the character description."), {
-      target: { value: "a description long enough to submit" },
-    });
+    // Every run starts from an avatar: reopen a described one from the gallery.
+    await pickTestAvatar();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Run" }));
     });

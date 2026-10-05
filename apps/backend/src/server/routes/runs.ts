@@ -2,8 +2,10 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { parseEventId, type RunView } from "@ai-director/contract";
+import { loadGrounding, type RepairGrounding } from "../../avatar/grounding.js";
 import type { RunEventBus } from "../../orchestrate/events.js";
 import type { Rubric } from "../../rubric/load.js";
+import type { AvatarStore } from "../../store/AvatarStore.js";
 import type { RunStore } from "../../store/RunStore.js";
 import { rebuildRunView } from "../../present/rebuildRunView.js";
 import { formatSse } from "../sse.js";
@@ -20,16 +22,12 @@ const KEEPALIVE_MS = 15_000;
 export type StartRun = (args: {
   runId: string;
   description: string;
-  /**
-   * Which stored avatar this description was read off, when the caller knows.
-   *
-   * Optional, and absent is the ordinary case: a description typed into the textarea
-   * belongs to no avatar. When it IS present the Repairer is given that avatar's sheet
-   * and brief and runs prompt v2 (`agents/repairer/prompt-v2.ts`); without it the
-   * Repairer is blind and runs v1, which is the prompt that fabricated the hair length,
-   * the height and the build on run `bee3bcd6`. See `docs/repairer-cannot-see.md`.
-   */
-  avatarId?: string;
+  /** The stored avatar this description was read off. Every run has one: the flow is
+   *  always render or upload the sheet, describe it, grade it, repair it. */
+  avatarId: string;
+  /** That avatar's sheet and brief, already loaded by the route. The Repairer runs prompt
+   *  v2 with them (`agents/repairer/prompt-v2.ts`) and never runs blind. */
+  grounding: RepairGrounding;
 }) => Promise<RunView>;
 
 export type RunRouteDeps = {
@@ -37,6 +35,9 @@ export type RunRouteDeps = {
   rubric: Rubric;
   startRun: StartRun;
   bus: RunEventBus;
+  /** Where the route reads the avatar's sheet from. Absent means no avatar can be loaded,
+   *  so every run is refused. */
+  avatars?: Pick<AvatarStore, "get" | "readImage">;
 };
 
 const CreateRunBodySchema = z.object({
@@ -45,8 +46,9 @@ const CreateRunBodySchema = z.object({
     .trim()
     .min(1, "description must not be empty")
     .max(20_000, "description must be at most 20000 characters"),
-  /** Naming the avatar is what upgrades the Repairer from blind v1 to sighted v2. */
-  avatarId: z.string().min(1).max(200).optional(),
+  /** Required. A description with no avatar has nothing for the Repairer to look at, and
+   *  a Repairer that cannot look is the one that fabricated details on run `bee3bcd6`. */
+  avatarId: z.string({ error: "avatarId is required" }).min(1, "avatarId is required").max(200),
 });
 
 export function registerRunRoutes(app: FastifyInstance, deps: RunRouteDeps): void {
@@ -68,6 +70,16 @@ export function registerRunRoutes(app: FastifyInstance, deps: RunRouteDeps): voi
       return reply.code(400).send({ error: message });
     }
 
+    // Loaded here, before the 202, so a run that cannot be grounded is refused to the
+    // caller's face instead of failing in the background after it was told "running".
+    const { avatarId } = parsed.data;
+    const grounding = deps.avatars ? await loadGrounding(deps.avatars, avatarId) : null;
+    if (!grounding) {
+      return reply.code(422).send({
+        error: `avatar "${avatarId}" has no character sheet the Repairer can see`,
+      });
+    }
+
     const runId = randomUUID();
     // Fire-and-forget: must not block the response on the agents. Any
     // rejection here is already recorded through the store by whatever
@@ -77,7 +89,8 @@ export function registerRunRoutes(app: FastifyInstance, deps: RunRouteDeps): voi
       .startRun({
         runId,
         description: parsed.data.description,
-        ...(parsed.data.avatarId === undefined ? {} : { avatarId: parsed.data.avatarId }),
+        avatarId,
+        grounding,
       })
       .then((view) => runViews.set(runId, view))
       .catch(() => {});

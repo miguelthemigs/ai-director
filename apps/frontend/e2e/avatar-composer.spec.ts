@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { gotoFixture } from "./helpers.js";
+import { gotoFixture, SAMPLE_DESCRIPTION } from "./helpers.js";
 
 /**
  * The guided avatar form, in a real browser.
@@ -21,11 +21,11 @@ test.describe("the guided avatar form", () => {
     await gotoFixture(page, "passed");
   });
 
-  test("opens on Build an avatar and names the whole flow", async ({ page }) => {
-    await expect(page.getByRole("tab", { name: "Build an avatar" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+  test("has no paste box, and names the whole flow", async ({ page }) => {
+    // Every run starts from an avatar. A pasted description belongs to none, so the Repairer
+    // would have nothing to look at and would run blind.
+    await expect(page.getByRole("tab")).toHaveCount(0);
+    await expect(page.getByPlaceholder("Paste the character description.")).toHaveCount(0);
     await expect(
       page.getByText(/render the avatar, then grade the description the model writes back/i),
     ).toBeVisible();
@@ -90,37 +90,24 @@ test.describe("the guided avatar form", () => {
     }
   });
 
-  test("the pipeline steps sit on the same tab as the fields, so it reads as one flow", async ({ page }) => {
+  test("the pipeline steps sit right under the fields, so it reads as one flow", async ({ page }) => {
     await expect(page.getByRole("button", { name: "Generate sheet" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Describe this person" })).toBeVisible();
   });
 
-  test("the inactive panel is not reachable by keyboard", async ({ page }) => {
-    // Both panels stay mounted so a draft survives a tab switch, which means the inactive one is
-    // animated to `opacity: 0` while still occupying the layout. Without `visibility: hidden` a
-    // keyboard user would tab straight into an invisible textarea.
-    await expect(page.getByPlaceholder("Paste the character description.")).toBeHidden();
+  test("reopening a described avatar puts its description up for grading and enables Run", async ({ page }) => {
+    await page.getByRole("button", { name: /Test avatar/ }).click();
 
-    await page.getByRole("tab", { name: "Paste a description" }).click();
-    await expect(page.getByPlaceholder("Paste the character description.")).toBeVisible();
-  });
-
-  test("a draft survives a tab switch in both directions", async ({ page }) => {
-    await page.getByLabel("Gender", { exact: true }).fill("man");
-    await page.getByRole("tab", { name: "Paste a description" }).click();
-    await page.getByPlaceholder("Paste the character description.").fill("pasted");
-    await page.getByRole("tab", { name: "Build an avatar" }).click();
-
-    await expect(page.getByLabel("Gender", { exact: true })).toHaveValue("man");
-    await expect(page.locator(".avatar-preview__text")).toHaveText("A man");
+    await expect(page.locator(".sheet-pipeline__description")).toHaveText(SAMPLE_DESCRIPTION);
+    await expect(page.getByRole("button", { name: "Run", exact: true })).toBeEnabled();
   });
 });
 
 /**
  * The Pipeline tab reproduces Mentic end to end: doctrine call, sheet layout, Nano Banana
  * Pro, then Mentic's describe prompt over the rendered sheet. Both steps spend real money,
- * so this suite (which runs on the fixture client, with no backend at all) checks only that
- * the tab is reachable and refuses to pretend. The steps themselves are covered in jsdom
+ * and this suite has no backend, so it checks only the layout and that neither step can be
+ * pressed before there is something to act on. The steps themselves are covered in jsdom
  * against a stubbed fetch, in `tests/components/SheetPipeline.test.tsx`.
  */
 test.describe("the pipeline steps", () => {
@@ -128,8 +115,7 @@ test.describe("the pipeline steps", () => {
     await gotoFixture(page, "passed");
   });
 
-  test("say they need the real backend rather than faking an avatar", async ({ page }) => {
-    await expect(page.getByText(/needs the real backend/i)).toBeVisible();
+  test("cannot be pressed before there is a prompt or a sheet to act on", async ({ page }) => {
     await expect(page.getByRole("button", { name: "Generate sheet" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Describe this person" })).toBeDisabled();
   });
@@ -141,17 +127,6 @@ test.describe("the pipeline steps", () => {
 
   test("stay inside the description column", async ({ page }) => {
     const composer = page.locator(".avatar-composer");
-    // Wait for the panel slide to settle before measuring. The panels are stacked in one
-    // grid cell and animate on a transform, so a box read immediately after the click is a
-    // box mid-flight and says nothing about the resting layout.
-    await expect
-      .poll(async () => {
-        const panel = await page.locator(".avatar-composer__panel[data-active]").boundingBox();
-        const box = await composer.boundingBox();
-        return panel && box ? Math.round(panel.x - box.x) : null;
-      })
-      .toBe(0);
-
     const composerBox = await composer.boundingBox();
     expect(composerBox).not.toBeNull();
     if (!composerBox) return;

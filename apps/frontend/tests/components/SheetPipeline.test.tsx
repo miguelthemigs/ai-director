@@ -47,7 +47,6 @@ function renderPipeline(overrides: Partial<Parameters<typeof SheetPipeline>[0]> 
       seedDescription="A 29-year-old woman."
       onDescription={onDescription}
       disabled={false}
-      live={true}
       {...overrides}
     />,
   );
@@ -57,13 +56,6 @@ function renderPipeline(overrides: Partial<Parameters<typeof SheetPipeline>[0]> 
 describe("SheetPipeline", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
-  });
-
-  it("says it needs the real backend in fixture mode, and generates nothing", () => {
-    stubFetch({});
-    renderPipeline({ live: false });
-    expect(screen.getByText(/needs the real backend/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Generate sheet" })).toBeDisabled();
   });
 
   it("names the price of each step next to the button that spends it", () => {
@@ -202,6 +194,18 @@ describe("SheetPipeline", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/limit is 6MB/);
     // The gallery's own mount fetch is the only call allowed; nothing was uploaded.
     expect(vi.mocked(fetch).mock.calls.map((call) => String(call[0]))).not.toContain("/avatar/upload");
+  });
+
+  it("will not describe an upload it could not save, since a run needs the stored sheet", async () => {
+    stubFetch({ upload: jsonResponse({ error: "disk full" }, false, 500) });
+    const onDescription = renderPipeline();
+    const input = screen.getByLabelText("Upload a character sheet");
+
+    fireEvent.change(input, { target: { files: [new File(["x"], "sheet.png", { type: "image/png" })] } });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/could not be saved/);
+    expect(screen.getByRole("button", { name: "Describe this person" })).toBeDisabled();
+    expect(onDescription).not.toHaveBeenCalled();
   });
 
   /**

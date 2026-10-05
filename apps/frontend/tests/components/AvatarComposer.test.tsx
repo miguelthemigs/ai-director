@@ -23,23 +23,56 @@ function stubFetch(routes: { sheet?: Response; describe?: Response }) {
   );
 }
 
-function renderComposer(live = false) {
+function renderComposer() {
   const onSubmit = vi.fn();
-  render(<AvatarComposer onSubmit={onSubmit} disabled={false} maxChars={2000} live={live} />);
+  render(<AvatarComposer onSubmit={onSubmit} disabled={false} maxChars={2000} />);
   return onSubmit;
 }
 
+/** Answers both pipeline steps: a rendered sheet stored as `a1`, then `description`. */
+function stubBuildFlow(description: string) {
+  stubFetch({
+    sheet: jsonResponse({
+      id: "a1",
+      imageBase64: PIXEL,
+      mediaType: "image/png",
+      model: "m",
+      authoredPrompt: "a",
+      sheetPrompt: "b",
+    }),
+    describe: jsonResponse({ description, raw: description, trimmed: false, model: "c" }),
+  });
+}
+
+async function renderAndDescribe(maxChars = 2000) {
+  const onSubmit = vi.fn();
+  render(<AvatarComposer onSubmit={onSubmit} disabled={false} maxChars={maxChars} />);
+  fireEvent.change(screen.getByLabelText("Gender"), { target: { value: "woman" } });
+  fireEvent.click(screen.getByRole("button", { name: "Generate sheet" }));
+  await screen.findByAltText("The rendered character reference sheet");
+  fireEvent.click(screen.getByRole("button", { name: "Describe this person" }));
+  return onSubmit;
+}
+
+beforeEach(() => {
+  // The pipeline lists the saved avatars on mount.
+  stubFetch({});
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
 describe("AvatarComposer", () => {
-  it("offers two tabs and opens on Build an avatar", () => {
+  /**
+   * Every run starts from an avatar. A pasted description belongs to no avatar, so the
+   * Repairer would have nothing to look at and would run blind (prompt v1).
+   */
+  it("has no way to paste a description: the avatar flow is the only way in", () => {
     renderComposer();
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
-      "Build an avatar",
-      "Paste a description",
-    ]);
-    expect(screen.getByRole("tab", { name: "Build an avatar" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    expect(screen.queryAllByRole("tab")).toEqual([]);
+    expect(screen.queryByPlaceholderText("Paste the character description.")).toBeNull();
+    expect(screen.queryByText(/paste/i)).toBeNull();
   });
 
   /**
@@ -81,35 +114,6 @@ describe("AvatarComposer", () => {
     renderComposer();
     expect(screen.getByRole("button", { name: "Generate sheet" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Describe this person" })).toBeInTheDocument();
-  });
-
-  it("submits the pasted text on the other tab", () => {
-    const onSubmit = renderComposer();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Paste a description" }));
-    fireEvent.change(screen.getByPlaceholderText("Paste the character description."), {
-      target: { value: "A 29-year-old woman in a grey wool coat." },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
-
-    // Null avatar: this description was typed, so it belongs to no stored sheet and the
-    // run is honestly a blind v1 one.
-    expect(onSubmit).toHaveBeenCalledWith("A 29-year-old woman in a grey wool coat.", null);
-  });
-
-  it("keeps each tab's draft, and the fields never leak into the pasted run", () => {
-    const onSubmit = renderComposer();
-
-    fireEvent.change(screen.getByLabelText("Gender"), { target: { value: "man" } });
-    fireEvent.click(screen.getByRole("tab", { name: "Paste a description" }));
-    fireEvent.change(screen.getByPlaceholderText("Paste the character description."), {
-      target: { value: "pasted text" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
-
-    expect(onSubmit).toHaveBeenCalledWith("pasted text", null);
-    fireEvent.click(screen.getByRole("tab", { name: "Build an avatar" }));
-    expect(screen.getByLabelText("Gender")).toHaveValue("man");
   });
 
   it("fills the form from the suggestions menu, then resets the menu to its placeholder", () => {
@@ -155,15 +159,11 @@ describe("AvatarComposer", () => {
     expect(screen.getByLabelText("Gender")).toHaveValue("");
   });
 
-  it("blocks Run and flags the count once the pasted text passes the cap", () => {
-    const onSubmit = vi.fn();
-    render(<AvatarComposer onSubmit={onSubmit} disabled={false} maxChars={5} live={false} />);
+  it("blocks Run and flags the count once the described text passes the cap", async () => {
+    stubBuildFlow("far too long for the cap");
+    const onSubmit = await renderAndDescribe(5);
 
-    fireEvent.click(screen.getByRole("tab", { name: "Paste a description" }));
-    fireEvent.change(screen.getByPlaceholderText("Paste the character description."), {
-      target: { value: "far too long for the cap" },
-    });
-
+    await screen.findByText("far too long for the cap", { selector: "p" });
     expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Run" }));
     expect(onSubmit).not.toHaveBeenCalled();
@@ -171,10 +171,6 @@ describe("AvatarComposer", () => {
 });
 
 describe("AvatarComposer, the full build flow", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   it("grades the description written FROM the avatar, never the prompt that made it", async () => {
     stubFetch({
       sheet: jsonResponse({
@@ -194,7 +190,7 @@ describe("AvatarComposer, the full build flow", () => {
     });
 
     const onSubmit = vi.fn();
-    render(<AvatarComposer onSubmit={onSubmit} disabled={false} maxChars={2000} live={true} />);
+    render(<AvatarComposer onSubmit={onSubmit} disabled={false} maxChars={2000} />);
 
     fireEvent.change(screen.getByLabelText("Gender"), { target: { value: "woman" } });
     fireEvent.change(screen.getByLabelText("Hair"), { target: { value: "blonde bob" } });
@@ -223,7 +219,7 @@ describe("AvatarComposer, the full build flow", () => {
       describe: jsonResponse({ description: "seven!!", raw: "seven!!", trimmed: false, model: "c" }),
     });
 
-    render(<AvatarComposer onSubmit={vi.fn()} disabled={false} maxChars={2000} live={true} />);
+    render(<AvatarComposer onSubmit={vi.fn()} disabled={false} maxChars={2000} />);
     fireEvent.change(screen.getByLabelText("Gender"), { target: { value: "woman" } });
 
     // "A woman" is also 7 characters, so this asserts on the count only after the described

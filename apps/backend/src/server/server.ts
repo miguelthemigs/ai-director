@@ -3,9 +3,6 @@ import { evaluateAllGroups } from "../agents/evaluator/run.js";
 import { buildVerbatimRetryPrompt } from "../agents/evaluator/prompt.js";
 import { EvaluatorGroupOutputSchema } from "../agents/evaluator/schema.js";
 import { repairSpans } from "../agents/repairer/run.js";
-import { DEFAULT_REPAIRER_PROMPT_VERSION } from "../agents/repairer/version.js";
-import { statedFactsFor } from "../avatar/statedFacts.js";
-import { isSupportedMediaType } from "../describe/describeImage.js";
 import { createAnthropicTransport, type ParseTransport } from "../api/client.js";
 import { createAnthropicTextTransport } from "../avatar/authorPrompt.js";
 import { createGeminiImageTransport } from "../avatar/generateSheet.js";
@@ -93,8 +90,8 @@ async function main(): Promise<void> {
   // `GET /runs/:id/events` (Task 18) subscribes to the very same instance --
   // that sharing is what lets a client watch a run it did not just start.
   const bus = new RunEventBus();
-  // Declared here rather than inside `avatar` below because `startRun` reads it too: it
-  // needs the sheet and the brief to run Repairer prompt v2.
+  // Handed to `buildApp` as `avatar.store`, which is also where `POST /runs` reads each
+  // run's sheet and brief from before it starts the run.
   const avatarStore = new FileAvatarStore(AVATARS_DIR);
 
   // KNOWN GAP, carried into this task's report rather than papered over:
@@ -103,45 +100,21 @@ async function main(): Promise<void> {
   // is fully optional for exactly this reason (see the contract's own
   // comment on it): omitting every field here is the honest "not measured",
   // never a fabricated `0`.
-  const startRun: StartRun = async ({ runId, description, avatarId }) => {
+  const startRun: StartRun = async ({ runId, description, avatarId, grounding }) => {
     const transport = createAnthropicTransport();
 
-    // ── What turns the Repairer from blind v1 into sighted v2 ────────────────────────
-    // v1 is handed a failing fragment and a band-5 description of what the check wants,
-    // and has no way to see the person. It satisfies the check by inventing: on run
-    // `bee3bcd6` it wrote shoulder-length hair on a medium-length head, 5 foot 8 on a
-    // 1.78m man and a narrow-shouldered build on an average one, and the run terminated
-    // `passed`. `docs/repairer-cannot-see.md` has the trace.
-    //
-    // So when the caller names the avatar this description came from, the sheet and the
-    // brief travel with the fragments. Absent an avatar — a description typed into the
-    // textarea, the CLI, every run made before today — the Repairer stays blind and the
-    // run records `v1`, which is the honest label for what actually ran.
-    const sheet = avatarId ? await avatarStore.readImage(avatarId) : null;
-    const record = avatarId ? await avatarStore.get(avatarId) : null;
-    const grounding =
-      sheet && isSupportedMediaType(sheet.mediaType)
-        ? {
-            sheet: { imageBase64: sheet.bytes.toString("base64"), mediaType: sheet.mediaType },
-            statedFacts: record ? statedFactsFor(record) : null,
-          }
-        : null;
-
+    // The route has already loaded this avatar's sheet and brief, or refused the run. So
+    // the Repairer always sees the person and always runs prompt v2. v1 is still in the
+    // tree only so the runs it made can be read and compared (`docs/repairer-cannot-see.md`).
     const out = await runToCompletion(
       {
         store,
         evaluate: (args) => evaluateAllGroups({ transport }, args),
         retryVerbatim: buildRetryVerbatim(transport),
-        repair: (args) => repairSpans({ transport }, { ...args, ...(grounding ?? {}) }),
+        repair: (args) => repairSpans({ transport }, { ...args, ...grounding }),
         emit: (event) => bus.publish(runId, event),
       },
-      {
-        rubric,
-        description,
-        runId,
-        repairerPromptVersion: grounding ? "v2" : DEFAULT_REPAIRER_PROMPT_VERSION,
-        ...(avatarId === undefined ? {} : { avatarId }),
-      },
+      { rubric, description, runId, repairerPromptVersion: "v2", avatarId },
     );
 
     const manifest = await store.getRun(runId);

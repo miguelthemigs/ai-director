@@ -66,7 +66,13 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     reply.code(statusCode).send({ error: message });
   });
 
-  registerRunRoutes(app, { ...deps, bus: deps.bus ?? new RunEventBus() });
+  registerRunRoutes(app, {
+    ...deps,
+    bus: deps.bus ?? new RunEventBus(),
+    // The same store the avatar routes write to: a run reads its sheet from where the
+    // render or upload put it.
+    ...(deps.avatar?.store ? { avatars: deps.avatar.store } : {}),
+  });
   registerVersionRoutes(app, { versionStore: deps.versionStore });
   registerAvatarRoutes(app, deps.avatar ?? {});
   registerCompareRoutes(app, deps.compare ?? {});

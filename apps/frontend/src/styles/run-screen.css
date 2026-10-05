@@ -426,63 +426,17 @@
   flex-direction: column;
   gap: var(--sp-4);
 }
-.avatar-composer__tabs {
-  display: flex;
-  gap: var(--sp-2);
-}
-.avatar-composer__tab {
-  appearance: none;
-  background: none;
-  border: var(--bd-hair) solid transparent;
-  border-radius: var(--r-1);
-  padding: var(--sp-2) var(--sp-4);
-  font-family: var(--ff-ui);
-  font-size: var(--fs-label);
-  letter-spacing: var(--tr-caps);
-  text-transform: uppercase;
-  color: var(--ink-3);
-  cursor: pointer;
-}
-.avatar-composer__tab[data-selected] {
-  color: var(--ink);
-  border-color: var(--ln-strong);
-  background: var(--sf-panel);
-}
-.avatar-composer__tab:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
 .avatar-composer__note {
   margin: 0;
   font-size: var(--fs-micro);
   color: var(--ink-3);
 }
 
-/* Both panels stay mounted so a draft survives a tab switch. They are stacked in one grid
-   cell rather than laid out in sequence, which is what lets the inactive one slide and blur
-   out of the way instead of pushing the footer down the page. */
-.avatar-composer__panels {
-  display: grid;
-  /* The outgoing panel slides sideways on a tab switch, so mid-transition it extends past
-     this box. `.run__field` sets `overflow-y: auto`, which forces `overflow-x` to `auto`
-     too, so without this a horizontal scrollbar flickers on every tab switch. `clip`
-     rather than `hidden`: it does not make this element a scroll container, so it cannot
-     swallow a focus ring by scrolling it into view. */
-  overflow-x: clip;
-}
-.avatar-composer__panel {
-  grid-area: 1 / 1;
+.avatar-composer__body {
   display: flex;
   flex-direction: column;
   gap: var(--sp-4);
   min-width: 0;
-}
-/* The inactive panel is animated to `opacity: 0` but is still in the layout and still
-   focusable, which would let a keyboard user tab into an invisible textarea. Taking it out of
-   the pointer and tab order is what makes the stack behave like one panel. */
-.avatar-composer__panel:not([data-active]) {
-  pointer-events: none;
-  visibility: hidden;
 }
 
 .avatar-composer__toolbar {
@@ -642,17 +596,11 @@
   gap: var(--sp-4);
   min-width: 0;
 }
-.sheet-pipeline__offline,
 .sheet-pipeline__error {
   margin: 0;
   padding: var(--sp-3) var(--sp-4);
   border-radius: var(--r-2);
   font-size: var(--fs-ui);
-}
-.sheet-pipeline__offline {
-  background: var(--sf-panel);
-  border: var(--bd-hair) solid var(--ln);
-  color: var(--ink-2);
 }
 .sheet-pipeline__error {
   background: var(--sig-alarm-tint);
@@ -901,21 +849,6 @@
 .description-composer__label {
   font-size: var(--fs-label);
   color: var(--ink-3);
-}
-.description-composer__input {
-  min-height: 220px;
-  padding: var(--sp-4);
-  background: var(--sf-panel);
-  border: var(--bd-hair) solid var(--ln);
-  border-radius: var(--r-2);
-  color: var(--ink);
-  font-family: var(--ff-specimen);
-  font-size: var(--fs-specimen);
-  line-height: var(--lh-spec);
-  resize: vertical;
-}
-.description-composer__input:disabled {
-  opacity: 0.6;
 }
 .description-composer__footer {
   display: flex;
