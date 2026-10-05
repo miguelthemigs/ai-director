@@ -64,15 +64,26 @@ afterEach(() => {
 });
 
 describe("AvatarComposer", () => {
-  /**
-   * Every run starts from an avatar. A pasted description belongs to no avatar, so the
-   * Repairer would have nothing to look at and would run blind (prompt v1).
-   */
-  it("has no way to paste a description: the avatar flow is the only way in", () => {
+  it("offers two ways to write the avatar's prompt, and opens on the fields", () => {
     renderComposer();
-    expect(screen.queryAllByRole("tab")).toEqual([]);
-    expect(screen.queryByPlaceholderText("Paste the character description.")).toBeNull();
-    expect(screen.queryByText(/paste/i)).toBeNull();
+    expect(screen.getByRole("button", { name: "Fill in the fields" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Paste a description" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByLabelText("Gender")).toBeInTheDocument();
+  });
+
+  it("keeps the fields when switching to paste and back", () => {
+    renderComposer();
+    fireEvent.change(screen.getByLabelText("Gender"), { target: { value: "man" } });
+    fireEvent.click(screen.getByRole("button", { name: "Paste a description" }));
+    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "pasted" } });
+    fireEvent.click(screen.getByRole("button", { name: "Fill in the fields" }));
+    expect(screen.getByLabelText("Gender")).toHaveValue("man");
   });
 
   /**
@@ -171,6 +182,39 @@ describe("AvatarComposer", () => {
 });
 
 describe("AvatarComposer, the full build flow", () => {
+  /**
+   * A pasted description is a way to write the avatar's prompt, like the fields. It renders
+   * the sheet; it is never graded itself. Grading it directly is what used to send the
+   * Repairer in blind.
+   */
+  it("renders the avatar from a pasted description, then grades what was described", async () => {
+    stubBuildFlow("A man in his forties, short grey hair, navy suit.");
+    const onSubmit = vi.fn();
+    render(<AvatarComposer onSubmit={onSubmit} disabled={false} maxChars={2000} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Paste a description" }));
+    fireEvent.change(screen.getByLabelText("Description"), {
+      target: { value: "Grey-haired man, forties, suit." },
+    });
+    // Pasted text alone is not something to grade: nothing has been rendered yet.
+    expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate sheet" }));
+    await screen.findByAltText("The rendered character reference sheet");
+    const sheetCall = vi
+      .mocked(fetch)
+      .mock.calls.find((call) => String(call[0]).startsWith("/avatar/sheet"));
+    expect(JSON.parse(String((sheetCall![1] as RequestInit).body))).toMatchObject({
+      description: "Grey-haired man, forties, suit.",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Describe this person" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Run" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+
+    expect(onSubmit).toHaveBeenCalledWith("A man in his forties, short grey hair, navy suit.", "a1");
+  });
+
   it("grades the description written FROM the avatar, never the prompt that made it", async () => {
     stubFetch({
       sheet: jsonResponse({

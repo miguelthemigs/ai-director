@@ -432,6 +432,52 @@
   color: var(--ink-3);
 }
 
+.avatar-composer__sources {
+  display: flex;
+  gap: var(--sp-2);
+}
+.avatar-composer__source {
+  appearance: none;
+  background: none;
+  border: var(--bd-hair) solid transparent;
+  border-radius: var(--r-1);
+  padding: var(--sp-2) var(--sp-4);
+  font-family: var(--ff-ui);
+  font-size: var(--fs-label);
+  letter-spacing: var(--tr-caps);
+  text-transform: uppercase;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.avatar-composer__source[aria-pressed="true"] {
+  color: var(--ink);
+  border-color: var(--ln-strong);
+  background: var(--sf-panel);
+}
+.avatar-composer__source:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.avatar-paste {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.avatar-paste__input {
+  min-height: 160px;
+  padding: var(--sp-4);
+  background: var(--sf-panel);
+  border: var(--bd-hair) solid var(--ln);
+  border-radius: var(--r-2);
+  color: var(--ink);
+  font-family: var(--ff-specimen);
+  font-size: var(--fs-specimen);
+  line-height: var(--lh-spec);
+  resize: vertical;
+}
+.avatar-paste__input:disabled {
+  opacity: 0.6;
+}
 .avatar-composer__body {
   display: flex;
   flex-direction: column;

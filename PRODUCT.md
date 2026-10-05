@@ -27,8 +27,8 @@ user-confirmed.)*
 
 ## Product Purpose
 
-A writer builds an avatar: they render a character sheet (or upload one), and a vision model
-describes the person on it. That description is what goes to the AI video model. An Evaluator agent
+A writer builds an avatar: they render a character sheet from guided fields or a pasted
+description (or upload a sheet), and a vision model describes the person on it. That description is what goes to the AI video model. An Evaluator agent
 scores it against a versioned nine-check rubric and quotes verbatim the words that failed. A
 Repairer agent rewrites only those quoted fragments, looking at the same sheet so it cannot invent
 what the picture does not show. Up to three passes. Every run starts from an avatar; there is no

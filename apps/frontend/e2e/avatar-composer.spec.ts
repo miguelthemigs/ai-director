@@ -21,11 +21,16 @@ test.describe("the guided avatar form", () => {
     await gotoFixture(page, "passed");
   });
 
-  test("has no paste box, and names the whole flow", async ({ page }) => {
-    // Every run starts from an avatar. A pasted description belongs to none, so the Repairer
-    // would have nothing to look at and would run blind.
-    await expect(page.getByRole("tab")).toHaveCount(0);
-    await expect(page.getByPlaceholder("Paste the character description.")).toHaveCount(0);
+  test("offers fields or a pasted description to render from, and names the whole flow", async ({ page }) => {
+    await expect(page.getByRole("button", { name: "Fill in the fields" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    // A real click: pasted text feeds the render step, and the generate button wakes for it.
+    await page.getByRole("button", { name: "Paste a description" }).click();
+    await page.getByLabel("Description", { exact: true }).fill("Grey-haired man, forties, suit.");
+    await expect(page.getByRole("button", { name: "Generate sheet" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Run", exact: true })).toBeDisabled();
     await expect(
       page.getByText(/render the avatar, then grade the description the model writes back/i),
     ).toBeVisible();

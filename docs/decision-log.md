@@ -1,6 +1,6 @@
 # Decision log
 
-## 2026-10-05 — Every run starts from an avatar; the paste path is gone
+## 2026-10-05 — Every run starts from an avatar; pasted text now renders one
 
 The product has one flow: render or upload a character sheet, describe it, grade the description,
 repair it. Until today there was a second way in, a tab on the Run screen for pasting a description
@@ -9,8 +9,11 @@ silently ran prompt v1, the blind prompt that fabricated the hair length, the he
 run `bee3bcd6` (see the 2026-09-16 entry below and `docs/repairer-cannot-see.md`). The server did the
 same when an avatar's sheet failed to load.
 
-Removed: the paste tab, and the fixture-only "needs the real backend" notice on the pipeline (there is
-no offline use of this tool). Changed: `POST /runs` requires `avatarId` (400 without one) and loads
+Changed in the browser: pasting a description is still there, but it now writes the avatar's render
+prompt, exactly like the guided fields do. The pasted text renders the sheet, the sheet is described,
+and only that description is graded. Run stays disabled until a described avatar exists. Removed:
+the fixture-only "needs the real backend" notice on the pipeline (there is no offline use of this
+tool). Changed: `POST /runs` requires `avatarId` (400 without one) and loads
 that avatar's sheet before it answers, refusing the run with 422 when there is none, rather than
 falling back to v1. `npm run score` takes `--avatar <id>` and grades that avatar's stored
 description. An uploaded sheet must be saved before it can be described, since a run reads the sheet
