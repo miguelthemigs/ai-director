@@ -16,6 +16,25 @@ const REF = /^(nodes|assets)\/[\w.-]+$/;
 const NAME = /^[\w.-]+$/;
 const RUN_ID = /^[\w.-]+$/;
 
+/**
+ * Parses a JSONL log. An unparseable FINAL line is dropped (a torn write); one anywhere else
+ * throws. `keep` is the text to retain on disk: every valid line, each newline-terminated.
+ */
+function parseLog(raw: string): { events: DirectorEvent[]; keep: string } {
+  const lines = raw.split("\n").filter((line) => line.length > 0);
+  const events: DirectorEvent[] = [];
+  const kept: string[] = [];
+  lines.forEach((line, i) => {
+    try {
+      events.push(JSON.parse(line) as DirectorEvent);
+      kept.push(line);
+    } catch (err) {
+      if (i !== lines.length - 1) throw err;
+    }
+  });
+  return { events, keep: kept.map((l) => `${l}\n`).join("") };
+}
+
 export class FileDirectorRunStore implements DirectorRunStore {
   /** Tail of each run's append chain: the next append waits for it. */
   private readonly chains = new Map<string, Promise<unknown>>();
@@ -55,10 +74,12 @@ export class FileDirectorRunStore implements DirectorRunStore {
     const next = previous
       .catch(() => undefined)
       .then(async () => {
+        const file = path.join(this.dir(runId), "events.jsonl");
+        await this.repairTail(file);
         const existing = await this.events(runId);
         const last = existing.length > 0 ? existing[existing.length - 1]!.seq : 0;
         const event = { ...body, runId, seq: last + 1, at: new Date().toISOString() } as DirectorEvent;
-        await appendFile(path.join(this.dir(runId), "events.jsonl"), `${JSON.stringify(event)}\n`, "utf8");
+        await appendFile(file, `${JSON.stringify(event)}\n`, "utf8");
         return event;
       });
     this.chains.set(runId, next);
@@ -73,11 +94,21 @@ export class FileDirectorRunStore implements DirectorRunStore {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
       throw err;
     }
-    return raw
-      .split("\n")
-      .filter((line) => line.length > 0)
-      .map((line) => JSON.parse(line) as DirectorEvent)
-      .filter((event) => event.seq > afterSeq);
+    return parseLog(raw).events.filter((event) => event.seq > afterSeq);
+  }
+
+  /** A crash mid-append can leave a torn or unterminated last line; fix it before writing more. */
+  private async repairTail(file: string): Promise<void> {
+    let raw: string;
+    try {
+      raw = await readFile(file, "utf8");
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw err;
+    }
+    if (raw.length === 0 || raw.endsWith("\n")) return;
+    const { keep } = parseLog(raw);
+    await writeFile(file, keep, "utf8");
   }
 
   async writeOutput(
@@ -150,8 +181,9 @@ export class FileDirectorRunStore implements DirectorRunStore {
   }
 
   async listRuns(): Promise<DirectorRunSummary[]> {
+    const ids = await this.listIds();
     const results = await Promise.allSettled(
-      (await this.listIds()).map(async (id): Promise<DirectorRunSummary> => {
+      ids.map(async (id): Promise<DirectorRunSummary> => {
         const view = reduceDirectorEvents(await this.events(id));
         if (view.id === "") throw new Error(`run "${id}" has no events`);
         const settled = view.render;
@@ -168,7 +200,11 @@ export class FileDirectorRunStore implements DirectorRunStore {
       }),
     );
     return results
-      .flatMap((r) => (r.status === "fulfilled" ? [r.value] : []))
+      .flatMap((r, i) => {
+        if (r.status === "fulfilled") return [r.value];
+        console.warn(`FileDirectorRunStore: skipping run "${ids[i]}": ${String(r.reason)}`);
+        return [];
+      })
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   }
 }

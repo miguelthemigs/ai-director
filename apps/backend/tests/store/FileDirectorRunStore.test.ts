@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { appendFile, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -86,5 +86,43 @@ describe("FileDirectorRunStore", () => {
     expect(runs.map((r) => r.id)).toEqual([second, first]);
     expect(runs[0]).toMatchObject({ brief: "second", waitingAt: "A", billedMicroUsd: null });
     expect(await store.listIds()).toEqual(expect.arrayContaining([first, second]));
+  });
+
+  it("survives a torn final line: events, append and listRuns keep working", async () => {
+    const { store, root } = await newStore();
+    const id = await store.createRun("b");
+    await store.append(id, { type: "gate.opened", gate: "A" });
+    const file = path.join(root, id, "events.jsonl");
+    await appendFile(file, '{"type":"gate.opened","ga');
+    expect((await store.events(id)).map((e) => e.seq)).toEqual([1, 2]);
+    const next = await store.append(id, { type: "gate.opened", gate: "B" });
+    expect(next.seq).toBe(3);
+    const lines = (await readFile(file, "utf8")).split("\n").filter(Boolean);
+    expect(lines.map((l) => JSON.parse(l).seq)).toEqual([1, 2, 3]);
+    expect((await store.listRuns()).map((r) => r.id)).toEqual([id]);
+  });
+
+  it("a complete final line without a newline stays separate from the next append", async () => {
+    const { store, root } = await newStore();
+    const id = await store.createRun("b");
+    const file = path.join(root, id, "events.jsonl");
+    const raw = await readFile(file, "utf8");
+    await rm(file);
+    await appendFile(file, raw.trimEnd());
+    const next = await store.append(id, { type: "gate.opened", gate: "A" });
+    expect(next.seq).toBe(2);
+    const lines = (await readFile(file, "utf8")).split("\n").filter(Boolean);
+    expect(lines).toHaveLength(2);
+    expect(lines.map((l) => JSON.parse(l).seq)).toEqual([1, 2]);
+  });
+
+  it("mid-file corruption still throws", async () => {
+    const { store, root } = await newStore();
+    const id = await store.createRun("b");
+    const file = path.join(root, id, "events.jsonl");
+    const raw = await readFile(file, "utf8");
+    await rm(file);
+    await appendFile(file, `garbage\n${raw}`);
+    await expect(store.events(id)).rejects.toThrow();
   });
 });
