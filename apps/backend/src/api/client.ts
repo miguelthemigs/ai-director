@@ -24,7 +24,13 @@ export type ParseTransport = (args: {
   schema: ZodType;
   /** Absent on every text-only call, which is all of them except a v2 repair. */
   image?: TransportImage;
-}) => Promise<{ parsed_output: unknown }>;
+}) => Promise<{
+  parsed_output: unknown;
+  /** Absent on fakes that do not report usage. */
+  usage?: { inputTokens: number; outputTokens: number };
+  /** The model that actually served the call (a fallback may differ from the requested one). */
+  model?: string;
+}>;
 
 // betas + fallbacks are beta-only request fields (confirmed against the installed
 // SDK's own .d.ts: they exist on the beta MessageCreateParams, not on
@@ -64,6 +70,13 @@ export function createAnthropicTransport(model: string = DEFAULT_MODEL): ParseTr
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
     });
-    return { parsed_output: response.parsed_output };
+    return {
+      parsed_output: response.parsed_output,
+      usage: {
+        inputTokens: response.usage.input_tokens,
+        outputTokens: response.usage.output_tokens,
+      },
+      model: response.model,
+    };
   };
 }
