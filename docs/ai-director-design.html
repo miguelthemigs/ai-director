@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AI Director — Architecture Design</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  :root { --ink:#1b1f24; --quiet:#5b6470; --line:#d8dde3; --accent:#2f5bd3; --tint:#eef2fc; --new:#e7f5ec; --newline:#2e8b57; --reuse:#f3f4f6; }
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color:var(--ink); background:#fff; font-size:10.5pt; line-height:1.5; max-width: 760px; margin: 0 auto; }
+  h1 { font-size:22pt; margin:0 0 4px; }
+  h2 { font-size:14pt; margin:28px 0 8px; padding-top:6px; border-top:1px solid var(--line); page-break-after: avoid; }
+  h3 { font-size:11.5pt; margin:18px 0 6px; page-break-after: avoid; }
+  .meta { color:var(--quiet); font-size:9.5pt; margin-bottom:18px; }
+  .lead { font-size:11.5pt; background:var(--tint); border:1px solid var(--line); padding:10px 14px; border-radius:6px; }
+  table { border-collapse:collapse; width:100%; margin:8px 0 12px; font-size:9.5pt; page-break-inside: avoid; }
+  th, td { border:1px solid var(--line); padding:5px 8px; text-align:left; vertical-align:top; }
+  th { background:#f6f7f9; }
+  code { font-family: "SF Mono", Menlo, monospace; font-size:8.8pt; background:#f4f5f7; padding:1px 4px; border-radius:3px; }
+  pre { font-family: "SF Mono", Menlo, monospace; font-size:8.3pt; line-height:1.4; background:#f6f7f9; border:1px solid var(--line); border-radius:6px; padding:10px 12px; white-space:pre-wrap; page-break-inside: avoid; }
+  pre code { background:none; padding:0; }
+  .diagram { border:1px solid var(--line); border-radius:8px; padding:10px; margin:10px 0 6px; text-align:center; page-break-inside: avoid; }
+  .caption { color:var(--quiet); font-size:9pt; margin:0 0 14px; }
+  .tag { display:inline-block; font-size:8pt; padding:1px 6px; border-radius:10px; border:1px solid var(--line); }
+  .tag.new { background:var(--new); border-color:var(--newline); }
+  .tag.reuse { background:var(--reuse); }
+  .crew { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; margin:10px 0; page-break-inside: avoid; }
+  .crew div { border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:9.3pt; }
+  .crew b { display:block; font-size:10pt; margin-bottom:2px; }
+  .pagebreak { page-break-before: always; }
+  ol li, ul li { margin-bottom:3px; }
+</style>
+</head>
+<body>
+
+<h1>AI Director — Architecture Design</h1>
+<div class="meta">12 October 2026 · Miguel Werneck · Follows <code>docs/ai-director-research.md</code> and <code>docs/ai-director-requirements-and-advice.md</code> · Source of this PDF: <code>docs/ai-director-design.html</code></div>
+
+<p class="lead"><b>In short:</b> six AI agents follow a fixed recipe written in code. Some steps run at the same time. Mistakes go back to whoever made them. Nothing is paid for until I approve. The result is <b>one</b> Seedance video.</p>
+
+<!-- ───────────────────────────── 1 ───────────────────────────── -->
+<h2>1. What this document is</h2>
+<p>The research said what a good AI ad needs. The advice said what to build. This shows <b>how it fits together</b>.</p>
+<p>The ad is <b>one</b> Seedance 2.5 video with several shots inside, at a length I choose (4–30 s). The character goes in as text. The product and location go in as pictures.</p>
+
+<h3>The crew</h3>
+<p>Three new agents, three reused agents, two generators, and code.</p>
+<div class="crew">
+  <div><b>1 · Interrogator</b><span class="tag new">new agent</span><br>Fills in what the brief left out. Asks me only what I must decide.</div>
+  <div><b>2 · Director</b><span class="tag new">new agent</span><br>Writes the plan: style, assets, shots. Uses the Higgsfield skill.</div>
+  <div><b>3 · Cinematographer</b><span class="tag new">new agent</span><br>Camera and light for every shot, in one call, so each shot follows the last.</div>
+  <div><b>4 · Describer</b><span class="tag reuse">reused agent</span><br>Describes the avatar sheet in words.</div>
+  <div><b>5 · Evaluator</b><span class="tag reuse">reused agent</span><br>Scores that description.</div>
+  <div><b>6 · Repairer</b><span class="tag reuse">reused agent</span><br>Fixes only the failing words.</div>
+  <div><b>7 · Nano Banana Pro</b><span class="tag reuse">image generator</span><br>Makes the avatar, product and location pictures.</div>
+  <div><b>8 · Seedance 2.5</b><span class="tag reuse">video generator</span><br>Makes the one video, with sound.</div>
+  <div><b>+ Code</b><span class="tag new">not AI</span><br>Sets the order, builds and checks the prompt, shows the price.</div>
+</div>
+
+<!-- ───────────────────────────── 2 ───────────────────────────── -->
+<h2>2. The big picture — C4 level 1, system context</h2>
+<p>Who uses it, and what it talks to.</p>
+<div class="diagram"><pre class="mermaid">
+flowchart TB
+  me(["<b>Me</b><br/>writes the brief, answers questions,<br/>approves the plan, presses render"])
+  sys["<b>AI Director</b><br/>turns a one-line brief into<br/>one cinematic ad video"]
+  anth["<b>Anthropic API</b><br/>claude-opus-5<br/>runs all six agents"]
+  goog["<b>Google AI</b><br/>Nano Banana Pro<br/>makes the pictures"]
+  orr["<b>OpenRouter</b><br/>Seedance 2.5<br/>makes the video"]
+  me -- "brief, answers, approvals" --> sys
+  sys -- "plan, pictures, price, video" --> me
+  sys -- "agent calls (text)" --> anth
+  sys -- "picture requests" --> goog
+  sys -- "one render, only after I approve" --> orr
+  classDef person fill:#2f5bd3,color:#fff,stroke:#2f5bd3
+  classDef system fill:#eef2fc,stroke:#2f5bd3,stroke-width:2px
+  classDef ext fill:#f6f7f9,stroke:#9aa3ad
+  class me person
+  class sys system
+  class anth,goog,orr ext
+</pre></div>
+<p class="caption">Only the render costs real money, and only after I approve.</p>
+
+<!-- ───────────────────────────── 3 ───────────────────────────── -->
+<h2>3. The parts of the system — C4 level 2, containers</h2>
+<p>It is added to the Prompt Coach repo, not a new app.</p>
+<div class="diagram"><pre class="mermaid">
+flowchart TB
+  me(["Me"])
+  subgraph repo["ai-director repo"]
+    direction TB
+    fe["<b>Frontend</b><br/>React 19 + Vite<br/>new <b>Director</b> tab<br/>next to Run, Architecture,<br/>Versions, Compare"]
+    be["<b>Backend server</b><br/>HTTP + live events<br/>new <code>/director</code> routes"]
+    orch["<b>Orchestrator</b><br/>the recipe + the engine<br/>that runs it"]
+    coach["<b>Prompt Coach</b><br/>Describer, Evaluator,<br/>Repairer (existing)"]
+    store[("<b>File store</b><br/>data/director-runs/<br/>every step saved")]
+    contract["<b>Contract package</b><br/>the shared types<br/>(the forms)"]
+  end
+  me --> fe
+  fe -- "start run, approve gates" --> be
+  be -- "live events" --> fe
+  be --> orch
+  orch --> coach
+  orch --> store
+  fe -. uses .-> contract
+  be -. uses .-> contract
+  classDef newc fill:#e7f5ec,stroke:#2e8b57,stroke-width:1.5px
+  classDef old fill:#f6f7f9,stroke:#9aa3ad
+  class fe,be,orch,store newc
+  class coach,contract old
+</pre></div>
+<p class="caption">Green = new. Grey = reused. The Prompt Coach becomes one part of the bigger workflow.</p>
+
+<!-- ───────────────────────────── 4 ───────────────────────────── -->
+<h2>4. Inside the orchestrator — C4 level 3, components</h2>
+<p>The new, hard part. Small pieces, one job each.</p>
+<div class="diagram"><pre class="mermaid">
+flowchart TB
+  subgraph orch["Orchestrator"]
+    direction TB
+    recipe["<b>Recipe (graph)</b><br/>the list of steps and<br/>what each one waits for"]
+    runner["<b>Runner</b><br/>finds steps that are ready,<br/>runs them, at the same time if it can"]
+    nodes["<b>Steps (nodes)</b><br/>3 new agents, 2 picture steps,<br/>character step, assembler, render"]
+    gates["<b>Gates</b><br/>pause and wait<br/>for my approval"]
+    checks["<b>Checks</b><br/>yes/no rules on the<br/>finished prompt"]
+    router["<b>Router</b><br/>sends a failed check to<br/>the step that owns it"]
+    log["<b>Run log + events</b><br/>saves every step, tells<br/>the screen what changed"]
+  end
+  recipe --> runner
+  runner --> nodes
+  runner --> gates
+  nodes --> checks
+  checks -- "fail" --> router
+  router -- "redo one part<br/>(max 2 times)" --> runner
+  runner --> log
+  classDef c fill:#e7f5ec,stroke:#2e8b57
+  class recipe,runner,nodes,gates,checks,router,log c
+</pre></div>
+<p class="caption">The runner is the engine. The recipe says what to do. The router says what to redo.</p>
+
+<!-- ───────────────────────────── 5 ───────────────────────────── -->
+<h2 class="pagebreak">5. The workflow — every step, in order</h2>
+<p>Top to bottom. Boxes side by side run at the same time. Blue shapes are where I or the code decide.</p>
+<div class="diagram"><pre class="mermaid">
+flowchart TB
+  brief(["Brief + length I choose<br/>'cool ad for my headphones', 15 s"])
+  inter["<b>1 · Interrogator</b><br/>fills in what the brief left out"]
+  gA{{"<b>Gate A</b> · I answer"}}
+  dir["<b>2 · Director</b><br/>style line, assets, shots in order"]
+  subgraph par["all at the same time"]
+    direction LR
+    prod["<b>Product</b><br/>picture"]
+    loc["<b>Location</b><br/>picture"]
+    char["<b>Character</b><br/>text, via Prompt Coach"]
+    cam["<b>3 · Cinematographer</b><br/>all shots, in order"]
+    prod ~~~ loc ~~~ char ~~~ cam
+  end
+  asm["<b>Assembler</b> (code)<br/>builds the prompt from the plan"]
+  chk{{"<b>Checks</b> (code) · all pass?"}}
+  route["<b>Router</b> (code)<br/>sends it back to its owner"]
+  gB{{"<b>Gate B</b> · I approve the plan"}}
+  gC{{"<b>Gate C</b> · I see the price, press render"}}
+  vid(["<b>Seedance 2.5</b> · ONE video, with sound"])
+
+  brief --> inter --> gA --> dir --> par --> asm --> chk
+  chk -- "no" --> route
+  route -. "redo only that part, max 2 tries" .-> par
+  chk -- "yes" --> gB --> gC --> vid
+
+  classDef agent fill:#e7f5ec,stroke:#2e8b57
+  classDef reuse fill:#f6f7f9,stroke:#9aa3ad
+  classDef code fill:#fff,stroke:#5b6470,stroke-dasharray:4 3
+  classDef gate fill:#eef2fc,stroke:#2f5bd3,stroke-width:2px
+  class inter,dir,cam agent
+  class prod,loc,char reuse
+  class asm,route code
+  class gA,gB,gC,chk gate
+</pre></div>
+<p class="caption">Green = new agents. Grey = reused. Dashed = code. The parallel work is text and pictures only. Seedance is still called <b>once</b>.</p>
+
+<!-- ───────────────────────────── 7 ───────────────────────────── -->
+<h2>6. The forms agents hand each other</h2>
+<p>Agents pass fixed forms, never loose text. The next agent cannot misread a form.</p>
+<pre><code>// packages/contract/src/director.ts
+export type Plan = {
+  styleLine: string;                      // pasted word for word into the prompt
+  assets: { handle: string; kind: "product" | "location" | "character"; role: string }[];
+  shots:  { n: number; action: string; weight: "short" | "normal" | "long" }[];
+};
+export type Camera = { shot: number; framing: string; lens: string; move: CameraMove; light: string };
+export type CameraMove = "static" | "slow push-in" | "pull-out" | "tracking" | "orbit" | "crane up" | "handheld";</code></pre>
+<p>The camera <code>move</code> is one slot that only takes a value from a fixed list (from Higgsfield). Two moves cannot be written there, so code can check it without an AI.</p>
+
+<!-- ───────────────────────────── 8 ───────────────────────────── -->
+<h2>7. Checks and routing — what happens when something is wrong</h2>
+<p>Code runs yes/no checks on the prompt. No AI judges. A failed check goes back only to the step that made that part, at most 2 times. The rest of the prompt never moves.</p>
+<table>
+  <tr><th>Check</th><th>Example of a fail</th><th>Goes back to</th></tr>
+  <tr><td>Every approved shot is in the prompt</td><td>Plan has 4 shots, prompt has 3</td><td>Director</td></tr>
+  <tr><td>Exactly one camera move per shot, from the list</td><td>"push-in while panning left"</td><td>Cinematographer (fixes that shot, keeps the others)</td></tr>
+  <tr><td>At most 5 reference pictures, each with a role</td><td>6 pictures, or one nobody uses</td><td>Director</td></tr>
+  <tr><td>The shots fit the length I chose</td><td>7 long shots in 10 seconds</td><td>Director</td></tr>
+  <tr><td>Style line and character text are identical everywhere</td><td>"short brown hair" vs "dark hair"</td><td>Assembler pastes it again</td></tr>
+</table>
+
+<!-- ───────────────────────────── 11 ───────────────────────────── -->
+<h2 class="pagebreak">8. End-to-end example: "cool ad for my headphones"</h2>
+<table>
+  <tr><th>Step</th><th>What it produces (shortened)</th></tr>
+  <tr><td>Brief</td><td>"cool ad for my headphones", 15 seconds</td></tr>
+  <tr><td>Interrogator</td><td>Asks me for the product photo. Decides the rest: apartment at dawn, calm tone.</td></tr>
+  <tr><td>Gate A</td><td>I upload the photo.</td></tr>
+  <tr><td>Director</td><td>Assets <code>@headphones</code>, <code>@apartment</code>, <code>@hero</code>. Four shots: noise wakes him · he grabs the headphones · noise drops · he walks out calm.</td></tr>
+  <tr><td>Product / Location / Character</td><td>Two pictures. The character text, cleaned by the Prompt Coach.</td></tr>
+  <tr><td>Cinematographer</td><td>Camera for all four shots, in order. Shot 2 says "push-in <i>and pan</i>".</td></tr>
+  <tr><td>Checks</td><td>Two moves in shot 2. Sent back. Returns as "slow push-in". All pass.</td></tr>
+  <tr><td>Gate B, Gate C</td><td>I approve, see ≈ $3.47, press render.</td></tr>
+  <tr><td>Seedance 2.5</td><td>One 15-second video with sound.</td></tr>
+</table>
+
+<h3>The final prompt the Assembler builds</h3>
+<pre><code>@Image1 is the headphones (@headphones). @Image2 is the apartment (@apartment).
+
+Photoreal commercial, physical cine lens, 180° shutter motion blur, natural light with soft haze,
+muted palette of slate grey, warm amber and off-white. Behaviour shown in the body, never stated.
+
+HERO (@hero): a man in his late twenties, lean build, short dark-brown curly hair, light olive skin,
+grey crewneck sweater, dark trousers.
+
+Scene: the apartment from @Image2, window on the left, front door on the right.
+
+Shot 1: Wide shot, 24mm, static. Hero lies awake as traffic noise pours through the open window;
+he presses a pillow over one ear. &lt;traffic rumble&gt; &lt;a distant siren&gt;
+Shot 2: Medium close-up, 50mm, slow push-in. He reaches to the bedside table and lifts the
+headphones from @Image1 over his ears in one smooth motion. &lt;fabric rustle&gt;
+Shot 3: Close-up, 85mm, static, warm lamp from the right. The cups seal; his shoulders drop and his
+eyes close for a beat. &lt;the city noise falls to a low hum&gt; (soft ambient synth)
+Shot 4: Medium shot, 35mm, tracking. He walks out of the front door into bright morning sun, calm,
+headphones on. (the synth rises gently)
+
+Keep it subtitle-free, do not generate a logo or watermark.</code></pre>
+<p class="caption">Code pastes every piece from the approved plan. No model rewrites it. What I approved is what renders.</p>
+
+<!-- ───────────────────────────── 12 ───────────────────────────── -->
+<h2>9. Build order</h2>
+
+<ol>
+  <li><b>Forms and runner,</b> tested with fake agents. Free.</li>
+  <li><b>Interrogator and Director,</b> using the Higgsfield skill.</li>
+  <li><b>Pictures and character,</b> reusing what exists.</li>
+  <li><b>Cinematographer, Assembler, checks</b> and routing.</li>
+  <li><b>Director tab.</b></li>
+  <li><b>Two briefs rendered,</b> and the write-up.</li>
+</ol>
+
+<p style="color:#5b6470;font-size:9pt;margin-top:24px">Made with Claude Code (Claude Opus 5.5) at my direction. Diagrams are written as text (Mermaid) inside <code>docs/ai-director-design.html</code>, so they can be edited there and the PDF re-exported.</p>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose",
+    flowchart: { htmlLabels: true, curve: "basis" }, fontFamily: "-apple-system, Helvetica Neue, Arial, sans-serif" });
+</script>
+</body>
+</html>
