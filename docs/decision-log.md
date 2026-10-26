@@ -1,5 +1,94 @@
 # Decision log
 
+## 2026-10-26 — Director: gate order
+
+Plan approval (Gate B) now comes before anything is generated: answers (A), Director, plan checks,
+B, then the pictures, the character and the Cinematographer in parallel, then assembly and prompt
+checks, then C. The design put plan approval after the pictures. Moving it first means a rejected
+plan costs nothing, and a re-planned shot never throws away finished pictures. Gate C shows the final
+prompt, the pictures and the price, and is the only place a render can start.
+
+## 2026-10-26 — Director: product and location pictures are reference images
+
+This reverses "text only" for images that are not faces. Seedance refuses faces, so the character
+still travels as text, but a product or a location can be sent as a reference image. It follows
+Mentic (`lib/video-lab/render-ugc.ts`, `lib/media-mirror.ts`): OpenRouter `input_references`, public
+HTTPS URLs hosted on UploadThing (`UPLOADTHING_TOKEN`), each named in the prompt by position. Only
+`product` and `location` pictures can be references, by type; there is no way to attach a face. At
+most 5 references go in one prompt.
+
+## 2026-10-26 — Director: the product picture is one view
+
+One clean studio view made from the owner's photo, not a two-view sheet. Mentic's own header on
+`generate-product-sheet.ts` warns that a two-view frame may render as two products, and gates the
+sheet on a probe that was never run. The location picture is an empty room with nobody in it.
+
+## 2026-10-26 — Director: the shot length rule
+
+Short is 2 s, normal is 3 s, long is 4 s. A plan fits when the sum is within 2 s of the length the
+owner chose. The prompt carries no seconds, because Seedance timing is unstable; code checks the fit
+and the Director plans it.
+
+## 2026-10-26 — Director: routed checks and invariants are different things
+
+Only checks a model can fail and fix are routed back to their owner: the seven in
+`DIRECTOR_CHECK_IDS`, at most 2 retries per owner. Assembly invariants (the style line and the
+character text are byte-identical, every reference is named) are assertions. If one fails, that is a
+defect in code, so the run fails; it is never sent back to a model.
+
+## 2026-10-26 — NFR-4 now names which agents use `claude-opus-5`
+
+The Interrogator, Director, Cinematographer and the Prompt Coach (Evaluator and Repairer) use
+`claude-opus-5`. The describe step stays on `claude-sonnet-5`, because it is an unchanged
+reproduction of what Mentic runs and changing the model would change what is being reproduced.
+
+## 2026-10-26 — Director: nothing was generated and no live test was run while building it
+
+The owner's instruction was "no videos nor images are going to be generated". So the live run (plan
+Task 13) was not done, and the Director is proven by tests with fakes only. Every paid seam
+(`ParseTransport`, `ImageTransport`, `VideoTransport`, `ReferenceHost`) is still built and injected,
+so a live run needs keys and nothing else.
+
+## 2026-10-26 — Director: a patch that changes assets is refused
+
+If the Director answers a failed check with a patch that would change the assets, the patch is
+refused and the previous plan is kept. The plan checks then fail again, and after 2 retries the run
+ends `stopped`, not `failed`. Changing assets after Gate A would invalidate what the owner approved,
+and `stopped` tells the owner why; `failed` would read as a bug.
+
+## 2026-10-26 — Render: no success without a saved clip
+
+If the provider reports success but the clip download fails, the attempt is recorded as failed and
+billed. Reading "rendered" with nothing to play would be a success state that is not one, and the
+provider has charged for it.
+
+## 2026-10-26 — Render: every settlement names its attempt
+
+Each `render.settled` event carries its attempt number. A failed submit's billing is therefore
+visible, and a later attempt can never overwrite an earlier one.
+
+## 2026-10-26 — Render: after Gate C a run always ends rendered or render_failed
+
+A crash between the Gate C approval and the claim is settled as `render_failed` on restart and never
+submitted again, so nothing is paid for twice. Billing is `not_billed` only when the attempt is
+provably unbilled. "Render again" starts a new attempt.
+
+## 2026-10-26 — Gate A answers are replaced atomically
+
+While the run waits at A, a new answer replaces the old one in one step. Before, a crash between
+writing the answer and recording it locked the gate.
+
+## 2026-10-26 — The location reference sentence
+
+The prompt names the location reference as "The <ordinal> reference image is the location (@handle):
+<description>." The description stays verbatim, so the assembly invariant (text byte-identical)
+holds for it too.
+
+## 2026-10-26 — Known gap: picture, character and vision spend is not in `textMicroUsd`
+
+A run's `textMicroUsd` counts only model text calls. Picture, character and vision spend is not
+metered into it yet, so the figure understates what a run costs before render. Not fixed in v1.
+
 ## 2026-10-05 — Every run starts from an avatar; pasted text now renders one
 
 The product has one flow: render or upload a character sheet, describe it, grade the description,

@@ -17,6 +17,11 @@ character-description Evaluator and Repairer, three screens, and the evidence th
   types a second time anywhere else is a defect.
 - `apps/backend` — rubric, agents, enforcement, orchestration, store, CLI, server.
 - `apps/frontend` — React 19 + Vite. Three screens: Run, Architecture, Versions.
+- The Director (brief to one Seedance take) lives in the same packages: the recipe and runner in
+  `apps/backend/src/orchestrate/director/`, its three agents in `apps/backend/src/agents/`
+  (`interrogator`, `director`, `cinematographer`), routes in
+  `apps/backend/src/server/routes/director.ts`, runs in `data/director-runs/`. See
+  `docs/architecture.md` section 7.
 - `data/` — runs, avatars, comparison clips, frozen gold set, version notes. All committed, so a
   fresh clone has every artefact.
 
@@ -32,7 +37,11 @@ character-description Evaluator and Repairer, three screens, and the evidence th
   and the UI must never show a success state for the last two.
 - Rubric and prompt files are append-only. A change ships as a new version file.
 - Motion is tied to real state changes only. No ambient or looping animation anywhere.
-- Never commit a key. Secrets live in `.env`; `.env.example` documents them.
+- Never commit a key. Secrets live in `.env`; `.env.example` documents them. The Director adds
+  `UPLOADTHING_TOKEN` (public URLs for product and location reference images).
+- Only Gate C renders: `POST /director/runs/:id/gates/C` with `decision: "render"` is the only route
+  that submits a video, and `/render/again` only retries a run that ended `render_failed`. Never a
+  live API call in a test.
 
 ## Commands
 

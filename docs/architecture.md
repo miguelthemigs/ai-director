@@ -421,3 +421,68 @@ outstanding items are in `docs/decision-log.md`.
 | What crosses the network | `packages/contract/src/run.ts` |
 | The decisions already taken, and the pre-registered failure condition | `docs/decision-log.md` |
 | How this was built, for assessment | `docs/how-i-built-prompt-coach.md` |
+| How the Director runs, and what each route does | section 7 above, `apps/backend/src/orchestrate/director/` |
+
+---
+
+## 7. The Director
+
+Added 2026-10-26. The Director turns a one-line brief into one Seedance take. The Prompt Coach
+above is one step inside it (the character). The decisions behind it are in `docs/decision-log.md`
+(entries dated 2026-10-26).
+
+**The recipe.** The order of steps is code, not a model deciding who to call. The nodes and the
+edges between them are defined once, in `packages/contract/src/director.ts`
+(`DIRECTOR_NODE_IDS`, `DIRECTOR_RECIPE_EDGES`):
+
+```
+Interrogator -> Gate A -> Director -> plan checks -> Gate B
+  -> product picture | location picture | character | Cinematographer   (in parallel)
+  -> Assembler -> prompt checks -> Gate C -> render
+```
+
+`apps/backend/src/orchestrate/director/recipe.ts` builds the runnable list from those edges. Every
+node is there except `render`, which only the Gate C route may start. The three agents are in
+`apps/backend/src/agents/{interrogator,director,cinematographer}/`, each with a versioned prompt
+file (`prompt-v1.ts`) and all on `claude-opus-5`.
+
+**The runner.** `orchestrate/director/runner.ts` runs every node whose dependencies are done, at
+once, and stops at a gate until the owner answers. Runs, gate answers and restarts on one run take a
+lock in turn, so they never overlap. Plan checks and prompt checks sit before Gates B and C
+(`orchestrate/director/checks.ts`). A failed check goes through `router.ts` to the node that owns it
+(the Director or the Cinematographer), with the failure attached, at most `MAX_RETRIES_PER_OWNER`
+(2) times. A third failure ends the run `stopped`. Assembly is code too (`assemble.ts`): the style
+line and the character text go in byte-identical, and a broken invariant fails the run instead of
+being routed.
+
+**The event log.** A run is an append-only file, `data/director-runs/<runId>/events.jsonl`, written
+by `store/FileDirectorRunStore.ts`. The view the screen shows is not stored; it is a pure fold of
+the events (`reduceDirectorEvents` in `packages/contract/src/directorState.ts`). Next to it:
+`manifest.json`, `nodes/<node>.<attempt>.json` (what each node produced), and
+`assets/<name>` (the product photo, pictures and the clip, `assets/clip.<attempt>.mp4`). A render
+attempt takes `render.<attempt>.claim` before the vendor is called. After a restart the server picks
+up every unfinished run and settles every render left in flight.
+
+**The routes** (`apps/backend/src/server/routes/director.ts`; all answer 503 when the Director is
+not configured):
+
+| Route | What it does |
+|---|---|
+| `POST /director/runs` | Starts a run from a brief; 202 with the id |
+| `GET /director/runs`, `GET /director/runs/:id` | The list; one run's view |
+| `GET /director/runs/:id/output?ref=nodes/...` | A node's output |
+| `GET /director/runs/:id/asset?ref=assets/...` | A saved picture or photo |
+| `GET /director/runs/:id/clip?attempt=N` | The rendered clip for attempt N |
+| `POST /director/runs/:id/gates/A` | The owner's answers, with the product photo; 409 if the run is not waiting at A |
+| `POST /director/runs/:id/gates/B` | Approve or reject the plan |
+| `POST /director/runs/:id/gates/C` | Reject, or approve and render. **The only route that submits a render.** 422 if the character did not pass and `acceptNotPassed` is not set; 503 without `OPENROUTER_API_KEY` |
+| `POST /director/runs/:id/render/again` | A new attempt, only for a run that ended `render_failed` |
+| `GET /director/runs/:id/events` | Server-sent events, replayed from the stored log after `Last-Event-ID` |
+
+A run ends `rendered`, `render_failed`, `stopped`, `rejected` or `failed`. Only `rendered` is a
+success. The price shown at Gate C is an estimate; the billed amount from OpenRouter is recorded
+beside it and never replaces it.
+
+**What is not proven.** The Director is tested with fakes only; no picture or clip was generated
+while building it. A run's `textMicroUsd` counts model text calls only, not pictures, the character
+or vision.
