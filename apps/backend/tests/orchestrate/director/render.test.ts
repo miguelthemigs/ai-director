@@ -18,6 +18,7 @@ import {
   resumeDirectorRenders,
   settleDirectorRender,
   submitDirectorRender,
+  whileRenderPressed,
 } from "../../../src/orchestrate/director/render.js";
 import { resumeAllDirectorRuns } from "../../../src/orchestrate/director/runner.js";
 import { POLL_DEADLINE_MS, POLL_INTERVAL_MS } from "../../../src/compare/runComparison.js";
@@ -486,6 +487,47 @@ describe("resumeDirectorRenders", () => {
     expect(ofType(events, "render.settled")).toEqual([expect.objectContaining({ status: "succeeded" })]);
     expect(reduceDirectorEvents(events).status).toBe("rendered");
     expect(video.submit).toHaveBeenCalledTimes(1);
+  });
+
+  /** The log of a run that was approved at gate C and then died before claiming attempt 1. */
+  async function approvedAtC(store: FileDirectorRunStore, runId: string): Promise<void> {
+    await store.append(runId, { type: "gate.resolved", gate: "A", decision: "approve", reason: null, seconds: 15 });
+    await store.append(runId, { type: "gate.opened", gate: "C" });
+    await store.append(runId, { type: "gate.resolved", gate: "C", decision: "approve", reason: null, seconds: null });
+  }
+
+  it("a run approved at gate C with no claim is settled failed, not_billed, and never submitted", async () => {
+    const video = fakeVideo();
+    const { store, runId, deps } = await setup(video);
+    await approvedAtC(store, runId);
+    expect(reduceDirectorEvents(await store.events(runId)).status).toBe("running");
+
+    await resumeDirectorRenders(deps);
+    await resumeDirectorRenders(deps);
+
+    expect(video.submit).not.toHaveBeenCalled();
+    const events = await store.events(runId);
+    expect(ofType(events, "render.settled")).toEqual([
+      expect.objectContaining({
+        attempt: 1,
+        estimatedMicroUsd: estimateMicroUsd(DIRECTOR_VIDEO_SIZE, 15),
+        status: "failed",
+        billing: "not_billed",
+        failure: "interrupted before the render was claimed",
+      }),
+    ]);
+    expect(ofType(events, "run.finished")).toEqual([expect.objectContaining({ status: "render_failed" })]);
+    expect(reduceDirectorEvents(events).status).toBe("render_failed");
+  });
+
+  it("leaves a run alone while a press in this process is between the approval and the claim", async () => {
+    const video = fakeVideo();
+    const { store, runId, deps } = await setup(video);
+    await whileRenderPressed(runId, async () => {
+      await approvedAtC(store, runId);
+      await resumeDirectorRenders(deps);
+    });
+    expect(ofType(await store.events(runId), "render.settled")).toEqual([]);
   });
 
   it("leaves runs without a claim, and settled renders, untouched", async () => {

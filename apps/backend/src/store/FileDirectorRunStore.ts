@@ -142,11 +142,10 @@ export class FileDirectorRunStore implements DirectorRunStore {
   }
 
   async writeAnswers(runId: string, answers: GateAAnswers): Promise<void> {
-    // "wx" makes the second write fail with EEXIST instead of overwriting.
-    await writeFile(path.join(this.dir(runId), "answers.json"), JSON.stringify(answers, null, 2), {
-      encoding: "utf8",
-      flag: "wx",
-    });
+    // Replaced atomically, never refused: a crash after this write and before `gate.resolved A`
+    // leaves gate A waiting, and the next answer must be able to replace this one. Double
+    // answers are refused by the runner (waiting at A, under the run lock), not here.
+    await writeJsonAtomic(path.join(this.dir(runId), "answers.json"), answers);
   }
 
   async readAnswers(runId: string): Promise<GateAAnswers | null> {

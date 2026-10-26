@@ -23,7 +23,7 @@ export interface DirectorRunStore {
   /** Returns `assets/<name>`. */
   saveAsset(runId: string, name: string, bytes: Buffer): Promise<string>;
   readAsset(runId: string, ref: string): Promise<Buffer>;
-  /** Written once; a second write throws. */
+  /** Replaced atomically (a reader sees the old answers or the new, never half of either). */
   writeAnswers(runId: string, answers: GateAAnswers): Promise<void>;
   readAnswers(runId: string): Promise<GateAAnswers | null>;
   /** Atomic create-if-absent of `render.<attempt>.claim`. */

@@ -188,6 +188,31 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve };
 }
 
+/** Reads SSE frames off a real socket until `count` have arrived. */
+async function frames(url: string, headers: Record<string, string>, count: number, onOpen?: () => void) {
+  const abort = new AbortController();
+  const res = await fetch(url, { headers, signal: abort.signal });
+  expect(res.headers.get("content-type")).toBe("text/event-stream");
+  onOpen?.();
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  const parsed: DirectorEvent[] = [];
+  while (parsed.length < count) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    text += decoder.decode(value, { stream: true });
+    const blocks = text.split("\n\n");
+    text = blocks.pop()!;
+    for (const block of blocks) {
+      const data = block.split("\n").find((line) => line.startsWith("data: "));
+      if (data) parsed.push(JSON.parse(data.slice(6)));
+    }
+  }
+  abort.abort();
+  return parsed;
+}
+
 describe("Director routes", () => {
   it("answers 503 on every /director route when the Director is not configured", async () => {
     const { app } = await setup({ director: false });
@@ -213,13 +238,13 @@ describe("Director routes", () => {
     // Gate A saved the photo and handed its ref on as the answer.
     const answers = await store.readAnswers(id);
     expect(answers).toEqual({
-      productPhotoAsset: "assets/photo.png",
+      productPhotoAsset: expect.stringMatching(/^assets\/photo-[\w-]+\.png$/),
       productKind: "a glass bottle",
       seconds: 15,
       mustNotAppear: ["dogs"],
       cast: { kind: "new" },
     });
-    const photo = await app.inject({ method: "GET", url: `/director/runs/${id}/asset?ref=assets/photo.png` });
+    const photo = await app.inject({ method: "GET", url: `/director/runs/${id}/asset?ref=${answers!.productPhotoAsset}` });
     expect(photo.statusCode).toBe(200);
     expect(photo.headers["content-type"]).toBe("image/png");
     expect(photo.rawPayload).toEqual(Buffer.from(PNG, "base64"));
@@ -304,6 +329,23 @@ describe("Director routes", () => {
     expect((await view(app, id)).waitingAt).toBe("A");
   });
 
+  it("answers gate A even when answers were written before a crash left it waiting", async () => {
+    const { app, store } = await setup();
+    const id = await start(app);
+    await until(app, id, (v) => v.waitingAt === "A");
+    await store.writeAnswers(id, {
+      productPhotoAsset: "assets/photo-old.png",
+      productKind: "stale",
+      seconds: 4,
+      mustNotAppear: [],
+      cast: { kind: "new" },
+    });
+    const res = await app.inject({ method: "POST", url: `/director/runs/${id}/gates/A`, payload: gateA() });
+    expect(res.statusCode).toBe(202);
+    expect(await store.readAnswers(id)).toMatchObject({ productKind: "a glass bottle", seconds: 15 });
+    await until(app, id, (v) => v.waitingAt === "B");
+  });
+
   it("validates the rest of gate A: media type, seconds, and the avatar cast", async () => {
     const { app, avatars } = await setup();
     const id = await start(app);
@@ -333,6 +375,39 @@ describe("Director routes", () => {
     await until(app, id, (v) => v.status === "rendered");
     expect((await press()).statusCode).toBe(409);
     expect(submits).toHaveLength(1);
+  });
+
+  it("a store error after gate C is approved ends the run render_failed, and render again works", async () => {
+    const { video, submits } = fakeVideo();
+    const { app, store } = await setup({ video });
+    const id = await toGateC(app);
+    vi.spyOn(store, "claimRender").mockRejectedValueOnce(Object.assign(new Error("EIO: disk gone"), { code: "EIO" }));
+
+    const res = await app.inject({ method: "POST", url: `/director/runs/${id}/gates/C`, payload: { decision: "render" } });
+    expect(res.statusCode).toBe(500);
+    const failed = await view(app, id);
+    expect(failed.status).toBe("render_failed");
+    expect(failed.render).toMatchObject({ attempt: 1, billing: "not_billed", failure: "EIO: disk gone" });
+    expect(submits).toHaveLength(0);
+
+    const again = await app.inject({ method: "POST", url: `/director/runs/${id}/render/again` });
+    expect(again.statusCode).toBe(202);
+    expect(again.json()).toMatchObject({ attempt: 2 });
+    await until(app, id, (v) => v.status === "rendered");
+    expect(submits).toHaveLength(1);
+  });
+
+  it("refuses gate C with nothing appended when the assembled prompt cannot be read", async () => {
+    const { app, store, root } = await setup();
+    const id = await toGateC(app);
+    const ref = (await view(app, id)).nodes.assembler.outputRef!;
+    await rm(path.join(root, "runs", id, ref));
+    const before = await store.events(id);
+
+    const res = await app.inject({ method: "POST", url: `/director/runs/${id}/gates/C`, payload: { decision: "render" } });
+    expect(res.statusCode).toBe(500);
+    expect(await store.events(id)).toEqual(before);
+    expect((await view(app, id)).waitingAt).toBe("C");
   });
 
   it("answers 422 when the character did not pass, unless the user accepts it", async () => {
@@ -431,31 +506,6 @@ describe("Director routes", () => {
 });
 
 describe("GET /director/runs/:id/events", () => {
-  /** Reads SSE frames off a real socket until `count` have arrived. */
-  async function frames(url: string, headers: Record<string, string>, count: number, onOpen?: () => void) {
-    const abort = new AbortController();
-    const res = await fetch(url, { headers, signal: abort.signal });
-    expect(res.headers.get("content-type")).toBe("text/event-stream");
-    onOpen?.();
-    const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let text = "";
-    const parsed: DirectorEvent[] = [];
-    while (parsed.length < count) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      text += decoder.decode(value, { stream: true });
-      const blocks = text.split("\n\n");
-      text = blocks.pop()!;
-      for (const block of blocks) {
-        const data = block.split("\n").find((line) => line.startsWith("data: "));
-        if (data) parsed.push(JSON.parse(data.slice(6)));
-      }
-    }
-    abort.abort();
-    return parsed;
-  }
-
   it("replays from the store after Last-Event-ID, then streams live with nothing lost or doubled", async () => {
     const { app } = await setup();
     const id = await start(app);
@@ -475,6 +525,59 @@ describe("GET /director/runs/:id/events", () => {
   it("answers 404 for an unknown run", async () => {
     const { app } = await setup();
     expect((await app.inject({ method: "GET", url: "/director/runs/run-nope/events" })).statusCode).toBe(404);
+  });
+
+  /** Wraps `hub.subscribe` so the test can count subscriptions and their unsubscribes. */
+  function countSubscriptions(hub: DirectorEventHub) {
+    const counts = { subscribed: 0, unsubscribed: 0 };
+    const subscribe = hub.subscribe.bind(hub);
+    vi.spyOn(hub, "subscribe").mockImplementation((runId, sink) => {
+      counts.subscribed += 1;
+      const off = subscribe(runId, sink);
+      return () => {
+        counts.unsubscribed += 1;
+        off();
+      };
+    });
+    return counts;
+  }
+
+  it("unsubscribes from the hub when the client goes away", async () => {
+    const { app, director } = await setup();
+    const id = await start(app);
+    await until(app, id, (v) => v.waitingAt === "A");
+    const counts = countSubscriptions(director.hub);
+    const address = await app.listen({ port: 0, host: "127.0.0.1" });
+
+    await frames(`${address}/director/runs/${id}/events`, {}, 1);
+    expect(counts.subscribed).toBe(1);
+    await vi.waitFor(() => expect(counts.unsubscribed).toBe(1));
+  });
+
+  it("leaves nothing subscribed when the client goes away while the run is being looked up", async () => {
+    const { app, store, director } = await setup();
+    const id = await start(app);
+    await until(app, id, (v) => v.waitingAt === "A");
+    const counts = countSubscriptions(director.hub);
+    const address = await app.listen({ port: 0, host: "127.0.0.1" });
+
+    const looking = deferred();
+    const release = deferred();
+    const events = store.events.bind(store);
+    vi.spyOn(store, "events").mockImplementationOnce(async (...args) => {
+      looking.resolve();
+      await release.promise;
+      return events(...args);
+    });
+    const abort = new AbortController();
+    const request = fetch(`${address}/director/runs/${id}/events`, { signal: abort.signal }).catch(() => null);
+    await looking.promise;
+    abort.abort();
+    await request;
+    await new Promise((r) => setTimeout(r, 50));
+    release.resolve();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(counts.subscribed).toBe(counts.unsubscribed);
   });
 });
 

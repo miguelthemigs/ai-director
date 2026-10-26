@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import {
@@ -19,7 +20,9 @@ import {
   nextRenderAttempt,
   resumeDirectorRenders,
   settleDirectorRender,
+  settleUnsubmitted,
   submitDirectorRender,
+  whileRenderPressed,
 } from "../../orchestrate/director/render.js";
 import {
   driveDirectorRun,
@@ -168,19 +171,51 @@ export function registerDirectorRoutes(app: FastifyInstance, deps: DirectorRoute
   }
 
   /** Claims the next attempt and submits it once; the settle is fired, never awaited. */
-  async function submitRender(reply: FastifyReply, id: string, video: VideoTransport) {
-    const events = await store.events(id);
-    const view = reduceDirectorEvents(events);
-    // One past the settled attempts, never `view.render.attempt + 1` (a submit that failed
-    // before `render.submitted` still settles its own attempt).
-    const attempt = nextRenderAttempt(events);
+  /**
+   * What a render sends, read BEFORE gate C is approved, so a run that cannot render is refused
+   * with nothing appended. Null (after replying 500) when the run has no length or no prompt.
+   */
+  async function renderInputs(
+    reply: FastifyReply,
+    id: string,
+    view: DirectorRunView,
+  ): Promise<{ prompt: AssembledPrompt; seconds: number } | null> {
     const promptRef = view.nodes.assembler.outputRef;
     if (view.seconds === null || promptRef === null) {
-      throw new Error(`run ${id} has no approved length or no assembled prompt to render`);
+      await reply.code(500).send({ error: `run ${id} has no approved length or no assembled prompt to render` });
+      return null;
     }
-    const prompt = await store.readOutput<AssembledPrompt>(id, promptRef);
+    return { prompt: await store.readOutput<AssembledPrompt>(id, promptRef), seconds: view.seconds };
+  }
+
+  async function submitRender(
+    reply: FastifyReply,
+    id: string,
+    video: VideoTransport,
+    { prompt, seconds }: { prompt: AssembledPrompt; seconds: number },
+  ) {
     const renderDeps = { store, video, publish: hub.publish };
-    const outcome = await submitDirectorRender(renderDeps, { runId: id, attempt, prompt, seconds: view.seconds });
+    let attempt: number | null = null;
+    let outcome: Awaited<ReturnType<typeof submitDirectorRender>>;
+    try {
+      // One past the settled attempts, never `view.render.attempt + 1` (a submit that failed
+      // before `render.submitted` still settles its own attempt).
+      attempt = nextRenderAttempt(await store.events(id));
+      outcome = await submitDirectorRender(renderDeps, { runId: id, attempt, prompt, seconds });
+    } catch (err) {
+      // Gate C is already approved: unrecorded, this run would read `running` forever with no
+      // way to render again. It is ended render_failed instead (the resume does the same after
+      // a crash at this point).
+      app.log.error({ err, runId: id }, "director render submit failed");
+      try {
+        const failed = attempt ?? nextRenderAttempt(await store.events(id));
+        const failure = err instanceof Error ? err.message : String(err);
+        await settleUnsubmitted(renderDeps, { runId: id, attempt: failed, seconds, failure });
+      } catch (settleErr) {
+        app.log.error({ err: settleErr, runId: id }, "director render failure could not be recorded");
+      }
+      return reply.code(500).send({ error: "the render could not be submitted; the run ends render_failed" });
+    }
     if (outcome === "already_claimed") {
       return reply.code(409).send({ error: `render attempt ${attempt} is already claimed` });
     }
@@ -236,8 +271,6 @@ export function registerDirectorRoutes(app: FastifyInstance, deps: DirectorRoute
       // An asset is written once and never changes. A miss above is not cached: a clip may
       // simply not have downloaded yet.
       .header("Cache-Control", "public, max-age=31536000, immutable")
-      // A <video> element cannot seek a response that does not advertise range support.
-      .header("Accept-Ranges", "bytes")
       .send(bytes);
   }
 
@@ -280,7 +313,8 @@ export function registerDirectorRoutes(app: FastifyInstance, deps: DirectorRoute
     }
 
     const mediaType = photo.mediaType as keyof typeof PHOTO_EXTENSION;
-    const productPhotoAsset = await store.saveAsset(id, `photo.${PHOTO_EXTENSION[mediaType]}`, bytes);
+    // A name of its own per post: two posts at once must not overwrite each other's photo.
+    const productPhotoAsset = await store.saveAsset(id, `photo-${randomUUID()}.${PHOTO_EXTENSION[mediaType]}`, bytes);
     const answers: GateAAnswers = { productPhotoAsset, productKind, seconds, mustNotAppear, cast };
     if (!(await resolve(reply, id, "A", { decision: "approve", answers }))) return reply;
     drive(id);
@@ -322,9 +356,16 @@ export function registerDirectorRoutes(app: FastifyInstance, deps: DirectorRoute
       });
     }
     if (deps.video === null) return reply.code(503).send({ error: NO_VIDEO });
+    const video = deps.video;
+    const inputs = await renderInputs(reply, id, run.view);
+    if (inputs === null) return reply;
 
-    if (!(await resolve(reply, id, "C", { decision: "approve" }))) return reply;
-    return submitRender(reply, id, deps.video);
+    // Marked from before the approval to the end of the submit: the render resume must not
+    // settle this run as interrupted in between.
+    return whileRenderPressed(id, async () => {
+      if (!(await resolve(reply, id, "C", { decision: "approve" }))) return reply;
+      return submitRender(reply, id, video, inputs);
+    });
   });
 
   app.post<IdParams>("/director/runs/:id/render/again", async (request, reply) => {
@@ -335,20 +376,34 @@ export function registerDirectorRoutes(app: FastifyInstance, deps: DirectorRoute
       return reply.code(409).send({ error: `the run is ${run.view.status}; only a failed render can render again` });
     }
     if (deps.video === null) return reply.code(503).send({ error: NO_VIDEO });
-    return submitRender(reply, id, deps.video);
+    const inputs = await renderInputs(reply, id, run.view);
+    if (inputs === null) return reply;
+    return submitRender(reply, id, deps.video, inputs);
   });
 
   // Server-sent events, replayed from the store (not memory) so a reconnect after a restart
   // still sees everything after its `Last-Event-ID`.
   app.get<IdParams>("/director/runs/:id/events", async (request, reply) => {
     const { id } = request.params;
+    // Listened for FIRST: a client that leaves while the run is still being looked up must
+    // not leave a hub subscription and a keepalive timer behind.
+    let closed = false;
+    const cleanups: Array<() => void> = [];
+    reply.raw.once("close", () => {
+      closed = true;
+      for (const cleanup of cleanups) cleanup();
+    });
+
     if (!(await loadRun(id))) return notFound(reply, id);
+    if (closed) {
+      reply.hijack();
+      return;
+    }
     const header = request.headers["last-event-id"];
     const after = typeof header === "string" && /^\d+$/.test(header.trim()) ? Number(header.trim()) : 0;
 
     let sent = after;
     let live = false;
-    let closed = false;
     const buffered: DirectorEvent[] = [];
     const write = (event: DirectorEvent) => {
       if (closed || event.seq <= sent) return;
@@ -358,6 +413,9 @@ export function registerDirectorRoutes(app: FastifyInstance, deps: DirectorRoute
     // Subscribed BEFORE the replay is read: an event appended in between is buffered here,
     // and the seq check drops whichever copy arrives second.
     const unsubscribe = hub.subscribe(id, (event) => (live ? write(event) : buffered.push(event)));
+    // A comment frame for intermediaries, not an event: it governs the transport, not the UI.
+    const keepalive = setInterval(() => reply.raw.write(": keepalive\n\n"), KEEPALIVE_MS);
+    cleanups.push(unsubscribe, () => clearInterval(keepalive));
 
     reply.hijack();
     reply.raw.writeHead(200, {
@@ -365,13 +423,6 @@ export function registerDirectorRoutes(app: FastifyInstance, deps: DirectorRoute
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
       "X-Accel-Buffering": "no",
-    });
-    // A comment frame for intermediaries, not an event: it governs the transport, not the UI.
-    const keepalive = setInterval(() => reply.raw.write(": keepalive\n\n"), KEEPALIVE_MS);
-    reply.raw.on("close", () => {
-      closed = true;
-      clearInterval(keepalive);
-      unsubscribe();
     });
 
     try {

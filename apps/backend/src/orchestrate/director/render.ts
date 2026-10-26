@@ -60,6 +60,8 @@ export type SubmitRenderOutcome = "submitted" | "already_claimed" | "submit_fail
 const submitting = new Set<string>();
 const settling = new Set<string>();
 const keyOf = (runId: string, attempt: number) => `${runId}:${attempt}`;
+/** Runs between a gate C approval and the end of its submit in this process, with a count per run. */
+const pressing = new Map<string, number>();
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
@@ -85,6 +87,51 @@ async function settleFailed(
 ): Promise<void> {
   await emit({ type: "render.settled", ...attempt, status: "failed", billing, actualMicroUsd, failure });
   await emit({ type: "run.finished", status: "render_failed", reason: failure });
+}
+
+/**
+ * Runs `work` (approving gate C, then submitting) with the run marked as pressed, so the render
+ * resume never mistakes the moment between the approval and the claim for an interrupted press.
+ */
+export async function whileRenderPressed<T>(runId: string, work: () => Promise<T>): Promise<T> {
+  pressing.set(runId, (pressing.get(runId) ?? 0) + 1);
+  try {
+    return await work();
+  } finally {
+    const left = (pressing.get(runId) ?? 1) - 1;
+    if (left === 0) pressing.delete(runId);
+    else pressing.set(runId, left);
+  }
+}
+
+/**
+ * Ends an attempt that failed before any task id was logged (a store error, or a crash between
+ * the gate C approval and the claim): `render.settled` failed, then `run.finished render_failed`,
+ * so "render again" is reachable. Billing is `not_billed` when the attempt was never claimed
+ * (nothing can have been sent) and `unknown` when it was. Appends only what is not yet logged;
+ * leaves an attempt with a `render.submitted` to the poll.
+ */
+export async function settleUnsubmitted(
+  deps: RenderDeps,
+  args: { runId: string; attempt: number; seconds: number; failure: string },
+): Promise<void> {
+  const { runId, attempt, failure } = args;
+  const emit = emitter(deps, runId);
+  let events = await deps.store.events(runId);
+  if (events.some((event) => event.type === "render.submitted" && event.attempt === attempt)) return;
+  const isMine = (event: DirectorEvent) => event.type === "render.settled" && event.attempt === attempt;
+  if (!events.some(isMine)) {
+    const billing: Billing = (await deps.store.hasRenderClaim(runId, attempt)) ? "unknown" : "not_billed";
+    const estimatedMicroUsd = estimateMicroUsd(DIRECTOR_VIDEO_SIZE, args.seconds);
+    await emit({ type: "render.settled", attempt, estimatedMicroUsd, status: "failed", billing, actualMicroUsd: null, failure });
+    events = await deps.store.events(runId);
+  }
+  const at = events.findLastIndex(isMine);
+  const settled = events[at] as Extract<DirectorEvent, { type: "render.settled" }>;
+  if (settled.status !== "failed") return;
+  if (!events.slice(at + 1).some((event) => event.type === "run.finished")) {
+    await emit({ type: "run.finished", status: "render_failed", reason: settled.failure ?? failure });
+  }
 }
 
 /** The attempt the next render press claims: one past the number of settled attempts. */
@@ -275,7 +322,7 @@ async function resumeRun(deps: SettleRenderDeps, runId: string): Promise<void> {
   const seen = await deps.store.events(runId);
   if (seen.length === 0) return;
   const attempt = nextRenderAttempt(seen);
-  if (!(await deps.store.hasRenderClaim(runId, attempt))) return;
+  if (!(await deps.store.hasRenderClaim(runId, attempt))) return resumeUnclaimed(deps, runId, attempt);
   // Checked AFTER the claim is seen: a submit marks itself in flight before it claims, so a
   // claim with no mark here belongs to a submit that has already returned (or died).
   if (submitting.has(keyOf(runId, attempt))) return;
@@ -301,9 +348,34 @@ async function resumeRun(deps: SettleRenderDeps, runId: string): Promise<void> {
 }
 
 /**
+ * A run approved at gate C that never claimed its attempt was interrupted between the two (a
+ * crash, or a store error nobody could record). Nothing reached OpenRouter: settled failed,
+ * `not_billed`, never submitted. The checks run in this order so a press in this process that
+ * starts, approves or claims meanwhile is always seen.
+ */
+async function resumeUnclaimed(deps: SettleRenderDeps, runId: string, attempt: number): Promise<void> {
+  const events = await deps.store.events(runId);
+  const view = reduceDirectorEvents(events);
+  if (view.gates.C !== "done" || view.status !== "running" || nextRenderAttempt(events) !== attempt) return;
+  // A press marks itself before it approves, so an approval seen above is either still pressing
+  // here, or has ended and left its claim (or its settlement) behind.
+  if (pressing.has(runId)) return;
+  if (await deps.store.hasRenderClaim(runId, attempt)) return;
+  if (view.seconds === null) {
+    throw new Error(`run ${runId} was approved at gate C with no approved length`);
+  }
+  await settleUnsubmitted(deps, {
+    runId,
+    attempt,
+    seconds: view.seconds,
+    failure: "interrupted before the render was claimed",
+  });
+}
+
+/**
  * After a restart, for every run: a claimed attempt with `render.submitted` and no settlement
  * is polled on; a claimed attempt with no `render.submitted` is settled failed, billing
- * `unknown`. Never submits. Awaits every poll it resumes, so the server boot need not await
+ * `unknown`; a run approved at gate C with no claim is settled failed, `not_billed`. Never submits. Awaits every poll it resumes, so the server boot need not await
  * it. Throws once, naming every run it could not resume.
  */
 export async function resumeDirectorRenders(deps: SettleRenderDeps): Promise<void> {

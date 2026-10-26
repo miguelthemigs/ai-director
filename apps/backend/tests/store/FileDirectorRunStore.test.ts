@@ -1,4 +1,4 @@
-import { appendFile, mkdtemp, readFile, rm } from "node:fs/promises";
+import { appendFile, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -76,14 +76,18 @@ describe("FileDirectorRunStore", () => {
     await expect(store.saveAsset(id, "../evil.png", Buffer.from([1]))).rejects.toThrow();
   });
 
-  it("answers are written once", async () => {
-    const { store } = await newStore();
+  it("answers are replaced atomically, leaving no temp file behind", async () => {
+    const { store, root } = await newStore();
     const id = await store.createRun("b");
     expect(await store.readAnswers(id)).toBeNull();
     const answers = { seconds: 15 } as unknown as GateAAnswers;
     await store.writeAnswers(id, answers);
     expect(await store.readAnswers(id)).toEqual(answers);
-    await expect(store.writeAnswers(id, answers)).rejects.toThrow();
+    // A crash after the write and before gate.resolved A must not lock gate A forever.
+    const again = { seconds: 20 } as unknown as GateAAnswers;
+    await store.writeAnswers(id, again);
+    expect(await store.readAnswers(id)).toEqual(again);
+    expect((await readdir(path.join(root, id))).filter((name) => name.endsWith(".tmp"))).toEqual([]);
   });
 
   it("listRuns is newest first, carries waitingAt and billedMicroUsd", async () => {
