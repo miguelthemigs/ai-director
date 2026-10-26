@@ -15,7 +15,21 @@ export function meter(
   const log: CallLog[] = [];
   const wrapped: ParseTransport = async (args) => {
     const start = now();
-    const result = await transport(args);
+    let result: Awaited<ReturnType<ParseTransport>>;
+    try {
+      result = await transport(args);
+    } catch (error) {
+      // A failed call may still have spent tokens; keep it in the log, with nothing invented.
+      log.push({
+        model: "unknown",
+        promptVersion,
+        inputTokens: null,
+        outputTokens: null,
+        microUsd: null,
+        latencyMs: now() - start,
+      });
+      throw error;
+    }
     const latencyMs = now() - start;
     const model = result.model ?? "unknown";
     const usage = result.usage;

@@ -29,4 +29,13 @@ describe("meter", () => {
     await m.transport(args);
     expect(m.calls()[0]).toMatchObject({ model: "unknown", inputTokens: null, outputTokens: null, microUsd: null });
   });
+  it("a throwing transport is still logged, and the original error propagates", async () => {
+    let t = 0;
+    const boom = new Error("boom");
+    const m = meter(async () => { throw boom; }, "v1", () => (t += 40));
+    await expect(m.transport(args)).rejects.toBe(boom);
+    expect(m.calls()).toEqual([
+      { model: "unknown", promptVersion: "v1", inputTokens: null, outputTokens: null, microUsd: null, latencyMs: 40 },
+    ]);
+  });
 });
