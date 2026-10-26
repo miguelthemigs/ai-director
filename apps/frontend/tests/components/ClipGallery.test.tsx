@@ -55,8 +55,8 @@ describe("ClipGallery", () => {
     expect(screen.getByText(/before the passes/i)).toBeInTheDocument();
     expect(screen.getByText(/after the passes/i)).toBeInTheDocument();
     expect(screen.getByText("repairer v2")).toBeInTheDocument();
-    // Never guessed as v1: the run predates the record and says so.
-    expect(screen.getByText(/repairer not recorded/i)).toBeInTheDocument();
+    // The before clip is unrepaired whatever its run's version, never "repairer vN".
+    expect(screen.getByText("no repair")).toBeInTheDocument();
   });
 
   it("shows the text each clip was rendered from, so two faces can be checked against one prompt", () => {

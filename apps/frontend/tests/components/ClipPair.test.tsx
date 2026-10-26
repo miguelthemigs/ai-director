@@ -178,8 +178,17 @@ describe("ClipPair", () => {
       />,
     );
     expect(within(screen.getByTestId("render-after")).getByText(/repairer v2/i)).toBeInTheDocument();
+    expect(within(screen.getByTestId("render-before")).getByText("no repair")).toBeInTheDocument();
+  });
+
+  it("names an unrecorded after side as an inferred v1, never as a recorded one", () => {
+    render(
+      <ClipPair
+        comparison={comparison({ after: renderView("after", { repairerPromptVersion: null }) })}
+      />,
+    );
     expect(
-      within(screen.getByTestId("render-before")).getByText(/repairer version not recorded/i),
+      within(screen.getByTestId("render-after")).getByText("repairer v1 (inferred, not recorded)"),
     ).toBeInTheDocument();
   });
 });

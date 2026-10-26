@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { ClipSummary } from "@ai-director/contract";
 import { formatMicroUsd } from "../data/compareApi.js";
+import { clipRepairLabel } from "../domain/labels.js";
 
 /**
  * Every clip ever rendered, all at once.
@@ -100,10 +101,11 @@ export function ClipGallery({
               <span className="gallery__side" data-side={clip.side}>
                 {clip.side === "before" ? "before the passes" : "after the passes"}
               </span>
-              <span className="gallery__version" data-known={Boolean(clip.repairerPromptVersion) || undefined}>
-                {clip.repairerPromptVersion
-                  ? `repairer ${clip.repairerPromptVersion}`
-                  : "repairer not recorded"}
+              <span
+                className="gallery__version"
+                data-known={clip.side === "before" || Boolean(clip.repairerPromptVersion) || undefined}
+              >
+                {clipRepairLabel(clip.side, clip.repairerPromptVersion)}
               </span>
             </div>
             <p className="gallery__shape tnum">

@@ -36,3 +36,21 @@ export const VERSION_KIND_TITLES: Record<VersionKind, string> = {
   evaluator_prompt: "Evaluator prompt",
   repairer_prompt: "Repairer prompt",
 };
+
+/**
+ * What produced the text behind one clip of a comparison.
+ *
+ * The "before" clip is the describe step's own output, which no Repairer touched, so it is
+ * labelled as unrepaired whatever its run's version is. Labelling it with the run's version
+ * made an unrepaired clip read as a v2 one, and that is exactly how a no-repair vs v2
+ * comparison was once mistaken for a v1 vs v2 one (`docs/repairer-v1-vs-v2-results.md` §6.1).
+ *
+ * An "after" clip whose run recorded no version is v1: every run written before the version
+ * was recorded on 16 September 2026 was repaired by v1 (`DEFAULT_REPAIRER_PROMPT_VERSION` in
+ * `apps/backend/src/agents/repairer/version.ts`). The label says it is inferred, because it
+ * was not recorded on the run itself.
+ */
+export function clipRepairLabel(side: "before" | "after", version: string | null): string {
+  if (side === "before") return "no repair";
+  return version ? `repairer ${version}` : "repairer v1 (inferred, not recorded)";
+}

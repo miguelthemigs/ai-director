@@ -5,6 +5,7 @@ import {
   type RenderView,
 } from "@ai-director/contract";
 import { CostReadout } from "./CostReadout.js";
+import { clipRepairLabel } from "../domain/labels.js";
 
 /**
  * The two clips, side by side.
@@ -132,11 +133,7 @@ function RenderPanel({ render }: { render: RenderView }): React.JSX.Element {
 
       <p className="clip-panel__provenance">
         <span>rubric {render.rubricVersion}</span>
-        <span>
-          {render.repairerPromptVersion
-            ? `repairer ${render.repairerPromptVersion}`
-            : "repairer version not recorded"}
-        </span>
+        <span>{clipRepairLabel(render.side, render.repairerPromptVersion)}</span>
       </p>
     </section>
   );

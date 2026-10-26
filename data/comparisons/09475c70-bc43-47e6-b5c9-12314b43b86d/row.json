@@ -18,7 +18,7 @@
     "failure": null,
     "estimatedMicroUsd": 411201,
     "actualMicroUsd": 415481,
-    "clipUrl": "/compare/09475c70-bc43-47e6-b5c9-12314b43b86d/before/clip",
+    "clipUrl": null,
     "description": "A young man in his mid-twenties with wavy brown hair, green eyes, light stubble and fair skin, of average build and medium height, wearing a black crewneck sweater, dark jeans and black leather shoes.",
     "descriptionSha256": "2b116a02c07bfd93dbb42c4356295be003a34b6f68414e3c32ad0237756eb4e2",
     "prompt": "A single locked-off medium shot of one person, facing the camera, plain neutral background.\n\nThe person:\nA young man in his mid-twenties with wavy brown hair, green eyes, light stubble and fair skin, of average build and medium height, wearing a black crewneck sweater, dark jeans and black leather shoes.\n\nThe person stands still and looks into the lens, with small natural movements only.\nThe camera does not move. There is no cut and no second shot.",
