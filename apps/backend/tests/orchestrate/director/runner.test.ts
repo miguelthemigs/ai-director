@@ -361,6 +361,89 @@ describe("Director runner", () => {
     expect(calls.assembler).toHaveLength(0);
   });
 
+  /** Logs a run through gate B (answers written), with no agent called. */
+  async function loggedToGateB(store: RunnerDeps["store"]): Promise<string> {
+    const runId = await store.createRun("a brief");
+    const done = async (node: DirectorNodeId, output: unknown) => {
+      await store.append(runId, { type: "node.started", node, attempt: 1, patchShots: null });
+      const outputRef = await store.writeOutput(runId, node, 1, output);
+      await store.append(runId, { type: "node.completed", node, attempt: 1, outputRef, summary: "", calls: [], latencyMs: 0 });
+    };
+    await done("interrogator", {});
+    await store.append(runId, { type: "gate.opened", gate: "A" });
+    await store.writeAnswers(runId, ANSWERS);
+    await store.append(runId, { type: "gate.resolved", gate: "A", decision: "approve", reason: null, seconds: 12 });
+    await done("director", {});
+    await done("planChecks", [pass("length_fits", "director")]);
+    await store.append(runId, { type: "checks.completed", node: "planChecks", outcomes: [pass("length_fits", "director")] });
+    await store.append(runId, { type: "gate.opened", gate: "B" });
+    await store.append(runId, { type: "gate.resolved", gate: "B", decision: "approve", reason: null, seconds: null });
+    return runId;
+  }
+
+  it("a failure logged before a crash, with a sibling in flight, is finished as failed on resume", async () => {
+    const { agents, calls } = fakeAgents();
+    const deps = depsFor(await newRoot(), agents);
+    const runId = await loggedToGateB(deps.store);
+    await deps.store.append(runId, { type: "node.started", node: "product", attempt: 1, patchShots: null });
+    await deps.store.append(runId, { type: "node.started", node: "location", attempt: 1, patchShots: null });
+    await deps.store.append(runId, { type: "node.failed", node: "product", attempt: 1, error: "no product photo" });
+
+    await resumeAllDirectorRuns(deps);
+
+    const events = await deps.store.events(runId);
+    expect(events[events.length - 1]).toMatchObject({
+      type: "run.finished",
+      status: "failed",
+      reason: "no product photo",
+    });
+    expect(events.filter((e) => e.type === "node.started" && e.node === "location")).toHaveLength(1);
+    expect(calls.location).toHaveLength(0);
+    expect(calls.character).toHaveLength(0);
+    expect(calls.assembler).toHaveLength(0);
+  });
+
+  it("a node.failed with no run.finished is finished as failed by the next drive", async () => {
+    const { agents, calls } = fakeAgents();
+    const deps = depsFor(await newRoot(), agents);
+    const runId = await deps.store.createRun("a brief");
+    await deps.store.append(runId, { type: "node.started", node: "interrogator", attempt: 1, patchShots: null });
+    await deps.store.append(runId, { type: "node.failed", node: "interrogator", attempt: 1, error: "boom" });
+
+    await driveDirectorRun(deps, runId);
+
+    const events = await deps.store.events(runId);
+    expect(events[events.length - 1]).toMatchObject({ type: "run.finished", status: "failed", reason: "boom" });
+    expect(calls.interrogator).toHaveLength(0);
+    expect((await viewOf(deps, runId)).status).toBe("failed");
+  });
+
+  it("if logging a failure throws, the drive waits for its siblings before rethrowing", async () => {
+    const release = deferred<void>();
+    let locationSettled = false;
+    const { agents } = fakeAgents({
+      product: async () => {
+        release.resolve();
+        throw new Error("no product photo");
+      },
+      location: async () => {
+        await release.promise;
+        await new Promise((r) => setImmediate(r));
+        locationSettled = true;
+        return {};
+      },
+    });
+    const store = new FileDirectorRunStore(await newRoot());
+    const runId = await loggedToGateB(store);
+    const brokenStore = Object.create(store) as FileDirectorRunStore;
+    brokenStore.append = (id, body) =>
+      body.type === "node.failed" ? Promise.reject(new Error("disk full")) : store.append(id, body);
+    const deps: RunnerDeps = { store: brokenStore, recipe: buildRecipe(agents) };
+
+    await expect(driveDirectorRun(deps, runId)).rejects.toThrow("disk full");
+    expect(locationSettled).toBe(true);
+  });
+
   it("a failed plan check is routed to the Director with its failures, then passes", async () => {
     const failing = [fail("no_timestamps", "director", [2]), pass("length_fits", "director")];
     const { agents, calls } = fakeAgents({

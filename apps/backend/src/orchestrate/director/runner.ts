@@ -153,7 +153,8 @@ async function settleChecks(
   return false;
 }
 
-type Settled = { node: DirectorNodeId; error: string | null };
+/** `fault` is a store error while recording the result; the promise itself never rejects. */
+type Settled = { node: DirectorNodeId; fault?: unknown };
 
 /** Appends `node.started`, then returns the node's run (wrapped, so awaiting the start does not await the run). */
 async function startNode(
@@ -200,57 +201,86 @@ async function startNode(
         calls: result.calls,
         latencyMs,
       });
-      return { node: spec.id, error: null };
+      return { node: spec.id };
     } catch (error) {
-      const text = message(error);
-      await emit({ type: "node.failed", node: spec.id, attempt, error: text });
-      return { node: spec.id, error: text };
+      try {
+        await emit({ type: "node.failed", node: spec.id, attempt, error: message(error) });
+        return { node: spec.id };
+      } catch (fault) {
+        return { node: spec.id, fault };
+      }
     }
   })();
   return { settled };
 }
 
 /**
+ * The run's failure, read from the log: the error of the earliest `node.failed` among recipe nodes
+ * whose status is still `failed`, or null when none is. Read from the log (not memory) so a crash
+ * between `node.failed` and `run.finished` is still finished as failed on the next drive.
+ */
+function failureOf(events: DirectorEvent[], view: DirectorRunView, recipe: NodeSpec[]): string | null {
+  const failed = new Set(recipe.filter((spec) => view.nodes[spec.id].status === "failed").map((spec) => spec.id));
+  if (failed.size === 0) return null;
+  const first = events.find(
+    (e): e is Extract<DirectorEvent, { type: "node.failed" }> => e.type === "node.failed" && failed.has(e.node),
+  );
+  return first?.error ?? view.nodes[[...failed][0]!].error ?? "a step failed";
+}
+
+/**
  * One drive, under the run's lock: start every ready node at once, record each result, route
- * checks, and stop at a gate, a terminal state, or when nothing is left to start. A node that
- * fails stops new starts; its siblings in flight finish and are logged before the run fails.
+ * checks, and stop at a gate, a terminal state, or when nothing is left to start. Once any node
+ * is `failed` in the log, nothing new starts; nodes in flight finish and are logged, then the
+ * run is finished as failed.
  */
 async function drive(deps: RunnerDeps, runId: string): Promise<void> {
   const emit = emitter(deps, runId);
   const inFlight = new Map<DirectorNodeId, Promise<Settled>>();
-  let failure: string | null = null;
 
-  for (;;) {
-    if (failure === null) {
+  try {
+    for (;;) {
       const events = await deps.store.events(runId);
       const view = reduceDirectorEvents(events);
-      if (TERMINAL.has(view.status) || view.status === "awaiting_gate") return;
+      const halted = TERMINAL.has(view.status) || view.status === "awaiting_gate";
+      if (halted && inFlight.size === 0) return;
 
-      if (inFlight.size === 0) {
-        if (await settleChecks(deps, runId, events, view, emit)) continue;
-        const gate = GATE_IDS.find(
-          (id) => view.gates[id] === "locked" && gateAfter(id).every((node) => view.nodes[node].status === "done"),
-        );
-        if (gate !== undefined) {
-          await emit({ type: "gate.opened", gate });
-          return;
+      if (!halted) {
+        const failure = failureOf(events, view, deps.recipe);
+        if (failure !== null) {
+          if (inFlight.size === 0) {
+            await emit({ type: "run.finished", status: "failed", reason: failure });
+            return;
+          }
+        } else {
+          if (inFlight.size === 0) {
+            if (await settleChecks(deps, runId, events, view, emit)) continue;
+            const gate = GATE_IDS.find(
+              (id) =>
+                view.gates[id] === "locked" && gateAfter(id).every((node) => view.nodes[node].status === "done"),
+            );
+            if (gate !== undefined) {
+              await emit({ type: "gate.opened", gate });
+              return;
+            }
+          }
+          for (const spec of deps.recipe) {
+            if (inFlight.has(spec.id) || !isReady(spec, view)) continue;
+            const { settled } = await startNode(deps, runId, spec, events, view, emit);
+            inFlight.set(spec.id, settled);
+          }
         }
       }
 
-      for (const spec of deps.recipe) {
-        if (inFlight.has(spec.id) || !isReady(spec, view)) continue;
-        const { settled } = await startNode(deps, runId, spec, events, view, emit);
-        inFlight.set(spec.id, settled);
-      }
+      if (inFlight.size === 0) return;
+      const settled = await Promise.race(inFlight.values());
+      inFlight.delete(settled.node);
+      if ("fault" in settled) throw settled.fault;
     }
-
-    if (inFlight.size === 0) {
-      if (failure !== null) await emit({ type: "run.finished", status: "failed", reason: failure });
-      return;
-    }
-    const settled = await Promise.race(inFlight.values());
-    inFlight.delete(settled.node);
-    if (settled.error !== null && failure === null) failure = settled.error;
+  } catch (error) {
+    // A store failure (e.g. appending node.failed) must not leave node runs unobserved.
+    await Promise.allSettled(inFlight.values());
+    throw error;
   }
 }
 
@@ -302,7 +332,8 @@ export async function resolveGate(
 
 /**
  * After a restart: every recipe node left `running` is logged `node.abandoned` (it re-runs as the
- * next attempt), then every run that is neither finished nor waiting at a gate is driven.
+ * next attempt), then every run that is neither finished nor waiting at a gate is driven. A run
+ * with a `failed` node re-runs nothing: the drive finishes it as failed.
  * `render` is not a recipe node, so a render in flight is left to the render resume.
  */
 export async function resumeAllDirectorRuns(deps: RunnerDeps): Promise<void> {
