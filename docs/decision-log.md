@@ -6,7 +6,7 @@ Plan approval (Gate B) now comes before anything is generated: answers (A), Dire
 B, then the pictures, the character and the Cinematographer in parallel, then assembly and prompt
 checks, then C. The design put plan approval after the pictures. Moving it first means a rejected
 plan costs nothing, and a re-planned shot never throws away finished pictures. Gate C shows the final
-prompt, the pictures and the price, and is the only place a render can start.
+prompt, the pictures and the price, and is where the owner first presses render. `/render/again` may retry, but only after `render_failed`.
 
 ## 2026-10-26 — Director: product and location pictures are reference images
 

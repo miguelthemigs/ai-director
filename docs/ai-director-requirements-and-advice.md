@@ -77,7 +77,7 @@ who to call. [R§4]
           failure ──────┘ routed back to the owning agent (max 2 retries)
                         ▼
               GATE C: I see the final prompt, the pictures and the price for the seconds
-                      I chose; the only render button
+                      I chose; where I first press render
                         ▼
                  ┌──────────────┐
                  │ 6 Seedance   │  one take, audio included

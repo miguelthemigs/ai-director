@@ -442,7 +442,7 @@ Interrogator -> Gate A -> Director -> plan checks -> Gate B
 ```
 
 `apps/backend/src/orchestrate/director/recipe.ts` builds the runnable list from those edges. Every
-node is there except `render`, which only the Gate C route may start. The three agents are in
+node is there except `render`, which starts only from the Gate C render approval, or from `/render/again` after `render_failed`. The three agents are in
 `apps/backend/src/agents/{interrogator,director,cinematographer}/`, each with a versioned prompt
 file (`prompt-v1.ts`) and all on `claude-opus-5`.
 
