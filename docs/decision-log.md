@@ -56,6 +56,17 @@ refused and the previous plan is kept. The plan checks then fail again, and afte
 ends `stopped`, not `failed`. Changing assets after Gate A would invalidate what the owner approved,
 and `stopped` tells the owner why; `failed` would read as a bug.
 
+## 2026-10-26 — Director: a patch may rewrite an asset's description
+
+This narrows the entry above. Two plan checks the router sends to the Director fail on an asset's
+description: `references_within_cap` (a blank one) and `nothing_ruled_out` (a ruled-out word in
+one). Refusing every asset change meant those runs could only end `stopped`. A patch may now rewrite
+descriptions; handles, kinds, the number of assets and their order stay frozen and are still
+refused. Patches all happen before Gate B, so the owner still approves the plan the pictures are
+made from. The Director patch prompt (v1, never yet sent to a model) was edited in place to say so.
+A handle the model writes with capitals is lower-cased, with its mentions, instead of failing the
+run.
+
 ## 2026-10-26 — Render: no success without a saved clip
 
 If the provider reports success but the clip download fails, the attempt is recorded as failed and

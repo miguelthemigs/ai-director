@@ -101,10 +101,31 @@ describe("direct", () => {
     );
   });
 
-  it("throws on a handle that is not lowercase", async () => {
+  it("lower-cases an upper-case handle and every mention of it, instead of failing", async () => {
     const plan = boardPlan();
     plan.assets[1]!.handle = "@Kitchen";
-    await expect(direct({ transport: fakeReturning(plan) }, { brief, answers })).rejects.toThrow(/@Kitchen/);
+    plan.scene = "@maya in @KITCHEN on a quiet morning, @product on the counter.";
+    plan.shots[0]!.action = "@maya walks into @Kitchen and reaches for @product";
+    plan.shots[3]!.sound = "the hum of @kitchen";
+    const result = await direct({ transport: fakeReturning(plan) }, { brief, answers });
+    expect(result.assets[1]!.handle).toBe("@kitchen");
+    expect(result.scene).toBe("@maya in @kitchen on a quiet morning, @product on the counter.");
+    expect(result.shots[0]!.action).toBe("@maya walks into @kitchen and reaches for @product");
+    expect(result.shots[3]!.sound).toBe("the hum of @kitchen");
+  });
+
+  it("leaves an undeclared mention alone and touches only whole handles", async () => {
+    const plan = boardPlan();
+    plan.assets[1]!.handle = "@Kitchen";
+    plan.shots[1]!.action = "She lifts @product near @Kitchenette and @Dog";
+    const result = await direct({ transport: fakeReturning(plan) }, { brief, answers });
+    expect(result.shots[1]!.action).toBe("She lifts @product near @Kitchenette and @Dog");
+  });
+
+  it("still throws on a handle with characters other than letters, digits or _", async () => {
+    const plan = boardPlan();
+    plan.assets[1]!.handle = "@my-kitchen";
+    await expect(direct({ transport: fakeReturning(plan) }, { brief, answers })).rejects.toThrow(/@my-kitchen/);
   });
 
   it("throws on a handle declared twice", async () => {
@@ -155,12 +176,19 @@ describe("patchPlan", () => {
     expect(call.user).toContain(answers.productKind);
   });
 
-  it("refuses a patch that changes an asset's description", async () => {
+  it("accepts a patch that rewrites an asset's description", async () => {
     const patched = boardPlan();
     patched.assets[1]!.description = "a dark industrial kitchen";
-    await expect(
-      patchPlan({ transport: fakeReturning(patched) }, { plan: boardPlan(), failures, brief, answers }),
-    ).rejects.toBeInstanceOf(PlanPatchError);
+    expect(
+      await patchPlan({ transport: fakeReturning(patched) }, { plan: boardPlan(), failures, brief, answers }),
+    ).toEqual(patched);
+  });
+
+  it("compares handles after lower-casing, so a capitalised copy of a handle is not a change", async () => {
+    const patched = boardPlan();
+    patched.assets[1]!.handle = "@Kitchen";
+    const result = await patchPlan({ transport: fakeReturning(patched) }, { plan: boardPlan(), failures, brief, answers });
+    expect(result.assets[1]!.handle).toBe("@kitchen");
   });
 
   it("refuses a patch that changes an asset's handle or kind", async () => {
@@ -199,7 +227,7 @@ describe("patchPlan", () => {
 
   it("names the asset that changed", async () => {
     const patched = boardPlan();
-    patched.assets[1]!.description = "a dark industrial kitchen";
+    patched.assets[1]!.kind = "product";
     await expect(
       patchPlan({ transport: fakeReturning(patched) }, { plan: boardPlan(), failures, brief, answers }),
     ).rejects.toThrow(/@kitchen/);
@@ -288,10 +316,12 @@ describe("director prompt v1", () => {
     expect(outcomes.filter((outcome) => !outcome.passed)).toEqual([]);
   });
 
-  it("tells a patch to keep every asset exactly as it was", () => {
+  it("tells a patch to keep every asset's handle, kind and order, and lets it fix a description", () => {
     const prompt = buildDirectorPatchSystemPrompt();
     expect(prompt.startsWith(buildDirectorSystemPrompt())).toBe(true);
-    expect(prompt).toMatch(/never add, remove or change an asset/i);
+    expect(prompt).toMatch(/never add, remove, reorder or rename an asset/i);
+    expect(prompt).toMatch(/rewrite an asset's description only when a failure names it/i);
+    expect(prompt).not.toMatch(/never add, remove or change an asset/i);
   });
 });
 

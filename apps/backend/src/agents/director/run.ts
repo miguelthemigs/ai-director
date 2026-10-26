@@ -9,19 +9,40 @@ import {
 import { DirectorPlanSchema } from "./schema.js";
 
 /**
- * A patch changed the asset list. A patch fixes shots, never assets: the assets are
- * what the product and location pictures are made from, so what the owner approves
- * at Gate B must be the asset list those pictures come from. Thrown, so the runner
- * logs the patch as a failed attempt.
+ * A patch changed the asset list itself: added, removed or reordered an asset, or changed a
+ * handle or a kind. Every later step is keyed by those, so they stay frozen. A description
+ * may change: a blank one (`references_within_cap`) or one with a ruled-out word
+ * (`nothing_ruled_out`) is fixed only by rewriting it, and the pictures are made from the
+ * plan approved at Gate B, after every patch. Thrown; the Director node keeps the previous
+ * plan, so the checks fail again and the router counts the retry.
  */
 export class PlanPatchError extends Error {
   constructor(readonly changes: string[]) {
-    super(`a patch may not change the assets: ${changes.join("; ")}`);
+    super(`a patch may change only asset descriptions: ${changes.join("; ")}`);
     this.name = "PlanPatchError";
   }
 }
 
 const HANDLE = /^@[a-z0-9_]+$/;
+const MENTION = /@[A-Za-z0-9_]+/g;
+
+/**
+ * Lower-cases every declared handle and each @mention of one, wherever the plan's text
+ * holds it. A capital is a slip, not a failure: the handle checks already compare without
+ * case, so this only makes the prompt say the handle one way. A mention of anything that
+ * is not declared is left exactly as written, for `handles_match` to report.
+ */
+function lowerCaseHandles(plan: Plan): Plan {
+  const declared = new Set(plan.assets.map((asset) => asset.handle.toLowerCase()));
+  const lower = (text: string) =>
+    text.replace(MENTION, (mention) => (declared.has(mention.toLowerCase()) ? mention.toLowerCase() : mention));
+  return {
+    styleLine: lower(plan.styleLine),
+    scene: lower(plan.scene),
+    assets: plan.assets.map((asset) => ({ ...asset, handle: lower(asset.handle), description: lower(asset.description) })),
+    shots: plan.shots.map((shot) => ({ ...shot, action: lower(shot.action), sound: lower(shot.sound) })),
+  };
+}
 const ASSET_KINDS: AssetKind[] = ["product", "location", "character"];
 
 /**
@@ -71,7 +92,7 @@ async function askForPlan(transport: ParseTransport, system: string, user: strin
   if (parsed_output === null || parsed_output === undefined) {
     throw new Error("director parse failed");
   }
-  return DirectorPlanSchema.parse(parsed_output);
+  return lowerCaseHandles(DirectorPlanSchema.parse(parsed_output));
 }
 
 /** One call: the filled brief and the Gate A answers in, the plan out. */
@@ -98,7 +119,7 @@ function assetChanges(before: Plan, after: Plan): string[] {
       changes.push(`asset ${index + 1} (${was.handle}) was removed`);
       continue;
     }
-    for (const field of ["handle", "kind", "description"] as const) {
+    for (const field of ["handle", "kind"] as const) {
       if (was[field] !== now[field]) changes.push(`asset ${index + 1} (${was.handle}) ${field} changed`);
     }
   }
@@ -108,8 +129,8 @@ function assetChanges(before: Plan, after: Plan): string[] {
 /**
  * Fixes the failures the plan checks routed back to the Director. The model returns a
  * whole plan; code then compares its assets with the input's, in order, and throws
- * `PlanPatchError` if any asset's handle, kind or description differs, or one was
- * added or removed.
+ * `PlanPatchError` if any asset's handle or kind differs, or one was added or removed.
+ * Descriptions may change.
  */
 export async function patchPlan(
   deps: { transport: ParseTransport },

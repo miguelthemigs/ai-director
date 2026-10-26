@@ -192,10 +192,13 @@ export function buildDirectorSystemPrompt(): string {
 }
 
 /**
- * The same prompt, plus what a patch may and may not touch. A patch fixes shots; the
- * assets are what the pictures are made from, so `patchPlan` refuses any change to
- * them in code (`PlanPatchError`). This tells the model so, instead of letting it
- * find out by failing.
+ * The same prompt, plus what a patch may and may not touch. A patch fixes shots and may
+ * rewrite an asset's description (a blank one, or one with a ruled-out word, is fixed no
+ * other way); `patchPlan` refuses any other asset change in code (`PlanPatchError`). This
+ * tells the model so, instead of letting it find out by failing.
+ *
+ * Edited in place, not shipped as v2: v1 had never been sent to a real model when the
+ * description rule changed.
  */
 export function buildDirectorPatchSystemPrompt(): string {
   return [
@@ -204,7 +207,8 @@ export function buildDirectorPatchSystemPrompt(): string {
     "## Fixing a plan",
     "",
     "Checks in code failed on a plan you wrote. Return the whole plan with those failures fixed and everything else left as it was.",
-    "- Never add, remove or change an asset. Copy every asset exactly — the same handle, kind and description, in the same order. Code compares them and refuses a plan where any of them differs.",
+    "- Never add, remove, reorder or rename an asset, and never change its kind. Copy every handle and kind exactly, in the same order. Code compares them and refuses a plan where any of them differs.",
+    "- Rewrite an asset's description only when a failure names it (a description that is blank, or holds something that must not appear). Otherwise copy it exactly.",
     "- Fix the shots: rewrite an action or a sound, change a weight, add or remove a shot. Touch the style line or the scene only when a failure names them.",
     "- A handle that is not declared comes out of the shot; it is never added as an asset.",
   ].join("\n");

@@ -229,6 +229,34 @@ describe("buildDirectorAgents through the runner", () => {
     expect(view.textMicroUsd).toBe(100 * 5 + 50 * 25);
   });
 
+  it.each([
+    ["references_within_cap", "a blank location description", (plan: Plan) => { plan.assets[1]!.description = " "; }, []],
+    ["nothing_ruled_out", "a ruled-out word in a description", (plan: Plan) => { plan.assets[1]!.description = "a kitchen with coffee on the counter"; }, ["coffee"]],
+  ] as const)("%s (%s) is fixed by a patch that rewrites the description, and the run reaches gate B", async (checkId, _what, spoil, mustNotAppear) => {
+    const spoiled = (): Plan => {
+      const plan = boardPlan();
+      spoil(plan);
+      return plan;
+    };
+    const { deps, store, seen } = await setup({ plan: spoiled, patch: boardPlan });
+    const runId = await toGateA(deps, async () => ({
+      productPhotoAsset: "assets/photo.png",
+      productKind: "a glass bottle",
+      seconds: 15,
+      mustNotAppear: [...mustNotAppear],
+      cast: { kind: "new" },
+    }));
+
+    const events = await store.events(runId);
+    const routed = events.find((e) => e.type === "route.sent");
+    expect(routed).toMatchObject({ owner: "director", checkIds: [checkId] });
+    expect(seen.filter((s) => s === "patch")).toHaveLength(1);
+    const view = reduceDirectorEvents(events);
+    expect(view.waitingAt).toBe("B");
+    expect(view.checks.plan.every((c) => c.passed)).toBe(true);
+    expect(await store.readOutput<Plan>(runId, view.nodes.director.outputRef!)).toEqual(boardPlan());
+  });
+
   it("a patch that changes the assets keeps the previous plan, so the run ends stopped, not failed", async () => {
     const short = (): Plan => ({ ...boardPlan(), shots: boardPlan().shots.slice(0, 1) });
     const { deps, store, seen } = await setup({
