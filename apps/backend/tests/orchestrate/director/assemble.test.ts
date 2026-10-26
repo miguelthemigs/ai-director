@@ -41,7 +41,7 @@ describe("assembleSeedancePrompt", () => {
     expect(parts[0]).toBe(
       [
         "The first reference image is the product (@product).",
-        "The second reference image is the a bright home kitchen with a wooden counter (@kitchen).",
+        "The second reference image is the location (@kitchen): a bright home kitchen with a wooden counter.",
       ].join("\n"),
     );
     expect(parts[1]).toBe(plan.styleLine);
@@ -83,6 +83,17 @@ describe("assembleSeedancePrompt", () => {
     expect(() => build({ references: [{ ...productRef(), handle: "@ghost" }] })).toThrow(
       AssemblyInvariantError,
     );
+  });
+
+  it("throws when an action text repeats a shot marker", () => {
+    const plan = boardPlan();
+    plan.shots[0] = { ...(plan.shots[0] as (typeof plan.shots)[number]), action: "see Shot 2: again" };
+    expect(() => build({ plan })).toThrow(AssemblyInvariantError);
+  });
+
+  it("throws when two references share a slot", () => {
+    const [p, k] = references() as [ReferenceImage, ReferenceImage];
+    expect(() => build({ references: [p, { ...k, slot: 1 }] })).toThrow(AssemblyInvariantError);
   });
 
   it("is deterministic and hashes the UTF-8 text", () => {

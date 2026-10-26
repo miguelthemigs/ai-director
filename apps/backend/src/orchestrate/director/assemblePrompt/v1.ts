@@ -9,7 +9,7 @@ export const LINE_SEPARATOR = "\n";
 export const productSentence = (ordinal: string, handle: string): string =>
   `The ${ordinal} reference image is the product (${handle}).`;
 export const locationSentence = (ordinal: string, description: string, handle: string): string =>
-  `The ${ordinal} reference image is the ${description} (${handle}).`;
+  `The ${ordinal} reference image is the location (${handle}): ${description}.`;
 export const heroLine = (handle: string, description: string): string =>
   `HERO (${handle}): ${description}`;
 export const sceneLine = (scene: string): string => `Scene: ${scene}`;

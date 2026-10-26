@@ -59,6 +59,8 @@ export function assembleSeedancePrompt(args: {
   const hero = characters[0];
   if (characters.length !== 1 || !hero) fail(`the plan declares ${characters.length} character assets, expected 1`);
 
+  const slots = new Set(args.references.map((r) => r.slot));
+  if (slots.size !== args.references.length) fail("two references share a slot");
   const references = [...args.references].sort((a, b) => a.slot - b.slot);
   const sentences = references.map((ref) => referenceSentence(ref, plan));
   const shots = plan.shots.map((shot, i) => {
