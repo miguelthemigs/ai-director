@@ -20,7 +20,8 @@ async function render(
     ...(args.referenceImages ? { referenceImages: args.referenceImages } : {}),
   });
   const bytes = Buffer.from(imageBase64, "base64");
-  const name = `${args.kind}-${args.handle}.${EXTENSION[mediaType] ?? "png"}`;
+  // A plan handle is `@mug`; the store's asset names allow no `@`, so the file drops it.
+  const name = `${args.kind}-${args.handle.replace(/^@/, "")}.${EXTENSION[mediaType] ?? "png"}`;
   const asset = await deps.store.saveAsset(args.runId, name, bytes);
   const { url } = await deps.host.publish(bytes, name, mediaType);
   return { slot: args.slot, handle: args.handle, kind: args.kind, url, asset };

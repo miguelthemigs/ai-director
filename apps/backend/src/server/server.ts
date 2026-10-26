@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { eventId } from "@ai-director/contract";
 import { evaluateAllGroups } from "../agents/evaluator/run.js";
 import { repairSpans } from "../agents/repairer/run.js";
@@ -9,14 +10,20 @@ import { driveComparison } from "../compare/runComparison.js";
 import { loadRubric } from "../rubric/load.js";
 import { toPassView, toRunView } from "../present/toRunView.js";
 import { RunEventBus } from "../orchestrate/events.js";
+import { buildDirectorAgents } from "../orchestrate/director/agents.js";
+import { DirectorEventHub } from "../orchestrate/director/hub.js";
+import { buildRecipe } from "../orchestrate/director/recipe.js";
+import { createUploadThingHost } from "../images/referenceHost.js";
 import { buildRetryVerbatim } from "../orchestrate/coach.js";
 import { runToCompletion } from "../orchestrate/runToCompletion.js";
 import { FileAvatarStore } from "../store/AvatarStore.js";
 import { FileComparisonStore } from "../store/ComparisonStore.js";
+import { FileDirectorRunStore } from "../store/FileDirectorRunStore.js";
 import { FileRunStore } from "../store/FileRunStore.js";
 import { FileVersionStore } from "../store/FileVersionStore.js";
 import { createOpenRouterVideoTransport } from "../video/openrouterClient.js";
 import { buildApp } from "./app.js";
+import { resumeDirectorAfterRestart, type DirectorRouteDeps } from "./routes/director.js";
 import type { StartRun } from "./routes/runs.js";
 
 // Loads .env into process.env if present. Optional -- a deployment that
@@ -32,6 +39,7 @@ const RUNS_DIR = "data/runs";
 const AVATARS_DIR = "data/avatars";
 const VERSIONS_DIR = "data/versions";
 const COMPARISONS_DIR = "data/comparisons";
+const DIRECTOR_RUNS_DIR = resolve("data/director-runs");
 
 async function main(): Promise<void> {
   const rubric = await loadRubric("v1");
@@ -145,10 +153,47 @@ async function main(): Promise<void> {
       : {}),
   };
 
-  app = buildApp({ store, rubric, startRun, bus, versionStore, avatar, compare, logger: true });
+  // The AI Director: wired only when all three of its keys are present (each of its agents,
+  // pictures and hosted references needs one), and absent is a 503 on every `/director` route.
+  // Rendering additionally needs OPENROUTER_API_KEY; without it a run plans but cannot render.
+  let director: DirectorRouteDeps | undefined;
+  if (hasAnthropic && hasGoogle && process.env.UPLOADTHING_TOKEN) {
+    const directorStore = new FileDirectorRunStore(DIRECTOR_RUNS_DIR);
+    // One hub: every event the runner and the render append is published to it, and
+    // `GET /director/runs/:id/events` subscribes to it.
+    const hub = new DirectorEventHub();
+    const images = createGeminiImageTransport();
+    const agents = buildDirectorAgents({
+      transport: createAnthropicTransport(),
+      images,
+      host: createUploadThingHost(),
+      store: directorStore,
+      coach: { transport: createAnthropicTransport(), avatars: avatarStore, runs: store, rubric },
+      character: {
+        text: createAnthropicTextTransport(),
+        images,
+        vision: createAnthropicVisionTransport(),
+        avatars: avatarStore,
+      },
+    });
+    director = {
+      runner: { store: directorStore, recipe: buildRecipe(agents), publish: hub.publish },
+      store: directorStore,
+      video: videoTransport ?? null,
+      avatars: avatarStore,
+      hub,
+    };
+  }
+
+  app = buildApp({ store, rubric, startRun, bus, versionStore, avatar, compare, director, logger: true });
 
   const port = Number(process.env.PORT ?? 8787);
   await app.listen({ port });
+
+  // After `listen`, never before it: a render resume can poll for 15 minutes.
+  if (director) {
+    resumeDirectorAfterRestart(director, (err, what) => app.log.error({ err }, what));
+  }
 }
 
 main().catch((err) => {

@@ -184,6 +184,22 @@ describe("Director runner", () => {
     expect(view.seconds).toBe(12);
   });
 
+  it("resolving with drive: false records the answer and starts nothing", async () => {
+    const { agents, calls } = fakeAgents();
+    const deps = depsFor(await newRoot(), agents);
+    const runId = await startDirectorRun(deps, "a brief");
+    await driveDirectorRun(deps, runId);
+
+    await resolveGate(deps, runId, "A", { decision: "approve", answers: ANSWERS }, { drive: false });
+    const view = await viewOf(deps, runId);
+    expect(view.gates.A).toBe("done");
+    expect(view.status).toBe("running");
+    expect(calls.director).toHaveLength(0);
+
+    await driveDirectorRun(deps, runId);
+    expect((await viewOf(deps, runId)).waitingAt).toBe("B");
+  });
+
   it("approving gate A without answers throws and appends nothing", async () => {
     const { agents } = fakeAgents();
     const deps = depsFor(await newRoot(), agents);

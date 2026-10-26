@@ -6,6 +6,7 @@ import type { RunStore } from "../store/RunStore.js";
 import type { VersionStore } from "../store/VersionStore.js";
 import { registerAvatarRoutes, type AvatarRouteDeps } from "./routes/avatar.js";
 import { registerCompareRoutes, type CompareRouteDeps } from "./routes/compare.js";
+import { registerDirectorRoutes, type DirectorRouteDeps } from "./routes/director.js";
 import { registerRunRoutes, type StartRun } from "./routes/runs.js";
 import { registerVersionRoutes } from "./routes/versions.js";
 
@@ -29,6 +30,9 @@ export type AppDeps = {
    *  OPENROUTER_API_KEY grades and repairs exactly as before, it simply cannot render, and
    *  `POST /compare` says so with a 503 rather than failing somewhere deeper. */
   compare?: CompareRouteDeps;
+  /** The AI Director. Optional, and absent is a real state: without ANTHROPIC_API_KEY,
+   *  GOOGLE_AI_KEY and UPLOADTHING_TOKEN every `/director` route answers 503 saying so. */
+  director?: DirectorRouteDeps;
   /** Fastify's request/error logger. Off by default so the test suite stays quiet, and ON
    *  in the real server: the error handler below deliberately redacts a 500's message to
    *  the client, so without a logger a provider failure was written precisely nowhere.
@@ -76,6 +80,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerVersionRoutes(app, { versionStore: deps.versionStore });
   registerAvatarRoutes(app, deps.avatar ?? {});
   registerCompareRoutes(app, deps.compare ?? {});
+  registerDirectorRoutes(app, deps.director);
 
   return app;
 }

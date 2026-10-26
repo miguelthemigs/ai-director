@@ -154,6 +154,18 @@ describe("makeProductPicture / makeLocationPicture", () => {
     expect(h.publish).toHaveBeenCalledWith(Buffer.from("made-bytes"), "product-mug.png", "image/png");
   });
 
+  it("a plan handle keeps its @ on the reference, and leaves it out of the file name", async () => {
+    const store = await newStore();
+    const runId = await store.createRun("b");
+    const h = host();
+    const ref = await makeProductPicture(
+      { images: vi.fn<ImageTransport>(async () => OUT), host: h, store },
+      { runId, photo: PHOTO, productKind: "a mug", handle: "@mug" },
+    );
+    expect(ref).toMatchObject({ handle: "@mug", asset: "assets/product-mug.png" });
+    expect(h.publish).toHaveBeenCalledWith(Buffer.from("made-bytes"), "product-mug.png", "image/png");
+  });
+
   it("location: 9:16, slot 2, no reference images", async () => {
     const store = await newStore();
     const runId = await store.createRun("b");

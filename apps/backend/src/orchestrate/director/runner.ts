@@ -299,12 +299,15 @@ export function driveDirectorRun(deps: RunnerDeps, runId: string): Promise<void>
  * Answers the gate the run is waiting at, then drives on. Throws GateConflictError, appending
  * nothing, unless the run is waiting at exactly this gate. Approving gate A requires the answers.
  * Approving gate C only records the approval: render is started by the gate C route, not here.
+ * With `drive: false` it returns once the answer is recorded; the caller fires the drive (an
+ * HTTP route answers before the agents run).
  */
 export async function resolveGate(
   deps: RunnerDeps,
   runId: string,
   gate: GateId,
   decision: { decision: "approve"; answers?: GateAAnswers } | { decision: "reject"; reason: string },
+  options: { drive?: boolean } = {},
 ): Promise<void> {
   await withRunLock(runId, async () => {
     const view = reduceDirectorEvents(await deps.store.events(runId));
@@ -327,7 +330,7 @@ export async function resolveGate(
     }
     await emit({ type: "gate.resolved", gate, decision: "approve", reason: null, seconds });
   });
-  await driveDirectorRun(deps, runId);
+  if (options.drive !== false) await driveDirectorRun(deps, runId);
 }
 
 /**

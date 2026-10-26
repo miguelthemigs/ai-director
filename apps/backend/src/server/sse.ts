@@ -1,4 +1,4 @@
-import type { RunEvent } from "@ai-director/contract";
+import type { DirectorEvent, RunEvent } from "@ai-director/contract";
 
 /**
  * One SSE frame for `event`. `JSON.stringify` already escapes any newline
@@ -9,4 +9,9 @@ import type { RunEvent } from "@ai-director/contract";
  */
 export function formatSse(event: RunEvent): string {
   return `id: ${event.id}\nevent: ${event.name}\ndata: ${JSON.stringify(event)}\n\n`;
+}
+
+/** One SSE frame for a Director event: its `seq` is the id `Last-Event-ID` echoes back. */
+export function formatDirectorSse(event: DirectorEvent): string {
+  return `id: ${event.seq}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
 }
