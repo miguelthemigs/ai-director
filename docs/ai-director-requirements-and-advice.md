@@ -55,6 +55,9 @@ who to call. [R§4]
                  ┌──────────────┐
                  │ 2 Director   │  Higgsfield shotlist skill, adapted for one Seedance 2.5 take
                  └──────┬───────┘  → style prefix, asset list with @handles, shots in order
+                        │   code: plan checks (length fits, handles match), routed back to the Director
+                        ▼
+              GATE B: I approve the plan, before anything is generated
                         │
      ┌──────────────┬──┴───────────┬─────────────────────┐        (parallel)
      ▼              ▼              ▼                     ▼
@@ -73,9 +76,8 @@ who to call. [R§4]
                  └──────┬───────┘
           failure ──────┘ routed back to the owning agent (max 2 retries)
                         ▼
-              GATE B: I approve the plan, the images and the final prompt
-                        ▼
-              GATE C: I see the price for the seconds I chose, and press render
+              GATE C: I see the final prompt, the pictures and the price for the seconds
+                      I chose; the only render button
                         ▼
                  ┌──────────────┐
                  │ 6 Seedance   │  one take, audio included
@@ -138,7 +140,7 @@ Why this shape:
 - **FR-9.** Code assembles the final prompt from the approved plan, in the order: reference roles,
   style prefix, character block, scene, `Shot 1…N`, audio in Seedance syntax, closing constraints.
   The style prefix and the character block are inserted byte-identical. [R§2, R§3]
-- **FR-10.** Code checks the assembled prompt before Gate B:
+- **FR-10.** Code checks the assembled prompt before Gate C:
   - every approved shot is present;
   - there are at most five references, each with a role;
   - every camera move is on the list;

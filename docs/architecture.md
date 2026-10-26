@@ -475,8 +475,8 @@ not configured):
 | `GET /director/runs/:id/clip?attempt=N` | The rendered clip for attempt N |
 | `POST /director/runs/:id/gates/A` | The owner's answers, with the product photo; 409 if the run is not waiting at A |
 | `POST /director/runs/:id/gates/B` | Approve or reject the plan |
-| `POST /director/runs/:id/gates/C` | Reject, or approve and render. **The only route that submits a render.** 422 if the character did not pass and `acceptNotPassed` is not set; 503 without `OPENROUTER_API_KEY` |
-| `POST /director/runs/:id/render/again` | A new attempt, only for a run that ended `render_failed` |
+| `POST /director/runs/:id/gates/C` | Reject, or approve and render. One of only two paths that submit a video (the other is `/render/again`); 422 if the character did not pass and `acceptNotPassed` is not set; 503 without `OPENROUTER_API_KEY` |
+| `POST /director/runs/:id/render/again` | A new attempt; works only on a run that ended `render_failed`; the other path that submits a video, and an owner's press like Gate C |
 | `GET /director/runs/:id/events` | Server-sent events, replayed from the stored log after `Last-Event-ID` |
 
 A run ends `rendered`, `render_failed`, `stopped`, `rejected` or `failed`. Only `rendered` is a

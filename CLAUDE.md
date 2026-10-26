@@ -39,9 +39,10 @@ character-description Evaluator and Repairer, three screens, and the evidence th
 - Motion is tied to real state changes only. No ambient or looping animation anywhere.
 - Never commit a key. Secrets live in `.env`; `.env.example` documents them. The Director adds
   `UPLOADTHING_TOKEN` (public URLs for product and location reference images).
-- Only Gate C renders: `POST /director/runs/:id/gates/C` with `decision: "render"` is the only route
-  that submits a video, and `/render/again` only retries a run that ended `render_failed`. Never a
-  live API call in a test.
+- Only two paths submit a video: the Gate C render approval
+  (`POST /director/runs/:id/gates/C` with `decision: "render"`), and `/render/again`, which works
+  only on a run that ended `render_failed`; both are an owner's press. Never a live API call in a
+  test.
 
 ## Commands
 
