@@ -45,6 +45,8 @@ export type RenderDeps = {
   store: DirectorRunStore;
   video: VideoTransport;
   publish?: (ev: DirectorEvent) => void;
+  /** Where a paid task id is written before it is logged to the store. Defaults to stderr. */
+  log?: (line: string) => void;
 };
 
 export type SettleRenderDeps = RenderDeps & {
@@ -201,6 +203,10 @@ export async function submitDirectorRender(
       return "submit_failed";
     }
 
+    // Written out first: if the append below fails, this line is the only record of a paid task.
+    (deps.log ?? console.error)(
+      `director render: run ${runId} attempt ${attempt} submitted as OpenRouter task ${taskId}`,
+    );
     // Before anything waits on it.
     await emit({ type: "render.submitted", taskId, ...settledAs });
     return "submitted";

@@ -20,6 +20,20 @@ export function isSupportedMediaType(value: string): value is SupportedMediaType
   return (SUPPORTED_MEDIA_TYPES as readonly string[]).includes(value);
 }
 
+const startsWith = (bytes: Buffer, at: number, signature: string | number[]): boolean => {
+  const expected = typeof signature === "string" ? Buffer.from(signature, "latin1") : Buffer.from(signature);
+  return bytes.length >= at + expected.length && bytes.subarray(at, at + expected.length).equals(expected);
+};
+
+/** The supported type the bytes' magic number says they are, or null for anything else. */
+export function sniffMediaType(bytes: Buffer): SupportedMediaType | null {
+  if (startsWith(bytes, 0, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return "image/png";
+  if (startsWith(bytes, 0, [0xff, 0xd8, 0xff])) return "image/jpeg";
+  if (startsWith(bytes, 0, "GIF87a") || startsWith(bytes, 0, "GIF89a")) return "image/gif";
+  if (startsWith(bytes, 0, "RIFF") && startsWith(bytes, 8, "WEBP")) return "image/webp";
+  return null;
+}
+
 /**
  * The seam. Same shape and same reason as `ParseTransport` in `../api/client.ts`: every
  * test in this repo runs against a fake, and exactly one implementation talks to a

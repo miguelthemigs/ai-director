@@ -1,4 +1,4 @@
-import { appendFile, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { appendFile, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -140,6 +140,19 @@ describe("FileDirectorRunStore", () => {
     const lines = (await readFile(file, "utf8")).split("\n").filter(Boolean);
     expect(lines.map((l) => JSON.parse(l).seq)).toEqual([1, 2, 3]);
     expect((await store.listRuns()).map((r) => r.id)).toEqual([id]);
+  });
+
+  it("repairs a torn final line by replacing the log through a temp file, never rewriting it in place", async () => {
+    const { store, root } = await newStore();
+    const id = await store.createRun("b");
+    const file = path.join(root, id, "events.jsonl");
+    await appendFile(file, '{"type":"gate.opened","ga');
+    const before = (await stat(file)).ino;
+    await store.append(id, { type: "gate.opened", gate: "A" });
+    // A rename puts a new file in place; an in-place write keeps the old inode.
+    expect((await stat(file)).ino).not.toBe(before);
+    expect((await readdir(path.join(root, id))).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+    expect((await store.events(id)).map((e) => e.seq)).toEqual([1, 2]);
   });
 
   it("a complete final line without a newline stays separate from the next append", async () => {

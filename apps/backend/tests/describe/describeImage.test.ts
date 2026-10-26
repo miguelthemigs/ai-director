@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   describeImage,
   isSupportedMediaType,
+  sniffMediaType,
   trimToWhole,
   type VisionTransport,
 } from "../../src/describe/describeImage.js";
@@ -117,5 +118,22 @@ describe("isSupportedMediaType", () => {
     expect(isSupportedMediaType("image/jpeg")).toBe(true);
     expect(isSupportedMediaType("image/heic")).toBe(false);
     expect(isSupportedMediaType("application/pdf")).toBe(false);
+  });
+});
+
+describe("sniffMediaType", () => {
+  const bytes = (...head: Array<number | string>) =>
+    Buffer.concat(head.map((h) => (typeof h === "string" ? Buffer.from(h, "latin1") : Buffer.from([h]))));
+  it("reads PNG, JPEG, GIF and WebP from their magic bytes", () => {
+    expect(sniffMediaType(bytes(0x89, "PNG\r\n\x1a\n", "rest"))).toBe("image/png");
+    expect(sniffMediaType(bytes(0xff, 0xd8, 0xff, 0xe0, "rest"))).toBe("image/jpeg");
+    expect(sniffMediaType(bytes("GIF89a", "rest"))).toBe("image/gif");
+    expect(sniffMediaType(bytes("GIF87a", "rest"))).toBe("image/gif");
+    expect(sniffMediaType(bytes("RIFF", 0, 0, 0, 0, "WEBPVP8 "))).toBe("image/webp");
+  });
+  it("is null for anything else, a short buffer, or a RIFF that is not WebP", () => {
+    expect(sniffMediaType(Buffer.from("%PDF-1.7"))).toBeNull();
+    expect(sniffMediaType(Buffer.from([0xff, 0xd8]))).toBeNull();
+    expect(sniffMediaType(bytes("RIFF", 0, 0, 0, 0, "WAVEfmt "))).toBeNull();
   });
 });

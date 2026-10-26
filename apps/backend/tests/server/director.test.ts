@@ -43,7 +43,9 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((r) => rm(r, { recursive: true, force: true })));
 });
 
-const PNG = Buffer.from("a small png").toString("base64");
+const PNG_BYTES = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("a small png")]);
+const PNG = PNG_BYTES.toString("base64");
+const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from("a small jpeg")]).toString("base64");
 const pass = (id: CheckOutcome["id"], owner: CheckOutcome["owner"]): CheckOutcome => ({
   id,
   owner,
@@ -329,6 +331,29 @@ describe("Director routes", () => {
     expect((await view(app, id)).waitingAt).toBe("A");
   });
 
+  it("refuses a photo whose bytes are not the declared type with 400, and writes nothing", async () => {
+    const { app, store, root } = await setup();
+    const id = await start(app);
+    await until(app, id, (v) => v.waitingAt === "A");
+    const post = (photo: { imageBase64: string; mediaType: string }) =>
+      app.inject({ method: "POST", url: `/director/runs/${id}/gates/A`, payload: gateA({ photo }) });
+
+    for (const photo of [
+      { imageBase64: JPEG, mediaType: "image/png" },
+      { imageBase64: PNG, mediaType: "image/webp" },
+      { imageBase64: Buffer.from("not an image at all").toString("base64"), mediaType: "image/jpeg" },
+    ]) {
+      const res = await post(photo);
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toMatch(/not a .*image\/(png|webp|jpeg)/);
+    }
+    expect(await readdir(path.join(root, "runs", id, "assets"))).toEqual([]);
+    expect(await store.readAnswers(id)).toBeNull();
+    expect((await view(app, id)).waitingAt).toBe("A");
+
+    expect((await post({ imageBase64: JPEG, mediaType: "image/jpeg" })).statusCode).toBe(202);
+  });
+
   it("answers gate A even when answers were written before a crash left it waiting", async () => {
     const { app, store } = await setup();
     const id = await start(app);
@@ -395,6 +420,41 @@ describe("Director routes", () => {
     expect(again.json()).toMatchObject({ attempt: 2 });
     await until(app, id, (v) => v.status === "rendered");
     expect(submits).toHaveLength(1);
+  });
+
+  it("answers 502, naming the failure, when the vendor refuses the submit", async () => {
+    const video: VideoTransport = {
+      submit: async () => {
+        throw new Error("OpenRouter timed out");
+      },
+      check: async () => {
+        throw new Error("never checked");
+      },
+      fetchClip: async () => {
+        throw new Error("never fetched");
+      },
+    };
+    const { app } = await setup({ video });
+    const id = await toGateC(app);
+    const res = await app.inject({ method: "POST", url: `/director/runs/${id}/gates/C`, payload: { decision: "render" } });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({ id, attempt: 1, outcome: "submit_failed" });
+    expect(res.json().error).toContain("OpenRouter timed out");
+    expect((await view(app, id)).status).toBe("render_failed");
+  });
+
+  it("serves a write-once asset as immutable and a re-makeable picture as no-cache", async () => {
+    const { app, store } = await setup();
+    const id = await toGateC(app);
+    await store.saveAsset(id, "location-kitchen.png", PNG_BYTES);
+    const answers = await store.readAnswers(id);
+    const get = (ref: string) => app.inject({ method: "GET", url: `/director/runs/${id}/asset?ref=${ref}` });
+
+    expect((await get("assets/location-kitchen.png")).headers["cache-control"]).toBe("no-cache");
+    expect((await get(answers!.productPhotoAsset)).headers["cache-control"]).toMatch(/immutable/);
+    await store.saveAsset(id, "clip.1.mp4", Buffer.from("mp4"));
+    const clip = await app.inject({ method: "GET", url: `/director/runs/${id}/clip?attempt=1` });
+    expect(clip.headers["cache-control"]).toMatch(/immutable/);
   });
 
   it("refuses gate C with nothing appended when the assembled prompt cannot be read", async () => {

@@ -10,7 +10,7 @@ import {
   type GateAAnswers,
 } from "@ai-director/contract";
 import type { DirectorRunStore } from "./DirectorRunStore.js";
-import { writeJsonAtomic } from "./FileRunStore.js";
+import { writeJsonAtomic, writeTextAtomic } from "./FileRunStore.js";
 
 const REF = /^(nodes|assets)\/[\w.-]+$/;
 const NAME = /^[\w.-]+$/;
@@ -108,7 +108,8 @@ export class FileDirectorRunStore implements DirectorRunStore {
     }
     if (raw.length === 0 || raw.endsWith("\n")) return;
     const { keep } = parseLog(raw);
-    await writeFile(file, keep, "utf8");
+    // Replaced whole, never rewritten in place: a crash mid-repair must not tear the log again.
+    await writeTextAtomic(file, keep);
   }
 
   async writeOutput(

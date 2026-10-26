@@ -39,8 +39,9 @@ async function setup(video: VideoTransport) {
   const store = new FileDirectorRunStore(root);
   const published: DirectorEvent[] = [];
   const runId = await store.createRun("a sparkling water ad");
-  const deps = { store, video, publish: (ev: DirectorEvent) => published.push(ev), sleep: NO_SLEEP };
-  return { root, store, runId, deps, published };
+  const log = vi.fn<(line: string) => void>();
+  const deps = { store, video, publish: (ev: DirectorEvent) => published.push(ev), sleep: NO_SLEEP, log };
+  return { root, store, runId, deps, published, log };
 }
 
 const NO_SLEEP = async () => undefined;
@@ -118,6 +119,25 @@ describe("submitDirectorRender", () => {
     await submitDirectorRender(ctx.deps, { runId: ctx.runId, attempt: 1, prompt: PROMPT, seconds: 4 });
     await settleDirectorRender(ctx.deps, { runId: ctx.runId, attempt: 1 });
     expect(seenAtCheck).toEqual([1]);
+  });
+
+  it("logs the task id before appending render.submitted, so a failed append does not lose it", async () => {
+    const video = fakeVideo();
+    const { store, runId, deps, log } = await setup(video);
+    const append = store.append.bind(store);
+    vi.spyOn(store, "append").mockImplementation(async (id, body) => {
+      if (body.type === "render.submitted") {
+        expect(log).toHaveBeenCalledTimes(1);
+        throw new Error("EIO: disk gone");
+      }
+      return append(id, body);
+    });
+
+    await expect(submitDirectorRender(deps, { runId, attempt: 1, prompt: PROMPT, seconds: 4 })).rejects.toThrow("EIO");
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(log.mock.calls[0]![0]).toContain("task-1");
+    expect(log.mock.calls[0]![0]).toContain(runId);
+    expect(log.mock.calls[0]![0]).toMatch(/attempt 1/);
   });
 
   it("a second press for the same attempt never submits again, even concurrently", async () => {

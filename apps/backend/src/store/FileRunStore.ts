@@ -156,7 +156,12 @@ export class FileRunStore implements RunStore {
 // mid-write can never leave a partially-written manifest/pass file that a
 // later read would parse as valid (or invalid) JSON.
 export async function writeJsonAtomic(target: string, payload: unknown): Promise<void> {
+  await writeTextAtomic(target, JSON.stringify(payload, null, 2));
+}
+
+/** Writes a sibling temp file, then renames it over `target`: a crash leaves the old file or the new. */
+export async function writeTextAtomic(target: string, text: string): Promise<void> {
   const tmp = `${target}.${randomUUID()}.tmp`;
-  await writeFile(tmp, JSON.stringify(payload, null, 2), "utf8");
+  await writeFile(tmp, text, "utf8");
   await rename(tmp, target);
 }

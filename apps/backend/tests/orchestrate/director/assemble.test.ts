@@ -56,6 +56,26 @@ describe("assembleSeedancePrompt", () => {
     expect(text.indexOf(plan.styleLine)).toBeGreaterThan(-1);
   });
 
+  it("never doubles a period: a light or a location description that ends with one keeps one", () => {
+    const plan = boardPlan();
+    plan.assets[1]!.description = "a bright home kitchen with a wooden counter.";
+    const cameras = boardCameras().map((c) => ({ ...c, light: "soft window light from the left." }));
+    const { text } = build({ plan, cameras });
+    expect(text).not.toContain("..");
+    expect(text).toContain("(@kitchen): a bright home kitchen with a wooden counter.\n");
+    expect(text).toContain("soft window light from the left. @maya walks into");
+  });
+
+  it("leaves no trailing space when a shot has no sound", () => {
+    const plan = boardPlan();
+    plan.shots[0]!.sound = "";
+    const { text } = build({ plan });
+    expect(text.split("\n").find((line) => line.startsWith("Shot 1:"))).toBe(
+      "Shot 1: medium shot, 35mm, static, soft window light from the left. @maya walks into @kitchen and reaches for @product",
+    );
+    expect(text.split("\n").some((line) => line.endsWith(" "))).toBe(false);
+  });
+
   it("matches cameras by shot number, not array order", () => {
     const cameras = boardCameras().reverse();
     cameras[3] = { ...(cameras[3] as Camera), framing: "wide shot" }; // shot 1

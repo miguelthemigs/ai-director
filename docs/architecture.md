@@ -296,7 +296,7 @@ text is unchanged by construction, and the splice asserts it.
 | Run | `apps/frontend/src/screens/RunScreen.tsx` | Build or reopen an avatar and describe it, watch the checks arrive, click a failing check to light up the exact words, compare pass 1 / 2 / 3 |
 | Architecture | `ArchitectureScreen.tsx` | The pipeline above, live. Each node lights as its step runs, and holds the real payload it sent |
 | Versions | `VersionsScreen.tsx` | Rubric and prompt version history. The visible feedback cycle: v1 scored a gold set, the agreement study said which checks were unreliable, v2 changes those and is re-scored against the same frozen set |
-| Compare | `CompareScreen.tsx` | Two Seedance clips from one avatar, side by side: the description before the repair passes and after. Added 2026-09-16. The ONLY screen that spends a render credit, and it grades nothing |
+| Compare | `CompareScreen.tsx` | Two Seedance clips from one avatar, side by side: the description before the repair passes and after. Added 2026-09-16. Of these four screens, the only one that spends a render credit, and it grades nothing. The Director (its Gate C render, and "render again" after a failed render) spends one too |
 
 Compare is walled off from the other three deliberately. It writes no rubric score and adds
 no event to the nine the run stream carries, so a reader who distrusts the render numbers

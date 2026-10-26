@@ -13,7 +13,7 @@ import {
   type GateAAnswers,
   type GateId,
 } from "@ai-director/contract";
-import { isSupportedMediaType, SUPPORTED_MEDIA_TYPES } from "../../describe/describeImage.js";
+import { isSupportedMediaType, sniffMediaType, SUPPORTED_MEDIA_TYPES } from "../../describe/describeImage.js";
 import { PHOTO_EXTENSION } from "../../orchestrate/director/agents.js";
 import type { DirectorEventHub } from "../../orchestrate/director/hub.js";
 import {
@@ -58,6 +58,9 @@ const NO_VIDEO = "rendering needs OPENROUTER_API_KEY, and every render through i
 const MAX_PHOTO_BYTES = 6 * 1024 * 1024;
 const KEEPALIVE_MS = 15_000;
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
+
+/** Assets whose name is never reused: `clip.<attempt>.mp4` and gate A's `photo-<uuid>.<ext>`. */
+const WRITE_ONCE_ASSET = /^assets\/(clip\.\d+\.mp4|photo-[0-9a-f-]{36}\.\w+)$/;
 
 const ASSET_MEDIA_TYPES: Record<string, string> = {
   png: "image/png",
@@ -194,7 +197,7 @@ export function registerDirectorRoutes(app: FastifyInstance, deps: DirectorRoute
     video: VideoTransport,
     { prompt, seconds }: { prompt: AssembledPrompt; seconds: number },
   ) {
-    const renderDeps = { store, video, publish: hub.publish };
+    const renderDeps = { store, video, publish: hub.publish, log: (line: string) => app.log.warn(line) };
     let attempt: number | null = null;
     let outcome: Awaited<ReturnType<typeof submitDirectorRender>>;
     try {
@@ -219,9 +222,20 @@ export function registerDirectorRoutes(app: FastifyInstance, deps: DirectorRoute
     if (outcome === "already_claimed") {
       return reply.code(409).send({ error: `render attempt ${attempt} is already claimed` });
     }
-    if (outcome === "submitted") {
-      void settleDirectorRender(renderDeps, { runId: id, attempt }).catch(fail("director render settle failed", id));
+    if (outcome === "submit_failed") {
+      // Already settled render_failed by the submit; the failure it logged is the answer.
+      const settled = (await store.events(id)).findLast(
+        (event) => event.type === "render.settled" && event.attempt === attempt,
+      );
+      const failure = settled?.type === "render.settled" ? settled.failure : null;
+      return reply.code(502).send({
+        id,
+        attempt,
+        outcome,
+        error: `the render could not be submitted: ${failure ?? "no reason was recorded"}`,
+      });
     }
+    void settleDirectorRender(renderDeps, { runId: id, attempt }).catch(fail("director render settle failed", id));
     return reply.code(202).send({ id, attempt, outcome });
   }
 
@@ -268,9 +282,10 @@ export function registerDirectorRoutes(app: FastifyInstance, deps: DirectorRoute
     return reply
       .code(200)
       .header("Content-Type", ASSET_MEDIA_TYPES[ext] ?? "application/octet-stream")
-      // An asset is written once and never changes. A miss above is not cached: a clip may
-      // simply not have downloaded yet.
-      .header("Cache-Control", "public, max-age=31536000, immutable")
+      // A clip (one per attempt) and an uploaded photo (a fresh name per post) are written once
+      // and never change. A product or location picture can be made again under the same name,
+      // so it is revalidated. A miss above is not cached: a clip may not have downloaded yet.
+      .header("Cache-Control", WRITE_ONCE_ASSET.test(ref) ? "public, max-age=31536000, immutable" : "no-cache")
       .send(bytes);
   }
 
@@ -303,6 +318,13 @@ export function registerDirectorRoutes(app: FastifyInstance, deps: DirectorRoute
     const bytes = Buffer.from(photo.imageBase64, "base64");
     if (bytes.length > MAX_PHOTO_BYTES) {
       return reply.code(400).send({ error: `the product photo is over ${MAX_PHOTO_BYTES / 1024 / 1024} MB` });
+    }
+    // The declared type names the file and travels to the image model: it must be what the bytes are.
+    const sniffed = sniffMediaType(bytes);
+    if (sniffed !== photo.mediaType) {
+      return reply.code(400).send({
+        error: `the product photo is not a ${photo.mediaType} image${sniffed === null ? "" : ` (its bytes are ${sniffed})`}`,
+      });
     }
     if (run.view.waitingAt !== "A") return notWaiting(reply, run.view, "A");
     if (cast.kind === "avatar") {
