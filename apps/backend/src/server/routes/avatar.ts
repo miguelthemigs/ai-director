@@ -1,10 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { authorActorPrompt, type TextTransport } from "../../avatar/authorPrompt.js";
-import { generateSheet, type ImageTransport } from "../../avatar/generateSheet.js";
-import { actorSheetBrief } from "../../avatar/sheetBrief.js";
+import type { TextTransport } from "../../avatar/authorPrompt.js";
+import type { ImageTransport } from "../../avatar/generateSheet.js";
+import { describeAndAttach, renderSheet } from "../../avatar/makeCharacter.js";
 import {
-  describeImage,
   isSupportedMediaType,
   SUPPORTED_MEDIA_TYPES,
   type VisionTransport,
@@ -79,34 +78,22 @@ export function registerAvatarRoutes(app: FastifyInstance, deps: AvatarRouteDeps
       return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "invalid body" });
     }
 
-    const authoredPrompt = await authorActorPrompt(deps.text, {
-      description: parsed.data.description,
-      ...(parsed.data.variationHint === undefined
-        ? {}
-        : { variationHint: parsed.data.variationHint }),
-    });
+    const rendered = await renderSheet(
+      { text: deps.text, images: deps.image, ...(deps.store ? { avatars: deps.store } : {}) },
+      {
+        description: parsed.data.description,
+        ...(parsed.data.variationHint === undefined
+          ? {}
+          : { variationHint: parsed.data.variationHint }),
+      },
+    );
     // The authoring step returning nothing is a real outcome, not an edge case: Mentic's
     // own authoring slots return "" on failure, and `withRealismTail` deliberately keeps
     // an empty prompt empty rather than shipping a bare tail that looks like a prompt.
-    if (!authoredPrompt) {
+    if (!rendered) {
       return reply.code(502).send({ error: "the authoring step returned no prompt" });
     }
-
-    const sheetPrompt = actorSheetBrief(authoredPrompt);
-    const sheet = await generateSheet(deps.image, { prompt: sheetPrompt });
-
-    // Written to disk BEFORE replying. A paid image that only ever existed in the
-    // response body is one a dropped connection or a browser reload destroys, and a
-    // vanished sheet looks exactly like a render that never happened.
-    const record = await deps.store?.save({
-      imageBase64: sheet.imageBase64,
-      mediaType: sheet.mediaType,
-      source: "generated",
-      imageModel: sheet.model,
-      authoredPrompt,
-      sheetPrompt,
-      seedDescription: parsed.data.description,
-    });
+    const { authoredPrompt, sheetPrompt, sheet, record } = rendered;
 
     return reply.code(200).send({
       id: record?.id ?? null,
@@ -169,26 +156,14 @@ export function registerAvatarRoutes(app: FastifyInstance, deps: AvatarRouteDeps
     // Narrowed by the schema's own refine; the cast keeps that guarantee at the type level.
     const mediaType = parsed.data.mediaType as (typeof SUPPORTED_MEDIA_TYPES)[number];
 
-    const result = await describeImage(deps.vision, {
-      imageBase64: parsed.data.imageBase64,
-      mediaType,
-    });
-
     // Best effort. The description has been paid for and is in hand; failing the response
     // because the record could not be updated would throw away the thing the caller asked
     // for in order to report a bookkeeping problem.
-    if (deps.store && parsed.data.avatarId) {
-      try {
-        await deps.store.attachDescription(parsed.data.avatarId, {
-          description: result.description,
-          descriptionRaw: result.raw,
-          descriptionTrimmed: result.trimmed,
-          describeModel: result.model,
-        });
-      } catch (err) {
-        request.log.error({ err }, "could not attach description to avatar record");
-      }
-    }
+    const result = await describeAndAttach(
+      { vision: deps.vision, ...(deps.store ? { avatars: deps.store } : {}) },
+      { imageBase64: parsed.data.imageBase64, mediaType, ...(parsed.data.avatarId ? { avatarId: parsed.data.avatarId } : {}) },
+      (err) => request.log.error({ err }, "could not attach description to avatar record"),
+    );
 
     return reply.code(200).send(result);
   });

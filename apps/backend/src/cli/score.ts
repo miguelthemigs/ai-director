@@ -1,12 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { evaluateAllGroups } from "../agents/evaluator/run.js";
-import { buildVerbatimRetryPrompt } from "../agents/evaluator/prompt.js";
-import { EvaluatorGroupOutputSchema } from "../agents/evaluator/schema.js";
 import { repairSpans } from "../agents/repairer/run.js";
-import { createAnthropicTransport, type ParseTransport } from "../api/client.js";
+import { createAnthropicTransport } from "../api/client.js";
 import { bandToPercent, isPass } from "../enforce/score.js";
-import { checksForGroup, loadRubric, type Rubric } from "../rubric/load.js";
-import type { PassResult, RetryVerbatimFn } from "../orchestrate/runPass.js";
+import { loadRubric, type Rubric } from "../rubric/load.js";
+import { buildRetryVerbatim } from "../orchestrate/coach.js";
+import type { PassResult } from "../orchestrate/runPass.js";
 import { runToCompletion } from "../orchestrate/runToCompletion.js";
 import { FileRunStore } from "../store/FileRunStore.js";
 import { FileAvatarStore } from "../store/AvatarStore.js";
@@ -14,58 +13,6 @@ import { loadGrounding } from "../avatar/grounding.js";
 
 const RUNS_DIR = "data/runs";
 const AVATARS_DIR = "data/avatars";
-
-/**
- * The production `retryVerbatim` dependency. Not folded into `evaluate`
- * (Task 9's review judged the separate seam correct): this asks a different
- * question of a single group -- "quote exactly this time" -- rather than
- * "score every group." It duplicates `evaluateGroup`'s output validation
- * (expected checkIds present, no stray ones) rather than importing it,
- * because that function is hard-wired to the normal prompt; the retry needs
- * the same validation against `buildVerbatimRetryPrompt`'s output instead.
- *
- * Left to throw on a malformed or missing response, same as `evaluateGroup`
- * does -- `runPass` calls this outside any `allSettled`, so a retry failure
- * is meant to fail the run as `failed` rather than quietly degrade one
- * group to `not_evaluated`. Degrading it here would hide a broken retry
- * behind a `no_improvement`/`improved_still_failing` result instead of the
- * distinct `failed` state the store already has for it.
- */
-function buildRetryVerbatim(transport: ParseTransport): RetryVerbatimFn {
-  return async ({ rubric, description, group }) => {
-    const system = buildVerbatimRetryPrompt(rubric, group);
-    const { parsed_output } = await transport({
-      system,
-      user: `Character description to score:\n\n${description}`,
-      schema: EvaluatorGroupOutputSchema,
-    });
-    if (parsed_output === null || parsed_output === undefined) {
-      throw new Error(`verbatim retry parse failed for group ${group}`);
-    }
-    const output = EvaluatorGroupOutputSchema.parse(parsed_output);
-
-    const expected = new Set(checksForGroup(rubric, group).map((check) => check.id));
-    for (const result of output.results) {
-      if (!expected.has(result.checkId)) {
-        throw new Error(`unexpected checkId ${result.checkId} in group ${group} retry`);
-      }
-    }
-    for (const id of expected) {
-      if (!output.results.some((result) => result.checkId === id)) {
-        throw new Error(`missing result for ${id} in group ${group} retry`);
-      }
-    }
-
-    return output.results.map((check) => ({
-      status: "scored" as const,
-      checkId: check.checkId,
-      band: check.band,
-      reason: check.reason,
-      quotes: check.quotes,
-      missingEvidence: check.band < 4 && check.quotes.length === 0,
-    }));
-  };
-}
 
 /**
  * Pure formatter: every one of the rubric's checks prints exactly once, in

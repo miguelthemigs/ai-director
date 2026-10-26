@@ -1,17 +1,15 @@
 import { eventId } from "@ai-director/contract";
 import { evaluateAllGroups } from "../agents/evaluator/run.js";
-import { buildVerbatimRetryPrompt } from "../agents/evaluator/prompt.js";
-import { EvaluatorGroupOutputSchema } from "../agents/evaluator/schema.js";
 import { repairSpans } from "../agents/repairer/run.js";
-import { createAnthropicTransport, type ParseTransport } from "../api/client.js";
+import { createAnthropicTransport } from "../api/client.js";
 import { createAnthropicTextTransport } from "../avatar/authorPrompt.js";
 import { createGeminiImageTransport } from "../avatar/generateSheet.js";
 import { createAnthropicVisionTransport } from "../describe/describeImage.js";
 import { driveComparison } from "../compare/runComparison.js";
-import { checksForGroup, loadRubric } from "../rubric/load.js";
+import { loadRubric } from "../rubric/load.js";
 import { toPassView, toRunView } from "../present/toRunView.js";
 import { RunEventBus } from "../orchestrate/events.js";
-import type { RetryVerbatimFn } from "../orchestrate/runPass.js";
+import { buildRetryVerbatim } from "../orchestrate/coach.js";
 import { runToCompletion } from "../orchestrate/runToCompletion.js";
 import { FileAvatarStore } from "../store/AvatarStore.js";
 import { FileComparisonStore } from "../store/ComparisonStore.js";
@@ -34,53 +32,6 @@ const RUNS_DIR = "data/runs";
 const AVATARS_DIR = "data/avatars";
 const VERSIONS_DIR = "data/versions";
 const COMPARISONS_DIR = "data/comparisons";
-
-/**
- * Duplicated from `cli/score.ts`'s private `buildRetryVerbatim` rather than
- * imported: this task's file scope is `present/*` and `server/*` only (a
- * concurrent fix is landing elsewhere in the tree), so touching `cli/score.ts`
- * to export it was out of bounds. Same contract: re-asks one group with an
- * instruction to quote the description verbatim, validates the returned
- * checkIds against the rubric, and throws on a malformed or missing response
- * (a retry failure fails the run as "failed" rather than quietly degrading
- * one group to "not_evaluated" -- see `runPass`'s doc comment on
- * `RetryVerbatimFn`).
- */
-function buildRetryVerbatim(transport: ParseTransport): RetryVerbatimFn {
-  return async ({ rubric, description, group }) => {
-    const system = buildVerbatimRetryPrompt(rubric, group);
-    const { parsed_output } = await transport({
-      system,
-      user: `Character description to score:\n\n${description}`,
-      schema: EvaluatorGroupOutputSchema,
-    });
-    if (parsed_output === null || parsed_output === undefined) {
-      throw new Error(`verbatim retry parse failed for group ${group}`);
-    }
-    const output = EvaluatorGroupOutputSchema.parse(parsed_output);
-
-    const expected = new Set(checksForGroup(rubric, group).map((check) => check.id));
-    for (const result of output.results) {
-      if (!expected.has(result.checkId)) {
-        throw new Error(`unexpected checkId ${result.checkId} in group ${group} retry`);
-      }
-    }
-    for (const id of expected) {
-      if (!output.results.some((result) => result.checkId === id)) {
-        throw new Error(`missing result for ${id} in group ${group} retry`);
-      }
-    }
-
-    return output.results.map((check) => ({
-      status: "scored" as const,
-      checkId: check.checkId,
-      band: check.band,
-      reason: check.reason,
-      quotes: check.quotes,
-      missingEvidence: check.band < 4 && check.quotes.length === 0,
-    }));
-  };
-}
 
 async function main(): Promise<void> {
   const rubric = await loadRubric("v1");
