@@ -144,14 +144,28 @@ describe("reshoot", () => {
     out.forEach((camera, index) => expect(camera).toBe(cameras[index]));
   });
 
-  it("throws when the model writes a shot it was not asked for", async () => {
-    const transport = fakeReturning([
-      { ...boardCameras()[1]!, light: "window light from the left" },
-      { ...boardCameras()[2]!, light: "window light from the left" },
-    ]);
+  it("discards a camera for a shot it was not asked for, and never splices it", async () => {
+    const cameras = boardCameras();
+    const fresh: Camera = { ...cameras[1]!, light: "window light from the left" };
+    const unasked: Camera = { ...cameras[2]!, framing: "an unasked close-up", lensMm: 0 };
+    const out = await reshoot(
+      { transport: fakeReturning([fresh, unasked]) },
+      { plan: boardPlan(), cameras, shots: [2], failures: [lightFailure] },
+    );
+    expect(out).toHaveLength(4);
+    expect(out[1]).toEqual(fresh);
+    expect(out[2]).toBe(cameras[2]);
+    expect(out).not.toContainEqual(unasked);
+  });
+
+  it("throws when the model writes two cameras for a shot it was asked for", async () => {
+    const twice = { ...boardCameras()[1]!, light: "window light from the left" };
     await expect(
-      reshoot({ transport }, { plan: boardPlan(), cameras: boardCameras(), shots: [2], failures: [lightFailure] }),
-    ).rejects.toThrow(/shot 3/);
+      reshoot(
+        { transport: fakeReturning([twice, twice]) },
+        { plan: boardPlan(), cameras: boardCameras(), shots: [2], failures: [lightFailure] },
+      ),
+    ).rejects.toThrow(/2 cameras for shot 2/);
   });
 
   it("throws when the model leaves out a shot it was asked for", async () => {
@@ -169,8 +183,23 @@ describe("cinematographer prompt v1", () => {
 
   it("offers exactly the closed list of moves, one per shot", () => {
     const prompt = buildCinematographerSystemPrompt();
-    for (const move of CAMERA_MOVES) expect(prompt).toContain(move);
     expect(prompt).toMatch(/exactly one camera move/i);
+  });
+
+  // v1's move list is literal text. If CAMERA_MOVES changes, this fails: ship prompt-v2.
+  it("writes the move list as literal text that still matches CAMERA_MOVES", () => {
+    expect(buildCinematographerSystemPrompt()).toContain(
+      "written exactly as listed: static, slow push-in, pull-out, tracking, orbit, crane up, handheld.",
+    );
+    expect(CAMERA_MOVES.join(", ")).toBe("static, slow push-in, pull-out, tracking, orbit, crane up, handheld");
+  });
+
+  it("freezes the example cameras, so nothing can change what v1 says", () => {
+    expect(Object.isFrozen(CINEMATOGRAPHER_EXAMPLE_CAMERAS)).toBe(true);
+    expect(Object.isFrozen(CINEMATOGRAPHER_EXAMPLE_CAMERAS[0])).toBe(true);
+    expect(() => {
+      (CINEMATOGRAPHER_EXAMPLE_CAMERAS[0] as { lensMm: number }).lensMm = 12;
+    }).toThrow(TypeError);
   });
 
   it("writes every shot in one pass, in order, each continuing the last", () => {

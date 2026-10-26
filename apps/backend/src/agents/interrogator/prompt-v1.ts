@@ -1,5 +1,3 @@
-import { MAX_VIDEO_SECONDS, MIN_VIDEO_SECONDS } from "@ai-director/contract";
-
 /**
  * INTERROGATOR PROMPT v1 — turns a one-line brief into a filled brief.
  *
@@ -17,6 +15,9 @@ import { MAX_VIDEO_SECONDS, MIN_VIDEO_SECONDS } from "@ai-director/contract";
  * finish or label are how a label gets rewritten downstream (Mentic,
  * `lib/ugc-lab/generate-product-sheet.ts`), so the kind is the only product fact
  * this prompt lets out.
+ *
+ * The 4-30 range is literal text, not `MIN/MAX_VIDEO_SECONDS` read at run time, so a
+ * contract change cannot silently rewrite v1; a test compares the two.
  */
 export const INTERROGATOR_PROMPT_VERSION = "v1";
 
@@ -33,7 +34,7 @@ export function buildInterrogatorSystemPrompt(): string {
     "- tone: how the ad should feel, in a few words: \"calm, quietly confident\", \"playful and fast\".",
     "- setting: the one place where the whole ad happens, and the time of day: \"a small city apartment at dawn\". One place only; the ad is one take and does not travel.",
     "- character: the one person in the ad, in one line: their age range, who they are and why the product matters to them right now. A fictional person, never a real or famous one.",
-    `- suggestedSeconds: the length of the ad in whole seconds, only if the brief itself names one between ${MIN_VIDEO_SECONDS} and ${MAX_VIDEO_SECONDS}. Otherwise null: the length is the owner's to choose, not yours.`,
+    `- suggestedSeconds: the length of the ad in whole seconds, only if the brief itself names one between 4 and 30. Otherwise null: the length is the owner's to choose, not yours.`,
     "",
     "Rules:",
     "1. No brand names, logos, slogans or trademarks in any field, not even the product's own brand if the brief names it. Name the kind of thing instead.",

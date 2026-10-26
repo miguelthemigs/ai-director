@@ -13,7 +13,10 @@ async function askForCameras(transport: ParseTransport, system: string, user: st
   if (parsed_output === null || parsed_output === undefined) {
     throw new Error("cinematographer parse failed");
   }
-  const { cameras } = CinematographerOutputSchema.parse(parsed_output);
+  return CinematographerOutputSchema.parse(parsed_output).cameras;
+}
+
+function assertLenses(cameras: Camera[]): Camera[] {
   for (const camera of cameras) {
     if (!Number.isFinite(camera.lensMm) || camera.lensMm <= 0) {
       throw new Error(`cinematographer gave shot ${camera.shot} a lens of ${camera.lensMm} mm`);
@@ -31,7 +34,9 @@ export async function shootAll(
   deps: { transport: ParseTransport },
   args: { plan: Plan; seconds: number },
 ): Promise<Camera[]> {
-  return askForCameras(deps.transport, buildCinematographerSystemPrompt(), renderShootRequest(args));
+  return assertLenses(
+    await askForCameras(deps.transport, buildCinematographerSystemPrompt(), renderShootRequest(args)),
+  );
 }
 
 /**
@@ -40,8 +45,10 @@ export async function shootAll(
  * listed shot the plan does not have is dropped without asking the model. Cameras for
  * every other shot are returned as the same objects, untouched, in shot order.
  *
- * The model must answer with exactly one camera for each listed shot of the plan and
- * nothing else; anything else throws rather than being spliced half-right.
+ * The model must answer with exactly one camera for each listed shot of the plan; a
+ * missing or doubled one throws rather than being spliced half-right. A camera for a
+ * shot it was not asked for is discarded, never spliced: the shots that pass stay
+ * exactly as they were.
  */
 export async function reshoot(
   deps: { transport: ParseTransport },
@@ -71,15 +78,13 @@ async function askForReplacements(
     renderReshootRequest({ plan: args.plan, cameras: shown, shots: targets, failures: args.failures }),
   );
 
+  const asked = fresh.filter((camera) => targets.includes(camera.shot));
   const problems: string[] = [];
-  for (const camera of fresh) {
-    if (!targets.includes(camera.shot)) problems.push(`wrote shot ${camera.shot}, which it was not asked for`);
-  }
   for (const shot of targets) {
-    const count = fresh.filter((camera) => camera.shot === shot).length;
+    const count = asked.filter((camera) => camera.shot === shot).length;
     if (count === 0) problems.push(`left out shot ${shot}`);
     if (count > 1) problems.push(`wrote ${count} cameras for shot ${shot}`);
   }
   if (problems.length > 0) throw new Error(`cinematographer reshoot ${problems.join("; ")}`);
-  return fresh;
+  return assertLenses(asked);
 }

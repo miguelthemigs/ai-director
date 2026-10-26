@@ -1,12 +1,5 @@
-import {
-  DIRECTOR_CHECK_LABELS,
-  LENGTH_TOLERANCE_SECONDS,
-  SHOT_WEIGHT_SECONDS,
-  type CheckOutcome,
-  type FilledBrief,
-  type GateAAnswers,
-  type Plan,
-} from "@ai-director/contract";
+import type { CheckOutcome, DirectorCheckId, FilledBrief, GateAAnswers, Plan } from "@ai-director/contract";
+import { deepFreeze } from "../deepFreeze.js";
 
 /**
  * DIRECTOR PROMPT v1 — the plan for one Seedance 2.5 take: style line, scene, assets,
@@ -42,6 +35,14 @@ import {
  * Every rule the plan checks enforce is stated here in the checks' own terms, and the
  * example plan below is pinned by a test to pass every one of them, so the prompt and
  * the code cannot drift apart unnoticed.
+ *
+ * ── Every number and label is literal text ──────────────────────────────────────
+ * The weight counts (short 2, normal 3, long 4), the tolerance (2) and the check
+ * labels are written out here, never read from the contract at run time: a change
+ * to `SHOT_WEIGHT_SECONDS`, `LENGTH_TOLERANCE_SECONDS` or `DIRECTOR_CHECK_LABELS`
+ * must not silently rewrite v1. Tests compare the literals with the constants, so
+ * such a change fails a test and ships as `prompt-v2.ts`. The example plan is deeply
+ * frozen for the same reason.
  */
 export const DIRECTOR_PROMPT_VERSION = "v1";
 
@@ -49,7 +50,7 @@ export const DIRECTOR_PROMPT_VERSION = "v1";
 export const DIRECTOR_EXAMPLE_SECONDS = 15;
 
 /** A worked example (the design's headphones ad, Part 7 §8), shown to the model whole. */
-export const DIRECTOR_EXAMPLE_PLAN: Plan = {
+export const DIRECTOR_EXAMPLE_PLAN: Plan = deepFreeze({
   styleLine:
     "Photoreal commercial, physical cine lens, 180° shutter motion blur, natural light with soft haze, muted palette of slate grey, warm amber and off-white. Behaviour shown in the body, never stated.",
   scene:
@@ -94,13 +95,21 @@ export const DIRECTOR_EXAMPLE_PLAN: Plan = {
       sound: "(the synth rises gently) <the door closes behind him>",
     },
   ],
-};
+});
 
-function weightCounts(): string {
-  return (Object.entries(SHOT_WEIGHT_SECONDS) as Array<[string, number]>)
-    .map(([weight, count]) => `${weight} counts ${count}`)
-    .join(", ");
-}
+/** The check labels as v1 shows them to the model in a patch request. */
+export const DIRECTOR_V1_CHECK_LABELS: Readonly<Record<DirectorCheckId, string>> = deepFreeze({
+  length_fits: "The shots fit the length you chose",
+  handles_match: "Every @handle is declared, and every asset is used",
+  references_within_cap: "At most 5 reference images, each with a role",
+  no_timestamps: "No timestamps or seconds in any shot",
+  nothing_ruled_out: "Nothing you said must not appear",
+  camera_per_shot: "Every planned shot has one camera",
+  light_has_direction: "Every light line names a source and a direction",
+});
+
+/** How far v1 tells the Director the counts may sit from the chosen length. */
+const V1_LENGTH_TOLERANCE = 2;
 
 export function buildDirectorSystemPrompt(): string {
   return [
@@ -130,8 +139,9 @@ export function buildDirectorSystemPrompt(): string {
     "",
     "- Each shot is one beat of the take. Write the action as what is visible: who moves, what their hands do, where their eyes go. Name assets by their handle: \"@hero lifts @headphones from the bedside table\".",
     "- Write only what happens in front of the camera. Never write framing, lens, camera moves or light in a shot: another agent writes the camera for every shot.",
-    `- weight is the shot's share of the take: "short", "normal" or "long". A ${weightCounts()}. The counts must add up to the length the owner chose, give or take ${LENGTH_TOLERANCE_SECONDS}. Code adds them up.`,
+    "- weight is the shot's share of the take: \"short\", \"normal\" or \"long\". A short counts 2, normal counts 3, long counts 4. The counts must add up to the length the owner chose, give or take 2. Code adds them up.",
     "- Never write seconds, timestamps or clock times anywhere in a shot, its action or its sound: no \"3s\", \"2 seconds\", \"(0-3s)\", \"0:05\", \"at 7:30\". The weights carry the timing. Write \"dawn\", not a clock time. No timestamps.",
+    "- Write ages and decades in words, never digits: \"eighties\", not \"80s\"; \"thirties\", not \"30s\". A number followed by an s reads as seconds to the check.",
     "",
     "## One take",
     "",
@@ -225,7 +235,7 @@ export function renderDirectorRequest(args: { brief: FilledBrief; answers: GateA
     `- Setting: ${brief.setting}`,
     `- Character: ${brief.character}`,
     "",
-    `Length: the owner chose ${answers.seconds} seconds, so the shot counts must add up to between ${answers.seconds - LENGTH_TOLERANCE_SECONDS} and ${answers.seconds + LENGTH_TOLERANCE_SECONDS}.`,
+    `Length: the owner chose ${answers.seconds} seconds, so the shot counts must add up to between ${answers.seconds - V1_LENGTH_TOLERANCE} and ${answers.seconds + V1_LENGTH_TOLERANCE}.`,
     renderRuledOut(answers),
     renderCast(answers),
   ].join("\n");
@@ -233,7 +243,7 @@ export function renderDirectorRequest(args: { brief: FilledBrief; answers: GateA
 
 function renderFailure(failure: CheckOutcome): string {
   const shots = failure.shots.length > 0 ? ` Shots: ${failure.shots.join(", ")}.` : "";
-  return `- ${DIRECTOR_CHECK_LABELS[failure.id]} — failed: ${failure.detail ?? "no detail"}.${shots}`;
+  return `- ${DIRECTOR_V1_CHECK_LABELS[failure.id]} — failed: ${failure.detail ?? "no detail"}.${shots}`;
 }
 
 export function renderDirectorPatchRequest(args: {

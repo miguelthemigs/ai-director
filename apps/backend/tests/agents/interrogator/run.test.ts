@@ -1,4 +1,4 @@
-import type { FilledBrief } from "@ai-director/contract";
+import { MAX_VIDEO_SECONDS, MIN_VIDEO_SECONDS, type FilledBrief } from "@ai-director/contract";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { z } from "zod";
 import {
@@ -86,6 +86,12 @@ describe("interrogator prompt v1", () => {
     const prompt = buildInterrogatorSystemPrompt();
     expect(prompt).toMatch(/what kind of thing/i);
     expect(prompt).toMatch(/never what it looks like/i);
+  });
+
+  // v1's range is literal text. If the contract's range changes, this fails: ship prompt-v2.
+  it("writes Seedance's length range as literal text that still matches the contract", () => {
+    expect(buildInterrogatorSystemPrompt()).toContain("names one between 4 and 30.");
+    expect([MIN_VIDEO_SECONDS, MAX_VIDEO_SECONDS]).toEqual([4, 30]);
   });
 
   it("allows no brand names", () => {

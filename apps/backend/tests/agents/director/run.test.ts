@@ -1,4 +1,6 @@
 import {
+  DIRECTOR_CHECK_LABELS,
+  LENGTH_TOLERANCE_SECONDS,
   SHOT_WEIGHT_SECONDS,
   type CheckOutcome,
   type FilledBrief,
@@ -13,6 +15,8 @@ import {
   DIRECTOR_EXAMPLE_PLAN,
   DIRECTOR_EXAMPLE_SECONDS,
   DIRECTOR_PROMPT_VERSION,
+  DIRECTOR_V1_CHECK_LABELS,
+  renderDirectorRequest,
 } from "../../../src/agents/director/prompt-v1.js";
 import { direct, patchPlan, PlanPatchError } from "../../../src/agents/director/run.js";
 import { DirectorPlanSchema } from "../../../src/agents/director/schema.js";
@@ -213,11 +217,42 @@ describe("director prompt v1", () => {
     for (const weight of ["short", "normal", "long"]) expect(prompt).toContain(`"${weight}"`);
   });
 
-  it("counts each weight exactly as the length check in code does", () => {
+  // v1's numbers and labels are literal text. If a contract constant changes, these
+  // fail: the prompt no longer agrees with the code, so ship prompt-v2.
+  it("counts each weight, as literal text, exactly as the length check in code does", () => {
     const prompt = buildDirectorSystemPrompt();
-    for (const [weight, count] of Object.entries(SHOT_WEIGHT_SECONDS)) {
-      expect(prompt).toContain(`${weight} counts ${count}`);
-    }
+    expect(prompt).toContain("A short counts 2, normal counts 3, long counts 4.");
+    expect(SHOT_WEIGHT_SECONDS).toEqual({ short: 2, normal: 3, long: 4 });
+    expect(prompt).toContain("give or take 2.");
+    expect(LENGTH_TOLERANCE_SECONDS).toBe(2);
+  });
+
+  it("states the count range, with v1's literal tolerance, in the request", () => {
+    expect(renderDirectorRequest({ brief, answers })).toContain(
+      `between ${15 - LENGTH_TOLERANCE_SECONDS} and ${15 + LENGTH_TOLERANCE_SECONDS}.`,
+    );
+  });
+
+  it("shows the check labels as literal text that still matches the contract", () => {
+    expect(DIRECTOR_V1_CHECK_LABELS).toEqual(DIRECTOR_CHECK_LABELS);
+  });
+
+  it("freezes the example plan, so nothing can change what v1 says", () => {
+    expect(Object.isFrozen(DIRECTOR_EXAMPLE_PLAN)).toBe(true);
+    expect(Object.isFrozen(DIRECTOR_EXAMPLE_PLAN.shots)).toBe(true);
+    expect(Object.isFrozen(DIRECTOR_EXAMPLE_PLAN.assets[0])).toBe(true);
+    expect(() => {
+      DIRECTOR_EXAMPLE_PLAN.shots[0]!.weight = "short";
+    }).toThrow(TypeError);
+  });
+
+  it("asks for ages and decades in words, because the timestamp check reads digits and s as seconds", () => {
+    expect(buildDirectorSystemPrompt()).toMatch(/ages and decades in words, never digits/i);
+    expect(buildDirectorSystemPrompt()).toContain('"eighties", not "80s"');
+    const plan = boardPlan();
+    plan.shots[3]!.action = "@maya sets down @product to a song from the 80s";
+    const outcome = runPlanChecks(plan, 15, []).find((o) => o.id === "no_timestamps")!;
+    expect(outcome.passed).toBe(false);
   });
 
   it("plans one take, with no 15-second blocks and no cuts across generations", () => {

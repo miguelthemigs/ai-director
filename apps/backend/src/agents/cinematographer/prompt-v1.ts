@@ -1,11 +1,6 @@
-import {
-  CAMERA_MOVES,
-  DIRECTOR_CHECK_LABELS,
-  type Camera,
-  type CheckOutcome,
-  type Plan,
-} from "@ai-director/contract";
-import { DIRECTOR_EXAMPLE_PLAN } from "../director/prompt-v1.js";
+import type { Camera, CheckOutcome, Plan } from "@ai-director/contract";
+import { deepFreeze } from "../deepFreeze.js";
+import { DIRECTOR_EXAMPLE_PLAN, DIRECTOR_V1_CHECK_LABELS } from "../director/prompt-v1.js";
 
 /**
  * CINEMATOGRAPHER PROMPT v1 — framing, lens, one move and light for every shot of the
@@ -26,7 +21,9 @@ import { DIRECTOR_EXAMPLE_PLAN } from "../director/prompt-v1.js";
  * prompt narrows it by letting light come only from sources the plan names.
  *
  * ── Its rules are the checks' rules ─────────────────────────────────────────────
- * The move list is `CAMERA_MOVES` itself. The direction words are the ones
+ * The move list is `CAMERA_MOVES`, written out as literal text so a change to the
+ * contract cannot silently rewrite v1 (a test compares the two; a change ships as
+ * `prompt-v2.ts`). The example cameras are deeply frozen. The direction words are the ones
  * `light_has_direction` accepts (`orchestrate/director/checks.ts`), and the example
  * cameras are pinned by a test to pass every prompt check.
  *
@@ -37,7 +34,7 @@ import { DIRECTOR_EXAMPLE_PLAN } from "../director/prompt-v1.js";
 export const CINEMATOGRAPHER_PROMPT_VERSION = "v1";
 
 /** Cameras for the four shots of `DIRECTOR_EXAMPLE_PLAN`, shown to the model. */
-export const CINEMATOGRAPHER_EXAMPLE_CAMERAS: Camera[] = [
+export const CINEMATOGRAPHER_EXAMPLE_CAMERAS: Camera[] = deepFreeze([
   {
     shot: 1,
     framing: "wide shot from the foot of the bed, eye level",
@@ -66,7 +63,7 @@ export const CINEMATOGRAPHER_EXAMPLE_CAMERAS: Camera[] = [
     move: "tracking",
     light: "bright morning sun through the open front door ahead, backlit, rim on his shoulders",
   },
-];
+]);
 
 function renderExample(): string {
   return DIRECTOR_EXAMPLE_PLAN.shots
@@ -86,7 +83,7 @@ export function buildCinematographerSystemPrompt(): string {
     "- shot: the shot's number in the plan, starting at 1. One camera per shot, no more, no fewer.",
     "- framing: the shot size and angle, in a few words: \"wide shot, eye level\", \"medium close-up\", \"close-up from a low angle\", \"over-the-shoulder medium shot\". Lens, move and light have their own fields; never repeat them here.",
     "- lensMm: the focal length in millimetres, as a number. 24 opens up a room, 35 keeps a person in their space, 50 is a natural medium, 85 is for a face or hands up close.",
-    `- move: exactly one camera move per shot, from this closed list, written exactly as listed: ${CAMERA_MOVES.join(", ")}. Never two: \"push-in while panning left\" is two moves and is refused. A shot that needs no move is \"static\".`,
+    `- move: exactly one camera move per shot, from this closed list, written exactly as listed: static, slow push-in, pull-out, tracking, orbit, crane up, handheld. Never two: \"push-in while panning left\" is two moves and is refused. A shot that needs no move is \"static\".`,
     "- light: the light on this shot, naming its source and the direction it comes from, in plain words: \"low dawn sun through the window from the left\", \"warm bedside lamp from the right\", \"overcast sky from behind, rim on her shoulders\". Say the direction with one of: from the left, from the right, from behind, from above, overhead, from below, from the front, from the side, backlit. A light with no direction (\"soft light\", \"moody light\", \"sidelight\") is refused.",
     "",
     "Code writes each camera into the final prompt as \"Shot 2: <framing>, <lensMm>mm, <move>, <light>.\" followed by the director's action, so write framing and light as short phrases, without a full stop.",
@@ -158,7 +155,7 @@ function renderCamera(camera: Camera): string {
 
 function renderFailure(failure: CheckOutcome): string {
   const shots = failure.shots.length > 0 ? ` Shots: ${failure.shots.join(", ")}.` : "";
-  return `- ${DIRECTOR_CHECK_LABELS[failure.id]} — failed: ${failure.detail ?? "no detail"}.${shots}`;
+  return `- ${DIRECTOR_V1_CHECK_LABELS[failure.id]} — failed: ${failure.detail ?? "no detail"}.${shots}`;
 }
 
 export function renderReshootRequest(args: {
