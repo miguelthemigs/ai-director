@@ -23,10 +23,16 @@ export const NANO_BANANA_PRO = "gemini-3-pro-image";
 /** Mentic's registry default, and the only slug this repo asks for. */
 export const DEFAULT_IMAGE_MODEL = NANO_BANANA_PRO;
 
+/** One picture in transit: base64 bytes and their media type. */
+export type TransportImage = { imageBase64: string; mediaType: string };
+
 export type ImageTransport = (args: {
   model: string;
   prompt: string;
   aspectRatio: string;
+  /** Sent as `inlineData` parts AFTER the text part (Mentic `googleGenerateImage` order), so
+   *  a brief can say "the first reference image". */
+  referenceImages?: TransportImage[];
 }) => Promise<{ imageBase64: string; mediaType: string }>;
 
 export type GeneratedSheet = {
@@ -42,8 +48,17 @@ export type GeneratedSheet = {
  * The one implementation that talks to Google. Everything above it takes an
  * `ImageTransport`, so no test in this repo can spend money by accident.
  */
-export function createGeminiImageTransport(): ImageTransport {
-  return async ({ model, prompt, aspectRatio }) => {
+/** The slice of `ai.models.generateContent` this file uses; tests inject a fake. */
+export type GenerateContent = (request: {
+  model: string;
+  contents: { role: string; parts: Array<{ text: string } | { inlineData: { data: string; mimeType: string } }> }[];
+  config: Record<string, unknown>;
+}) => Promise<{
+  candidates?: { content?: { parts?: { thought?: boolean; text?: string; inlineData?: { data?: string; mimeType?: string } }[] } }[];
+}>;
+
+export function createGeminiImageTransport(deps: { generateContent?: GenerateContent } = {}): ImageTransport {
+  return async ({ model, prompt, aspectRatio, referenceImages }) => {
     // Mentic prefers GOOGLE_AI_KEY (the Google AI Studio convention) and falls back to
     // GOOGLE_API_KEY for legacy setups. Read at call time so importing this module
     // without a key never throws.
@@ -51,11 +66,23 @@ export function createGeminiImageTransport(): ImageTransport {
     if (!apiKey) {
       throw new Error("GOOGLE_AI_KEY (or GOOGLE_API_KEY) missing, required for Nano Banana Pro");
     }
-    const ai = new GoogleGenAI({ apiKey });
+    const generateContent: GenerateContent =
+      deps.generateContent ??
+      ((request) => new GoogleGenAI({ apiKey }).models.generateContent(request as never) as never);
 
-    const response = await ai.models.generateContent({
+    const response = await generateContent({
       model,
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: prompt },
+            ...(referenceImages ?? []).map((image) => ({
+              inlineData: { data: image.imageBase64, mimeType: image.mediaType },
+            })),
+          ],
+        },
+      ],
       config: {
         responseModalities: [Modality.IMAGE],
         // "2K" rather than the 1K default, and it is free: the output token count is

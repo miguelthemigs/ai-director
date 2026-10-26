@@ -28,6 +28,8 @@ allowBuilds:
   # to believe a skipped script was skippable.
   '@google/genai': false
   esbuild: true
+  # Declined: uploadthing's optional native msgpack speedup; it falls back to pure JS.
+  msgpackr-extract: false
   protobufjs: false
 
 # Why there is no `nodeLinker` here, and no .npmrc any more.
