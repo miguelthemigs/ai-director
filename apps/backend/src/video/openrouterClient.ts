@@ -17,15 +17,20 @@ import type { RenderStatus } from "@ai-director/contract";
  *
  * ── Nothing here decides what to render ─────────────────────────────────────────────
  * Same discipline as the file it came from: this module submits and polls once told to.
- * Which description, which size and which seconds are decided in `compare/runComparison.ts`,
- * and the claim discipline that keeps a submit from happening twice lives there too,
- * because it needs a store.
+ * Which prompt, which size and which seconds are decided by the callers —
+ * `compare/runComparison.ts` and `orchestrate/director/render.ts` — and the claim
+ * discipline that keeps a submit from happening twice lives there too, because it needs a
+ * store.
  *
- * ── Text only ───────────────────────────────────────────────────────────────────────
- * `VideoSubmitRequest` has no `input_references` and no `frame_images` field, so there is
- * no way to add one without editing this type. That is deliberate. Mentic's nine probe
- * calls on 2026-08-25 established that a human likeness in an input image is refused at
- * full latency on every render.
+ * ── References: products and locations only ─────────────────────────────────────────
+ * `input_references` exists for the AI Director (decision 5 of the backend plan, the
+ * Mentic way from `lib/video-lab/render-ugc.ts`): public HTTPS images hosted on
+ * UploadThing, named in the prompt by position. It carries a PRODUCT or a LOCATION
+ * picture and never a face. Mentic's nine probe calls on 2026-08-25 established that a
+ * human likeness in an input image is refused at full latency on every render, so the
+ * character travels as text and only `ReferenceImage`s — typed `product | location` in the
+ * contract — are ever mapped onto this field. A Compare request sends none. There is still
+ * no `frame_images` field.
  */
 
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
@@ -69,7 +74,7 @@ function clipMediaType(raw: string | null): string {
   return CLIP_MEDIA_TYPES.has(base) ? base : DEFAULT_CLIP_MEDIA_TYPE;
 }
 
-/** The body this client posts. No image field exists, by construction. */
+/** The body this client posts. */
 export type VideoSubmitRequest = {
   model: string;
   prompt: string;
@@ -77,6 +82,9 @@ export type VideoSubmitRequest = {
   duration: number;
   size: string;
   generate_audio: boolean;
+  /** Product and location pictures only, never a face (see the header). UploadThing URLs,
+   *  checked by the caller before submit. Absent on a Compare request. */
+  input_references?: Array<{ type: "image_url"; image_url: { url: string } }>;
 };
 
 export type VideoTaskResult = {

@@ -28,6 +28,8 @@ export interface DirectorRunStore {
   readAnswers(runId: string): Promise<GateAAnswers | null>;
   /** Atomic create-if-absent of `render.<attempt>.claim`. */
   claimRender(runId: string, attempt: number): Promise<"claimed" | "already_claimed">;
+  /** Whether `render.<attempt>.claim` exists. Reads only: never takes the claim. */
+  hasRenderClaim(runId: string, attempt: number): Promise<boolean>;
   /** Newest first, from each run's folded events. */
   listRuns(): Promise<DirectorRunSummary[]>;
   listIds(): Promise<string[]>;

@@ -51,6 +51,16 @@ describe("FileDirectorRunStore", () => {
     expect(await store.claimRender(id, 2)).toBe("claimed");
   });
 
+  it("hasRenderClaim reads a claim without taking it", async () => {
+    const { store } = await newStore();
+    const id = await store.createRun("b");
+    expect(await store.hasRenderClaim(id, 1)).toBe(false);
+    expect(await store.hasRenderClaim(id, 1)).toBe(false);
+    expect(await store.claimRender(id, 1)).toBe("claimed");
+    expect(await store.hasRenderClaim(id, 1)).toBe(true);
+    expect(await store.hasRenderClaim(id, 2)).toBe(false);
+  });
+
   it("outputs and assets round-trip; traversal refs and names are rejected", async () => {
     const { store } = await newStore();
     const id = await store.createRun("b");

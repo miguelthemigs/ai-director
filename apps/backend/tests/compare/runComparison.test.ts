@@ -110,7 +110,7 @@ describe("driveComparison", () => {
     });
   });
 
-  it("never sends an image reference", async () => {
+  it("a Compare request carries no input_references", async () => {
     await withStore(async (store) => {
       const transport = fakeTransport();
       const row = await startComparison({ store, transport }, START);

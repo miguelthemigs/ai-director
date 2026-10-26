@@ -55,12 +55,26 @@ describe("submit", () => {
     expect(JSON.parse(init.body as string)).toEqual(REQUEST);
   });
 
-  it("never sends an image reference, whatever the caller passed", async () => {
+  it("a Compare request carries no input_references", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ id: "task-1" }));
     await createOpenRouterVideoTransport().submit(REQUEST);
     const body = (fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string;
     expect(body).not.toContain("input_references");
     expect(body).not.toContain("frame_images");
+  });
+
+  it("sends input_references verbatim, in the order given, when a request carries them", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: "task-1" }));
+    const withReferences = {
+      ...REQUEST,
+      input_references: [
+        { type: "image_url" as const, image_url: { url: "https://utfs.io/f/one.png" } },
+        { type: "image_url" as const, image_url: { url: "https://abc.ufs.sh/f/two.png" } },
+      ],
+    };
+    await createOpenRouterVideoTransport().submit(withReferences);
+    const body = (fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string;
+    expect(JSON.parse(body)).toEqual(withReferences);
   });
 
   it("throws a typed HTTP error carrying the upstream message and the status", async () => {

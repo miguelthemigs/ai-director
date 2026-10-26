@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { access, appendFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import {
@@ -166,6 +166,16 @@ export class FileDirectorRunStore implements DirectorRunStore {
       return "claimed";
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "EEXIST") return "already_claimed";
+      throw err;
+    }
+  }
+
+  async hasRenderClaim(runId: string, attempt: number): Promise<boolean> {
+    try {
+      await access(path.join(this.dir(runId), `render.${attempt}.claim`));
+      return true;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
       throw err;
     }
   }
