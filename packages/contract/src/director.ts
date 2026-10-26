@@ -175,6 +175,9 @@ export type DirectorEventBody =
   | { type: "render.polled"; status: RenderStatus; reads: number }
   | {
       type: "render.settled";
+      /** Carried here too, because a submit that fails logs no `render.submitted`. */
+      attempt: number;
+      estimatedMicroUsd: number;
       status: RenderStatus;
       billing: Billing;
       actualMicroUsd: number | null;

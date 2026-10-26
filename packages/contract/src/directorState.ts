@@ -142,17 +142,32 @@ export function applyDirectorEvent(view: DirectorRunView, event: DirectorEvent):
       if (next.render) next.render = { ...next.render, status: event.status };
       break;
     case "render.settled": {
-      if (next.render) {
-        next.render = {
-          ...next.render,
-          status: event.status,
-          billing: event.billing,
-          actualMicroUsd: event.actualMicroUsd,
-          failure: event.failure,
-        };
-      }
+      // A submit that failed logged no `render.submitted`: this attempt opens its own record
+      // rather than writing onto (or past) the previous attempt's.
+      const base =
+        next.render !== null && next.render.attempt === event.attempt
+          ? next.render
+          : {
+              attempt: event.attempt,
+              status: "queued" as const,
+              billing: null,
+              estimatedMicroUsd: event.estimatedMicroUsd,
+              actualMicroUsd: null,
+              failure: null,
+            };
+      next.render = {
+        ...base,
+        status: event.status,
+        billing: event.billing,
+        actualMicroUsd: event.actualMicroUsd,
+        failure: event.failure,
+      };
       const ok = event.status === "succeeded";
-      patchNode("render", { status: ok ? "done" : "failed", error: ok ? null : event.failure });
+      patchNode("render", {
+        status: ok ? "done" : "failed",
+        attempt: event.attempt,
+        error: ok ? null : event.failure,
+      });
       next.status = ok ? "rendered" : "render_failed";
       break;
     }

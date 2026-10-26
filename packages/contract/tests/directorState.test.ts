@@ -181,7 +181,7 @@ describe("reduceDirectorEvents", () => {
 
   it("render.settled succeeded renders the run and keeps the estimate beside the actual", () => {
     const v = log(submitted, {
-      type: "render.settled", status: "succeeded", billing: "billed", actualMicroUsd: 3_000_000, failure: null,
+      type: "render.settled", attempt: 1, estimatedMicroUsd: 3_470_000, status: "succeeded", billing: "billed", actualMicroUsd: 3_000_000, failure: null,
     });
     expect(v.status).toBe("rendered");
     expect(v.nodes.render.status).toBe("done");
@@ -193,7 +193,7 @@ describe("reduceDirectorEvents", () => {
   it("render.settled failed or cancelled fails the render, never rendered", () => {
     for (const status of ["failed", "cancelled"] as const) {
       const v = log(submitted, {
-        type: "render.settled", status, billing: "not_billed", actualMicroUsd: null, failure: "nope",
+        type: "render.settled", attempt: 1, estimatedMicroUsd: 3_470_000, status, billing: "not_billed", actualMicroUsd: null, failure: "nope",
       });
       expect(v.status).toBe("render_failed");
       expect(v.nodes.render).toMatchObject({ status: "failed", error: "nope" });
@@ -204,7 +204,7 @@ describe("reduceDirectorEvents", () => {
   it("render again after render_failed is a fresh attempt on a blocked render node", () => {
     const v = log(
       submitted,
-      { type: "render.settled", status: "failed", billing: "not_billed", actualMicroUsd: null, failure: "f" },
+      { type: "render.settled", attempt: 1, estimatedMicroUsd: 3_470_000, status: "failed", billing: "not_billed", actualMicroUsd: null, failure: "f" },
       { type: "run.finished", status: "render_failed", reason: "f" },
       { type: "render.submitted", attempt: 2, taskId: "t2", estimatedMicroUsd: 1 },
     );
@@ -213,6 +213,51 @@ describe("reduceDirectorEvents", () => {
     expect(v.status).toBe("rendering");
     expect(v.reason).toBeNull();
     expect(v.finishedAt).toBeNull();
+  });
+
+  it("a submit failure on attempt 1 (no render.submitted) still shows attempt 1, its billing and its estimate", () => {
+    const settled = {
+      type: "render.settled", attempt: 1, estimatedMicroUsd: 3_470_000, status: "failed",
+      billing: "unknown", actualMicroUsd: null, failure: "timeout",
+    } as const;
+    const atSettle = log(settled);
+    expect(atSettle.nodes.render).toMatchObject({ status: "failed", attempt: 1, error: "timeout" });
+    const v = log(settled, { type: "run.finished", status: "render_failed", reason: "timeout" });
+    expect(v.render).toEqual({
+      attempt: 1, status: "failed", billing: "unknown", estimatedMicroUsd: 3_470_000,
+      actualMicroUsd: null, failure: "timeout",
+    });
+    expect(v.status).toBe("render_failed");
+  });
+
+  it("an attempt-2 submit refusal opens attempt 2's record and leaves attempt 1's untouched", () => {
+    const afterOne = log(
+      submitted,
+      {
+        type: "render.settled", attempt: 1, estimatedMicroUsd: 3_470_000, status: "failed",
+        billing: "billed", actualMicroUsd: 1_200_000, failure: "refused",
+      },
+      { type: "run.finished", status: "render_failed", reason: "refused" },
+    );
+    const attemptOne = afterOne.render;
+    const snapshot = JSON.stringify(attemptOne);
+    const v = applyDirectorEvent(
+      afterOne,
+      ev(
+        {
+          type: "render.settled", attempt: 2, estimatedMicroUsd: 1_850_000, status: "failed",
+          billing: "not_billed", actualMicroUsd: null, failure: "bad size",
+        },
+        afterOne.lastSeq + 1,
+      ),
+    );
+    expect(v.render).toEqual({
+      attempt: 2, status: "failed", billing: "not_billed", estimatedMicroUsd: 1_850_000,
+      actualMicroUsd: null, failure: "bad size",
+    });
+    expect(v.nodes.render).toMatchObject({ status: "failed", attempt: 2, error: "bad size" });
+    expect(JSON.stringify(attemptOne)).toBe(snapshot);
+    expect(attemptOne).toMatchObject({ attempt: 1, billing: "billed", actualMicroUsd: 1_200_000 });
   });
 
   it("applyDirectorEvent never mutates its input and returns a new object", () => {

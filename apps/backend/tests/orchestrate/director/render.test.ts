@@ -7,6 +7,8 @@ import {
   estimateMicroUsd,
   reduceDirectorEvents,
   SEEDANCE_MODEL,
+  applyDirectorEvent,
+  isRenderSuccess,
   type AssembledPrompt,
   type DirectorEvent,
 } from "@ai-director/contract";
@@ -145,10 +147,19 @@ describe("submitDirectorRender", () => {
     expect(video.submit).toHaveBeenCalledTimes(1);
     const events = await store.events(runId);
     expect(ofType(events, "render.settled")).toEqual([
-      expect.objectContaining({ status: "failed", billing: "unknown", actualMicroUsd: null, failure: expect.stringContaining("timeout") }),
+      expect.objectContaining({
+        attempt: 1,
+        estimatedMicroUsd: estimateMicroUsd(DIRECTOR_VIDEO_SIZE, 4),
+        status: "failed",
+        billing: "unknown",
+        actualMicroUsd: null,
+        failure: expect.stringContaining("timeout"),
+      }),
     ]);
     expect(ofType(events, "run.finished")).toEqual([expect.objectContaining({ status: "render_failed" })]);
-    expect(reduceDirectorEvents(events).status).toBe("render_failed");
+    const view = reduceDirectorEvents(events);
+    expect(view.status).toBe("render_failed");
+    expect(view.render).toMatchObject({ attempt: 1, billing: "unknown", estimatedMicroUsd: estimateMicroUsd(DIRECTOR_VIDEO_SIZE, 4) });
   });
 
   it("a 4xx from OpenRouter settles failed with billing not_billed", async () => {
@@ -219,7 +230,14 @@ describe("settleDirectorRender", () => {
 
     const events = await store.events(runId);
     expect(ofType(events, "render.settled")).toEqual([
-      expect.objectContaining({ status: "succeeded", billing: "billed", actualMicroUsd: 3_512_000, failure: null }),
+      expect.objectContaining({
+        attempt: 1,
+        estimatedMicroUsd: estimateMicroUsd(DIRECTOR_VIDEO_SIZE, 15),
+        status: "succeeded",
+        billing: "billed",
+        actualMicroUsd: 3_512_000,
+        failure: null,
+      }),
     ]);
     expect(ofType(events, "run.finished")).toEqual([expect.objectContaining({ status: "rendered", reason: null })]);
     const view = reduceDirectorEvents(events);
@@ -298,18 +316,46 @@ describe("settleDirectorRender", () => {
     expect(video.submit).toHaveBeenCalledTimes(1);
   });
 
-  it("a succeeded render whose clip cannot be fetched stays billed and the run is render_failed", async () => {
-    const video = fakeVideo({ fetchClip: vi.fn(async () => Promise.reject(new Error("404 content gone"))) });
-    const { store, runId, deps } = await setup(video);
+  it.each([
+    ["cannot be fetched", "fetchClip"],
+    ["cannot be saved", "saveAsset"],
+  ] as const)("a succeeded render whose clip %s is failed and billed, and no view ever shows success", async (_label, broken) => {
+    const video = fakeVideo();
+    if (broken === "fetchClip") video.fetchClip.mockRejectedValue(new Error("404 content gone"));
+    const { store, runId, deps, published } = await setup(video);
+    if (broken === "saveAsset") {
+      vi.spyOn(store, "saveAsset").mockRejectedValue(new Error("404 content gone"));
+    }
     await submitDirectorRender(deps, { runId, attempt: 1, prompt: PROMPT, seconds: 4 });
     await settleDirectorRender(deps, { runId, attempt: 1 });
 
     const events = await store.events(runId);
     expect(ofType(events, "render.settled")).toEqual([
-      expect.objectContaining({ status: "succeeded", billing: "billed", actualMicroUsd: 3_470_000, failure: expect.stringContaining("404 content gone") }),
+      expect.objectContaining({
+        attempt: 1,
+        status: "failed",
+        billing: "billed",
+        actualMicroUsd: 3_470_000,
+        failure: "clip download failed: 404 content gone",
+      }),
     ]);
     expect(ofType(events, "run.finished")).toEqual([expect.objectContaining({ status: "render_failed" })]);
-    expect(reduceDirectorEvents(events).status).toBe("render_failed");
+
+    // Every view a subscriber could have seen, event by event.
+    let view = reduceDirectorEvents(events.slice(0, 1));
+    for (const event of published) {
+      view = applyDirectorEvent(view, event);
+      expect(view.status).not.toBe("rendered");
+      expect(view.nodes.render.status).not.toBe("done");
+      expect(view.render === null || !isRenderSuccess(view.render.status)).toBe(true);
+      if (event.type === "render.settled") expect(view.nodes.render.status).toBe("failed");
+    }
+    const final = reduceDirectorEvents(events);
+    expect(final.status).toBe("render_failed");
+    // `run.finished render_failed` then blocks every node not done (the existing fold rule).
+    expect(final.nodes.render.status).toBe("blocked");
+    expect(final.render).toMatchObject({ status: "failed", billing: "billed", actualMicroUsd: 3_470_000 });
+    expect(isRenderSuccess(final.render!.status)).toBe(false);
   });
 
   it("settling twice appends one render.settled", async () => {
@@ -382,6 +428,7 @@ describe("resumeDirectorRenders", () => {
   it("a claim with no render.submitted settles failed with billing unknown, never submitting", async () => {
     const video = fakeVideo();
     const { store, runId, deps } = await setup(video);
+    await store.append(runId, { type: "gate.resolved", gate: "A", decision: "approve", reason: null, seconds: 15 });
     // The process died between the claim and the submit's answer.
     await store.claimRender(runId, 1);
 
@@ -392,9 +439,53 @@ describe("resumeDirectorRenders", () => {
     expect(video.check).not.toHaveBeenCalled();
     const events = await store.events(runId);
     expect(ofType(events, "render.settled")).toEqual([
-      expect.objectContaining({ status: "failed", billing: "unknown", actualMicroUsd: null }),
+      expect.objectContaining({
+        attempt: 1,
+        estimatedMicroUsd: estimateMicroUsd(DIRECTOR_VIDEO_SIZE, 15),
+        status: "failed",
+        billing: "unknown",
+        actualMicroUsd: null,
+      }),
     ]);
     expect(ofType(events, "run.finished")).toEqual([expect.objectContaining({ status: "render_failed" })]);
+    expect(reduceDirectorEvents(events).render).toMatchObject({ attempt: 1, billing: "unknown" });
+  });
+
+  it("never settles an attempt whose submit is in flight, even in the instant after its claim", async () => {
+    const video = fakeVideo();
+    const { store, runId, deps } = await setup(video);
+    // The resume runs right after the claim file is written, before submit is even called.
+    const claimRender = store.claimRender.bind(store);
+    vi.spyOn(store, "claimRender").mockImplementation(async (id, attempt) => {
+      const outcome = await claimRender(id, attempt);
+      await resumeDirectorRenders(deps);
+      return outcome;
+    });
+
+    expect(await submitDirectorRender(deps, { runId, attempt: 1, prompt: PROMPT, seconds: 4 })).toBe("submitted");
+
+    const events = await store.events(runId);
+    expect(ofType(events, "render.settled")).toHaveLength(0);
+    expect(ofType(events, "render.submitted")).toHaveLength(1);
+    expect(video.submit).toHaveBeenCalledTimes(1);
+  });
+
+  it("a submit that finishes while the resume reads the claim is polled, not settled as unknown", async () => {
+    const video = fakeVideo();
+    const { store, runId, deps } = await setup(video);
+    // The resume read the events (no claim yet); the whole submit happens before it reads the claim.
+    const hasRenderClaim = store.hasRenderClaim.bind(store);
+    vi.spyOn(store, "hasRenderClaim").mockImplementation(async (id, attempt) => {
+      await submitDirectorRender(deps, { runId, attempt: 1, prompt: PROMPT, seconds: 4 });
+      return hasRenderClaim(id, attempt);
+    });
+
+    await resumeDirectorRenders(deps);
+
+    const events = await store.events(runId);
+    expect(ofType(events, "render.settled")).toEqual([expect.objectContaining({ status: "succeeded" })]);
+    expect(reduceDirectorEvents(events).status).toBe("rendered");
+    expect(video.submit).toHaveBeenCalledTimes(1);
   });
 
   it("leaves runs without a claim, and settled renders, untouched", async () => {

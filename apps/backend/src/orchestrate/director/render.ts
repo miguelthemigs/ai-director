@@ -8,6 +8,7 @@ import {
   type DirectorEvent,
   type DirectorEventBody,
   type RenderStatus,
+  reduceDirectorEvents,
 } from "@ai-director/contract";
 import { POLL_DEADLINE_MS, POLL_INTERVAL_MS } from "../../compare/runComparison.js";
 import { isUploadThingUrl } from "../../images/referenceHost.js";
@@ -77,10 +78,12 @@ function emitter(deps: RenderDeps, runId: string) {
 /** Ends an attempt that will never produce a clip: `render.settled` failed, then the run. */
 async function settleFailed(
   emit: ReturnType<typeof emitter>,
+  attempt: { attempt: number; estimatedMicroUsd: number },
   billing: Billing,
   failure: string,
+  actualMicroUsd: number | null = null,
 ): Promise<void> {
-  await emit({ type: "render.settled", status: "failed", billing, actualMicroUsd: null, failure });
+  await emit({ type: "render.settled", ...attempt, status: "failed", billing, actualMicroUsd, failure });
   await emit({ type: "run.finished", status: "render_failed", reason: failure });
 }
 
@@ -100,12 +103,16 @@ export async function submitDirectorRender(
   args: { runId: string; attempt: number; prompt: AssembledPrompt; seconds: number },
 ): Promise<SubmitRenderOutcome> {
   const { runId, attempt, prompt, seconds } = args;
-  if ((await deps.store.claimRender(runId, attempt)) === "already_claimed") return "already_claimed";
-
+  // Marked in flight BEFORE the claim exists, so the resume can never see this claim without
+  // also seeing that its submit is still running.
   const key = keyOf(runId, attempt);
-  submitting.add(key);
+  const marked = !submitting.has(key);
+  if (marked) submitting.add(key);
   try {
+    if ((await deps.store.claimRender(runId, attempt)) === "already_claimed") return "already_claimed";
+
     const emit = emitter(deps, runId);
+    const settledAs = { attempt, estimatedMicroUsd: estimateMicroUsd(DIRECTOR_VIDEO_SIZE, seconds) };
     const references = [...prompt.references].sort((a, b) => a.slot - b.slot);
 
     // OpenRouter fetches each reference by URL. Only UploadThing's hosts are ones this repo
@@ -114,6 +121,7 @@ export async function submitDirectorRender(
     if (foreign.length > 0) {
       await settleFailed(
         emit,
+        settledAs,
         "not_billed",
         `reference ${foreign.map((r) => r.handle).join(", ")} is not an UploadThing URL, so nothing was sent to OpenRouter`,
       );
@@ -142,29 +150,26 @@ export async function submitDirectorRender(
     } catch (err) {
       // Only a refusal OpenRouter answered (4xx) or a request never sent is provably free. A
       // timeout, a 5xx or an unreadable 2xx may have created a job: billing unknown.
-      await settleFailed(emit, submitProvablyUnbilled(err) ? "not_billed" : "unknown", message(err));
+      await settleFailed(emit, settledAs, submitProvablyUnbilled(err) ? "not_billed" : "unknown", message(err));
       return "submit_failed";
     }
 
     // Before anything waits on it.
-    await emit({
-      type: "render.submitted",
-      attempt,
-      taskId,
-      estimatedMicroUsd: estimateMicroUsd(DIRECTOR_VIDEO_SIZE, seconds),
-    });
+    await emit({ type: "render.submitted", taskId, ...settledAs });
     return "submitted";
   } finally {
-    submitting.delete(key);
+    if (marked) submitting.delete(key);
   }
 }
 
-/** The task id of `attempt`, or null when that attempt is already settled. */
-function pendingTask(events: DirectorEvent[], runId: string, attempt: number): string | null {
+type Submitted = Extract<DirectorEvent, { type: "render.submitted" }>;
+
+/** The `render.submitted` of `attempt`, or null when that attempt is already settled. */
+function pendingTask(events: DirectorEvent[], runId: string, attempt: number): Submitted | null {
   for (let i = events.length - 1; i >= 0; i--) {
     const event = events[i]!;
     if (event.type === "render.submitted" && event.attempt === attempt) {
-      return events.slice(i + 1).some((later) => later.type === "render.settled") ? null : event.taskId;
+      return events.slice(i + 1).some((later) => later.type === "render.settled") ? null : event;
     }
   }
   throw new Error(`render attempt ${attempt} of run ${runId} was never submitted`);
@@ -175,35 +180,38 @@ async function finish(
   deps: SettleRenderDeps,
   emit: ReturnType<typeof emitter>,
   runId: string,
-  attempt: number,
+  submitted: Submitted,
   read: VideoTaskResult,
 ): Promise<void> {
+  const settledAs = { attempt: submitted.attempt, estimatedMicroUsd: submitted.estimatedMicroUsd };
   const billing: Billing =
     read.status === "succeeded" || typeof read.actualMicroUsd === "number" ? "billed" : "unknown";
-  let failure = read.failure ?? (read.status === "succeeded" ? null : `OpenRouter reported the render ${read.status}`);
-  let clipSaved = false;
+
   if (read.status === "succeeded") {
     try {
       const clip = await deps.video.fetchClip(read.taskId);
-      await deps.store.saveAsset(runId, `clip.${attempt}.mp4`, clip.bytes);
-      clipSaved = true;
+      await deps.store.saveAsset(runId, `clip.${submitted.attempt}.mp4`, clip.bytes);
     } catch (err) {
-      // The render HAPPENED and was billed: it stays `succeeded` and `billed`. The run still
-      // has no clip, so it does not finish as a success.
-      failure = `the render succeeded and was billed, but its clip could not be downloaded and saved: ${message(err)}`;
+      // `succeeded` is never logged without a saved clip: the run would read as a success
+      // with nothing to play. The render HAPPENED and was paid for, so it stays billed at the
+      // actual cost.
+      await settleFailed(emit, settledAs, "billed", `clip download failed: ${message(err)}`, read.actualMicroUsd);
+      return;
     }
+    await emit({ type: "render.settled", ...settledAs, status: "succeeded", billing, actualMicroUsd: read.actualMicroUsd, failure: null });
+    await emit({ type: "run.finished", status: "rendered", reason: null });
+    return;
   }
-  await emit({ type: "render.settled", status: read.status, billing, actualMicroUsd: read.actualMicroUsd, failure });
-  await emit({
-    type: "run.finished",
-    status: clipSaved ? "rendered" : "render_failed",
-    reason: clipSaved ? null : failure,
-  });
+
+  const failure = read.failure ?? `OpenRouter reported the render ${read.status}`;
+  await emit({ type: "render.settled", ...settledAs, status: read.status, billing, actualMicroUsd: read.actualMicroUsd, failure });
+  await emit({ type: "run.finished", status: "render_failed", reason: failure });
 }
 
 async function poll(deps: SettleRenderDeps, runId: string, attempt: number): Promise<void> {
-  const taskId = pendingTask(await deps.store.events(runId), runId, attempt);
-  if (taskId === null) return;
+  const submitted = pendingTask(await deps.store.events(runId), runId, attempt);
+  if (submitted === null) return;
+  const { taskId } = submitted;
 
   const emit = emitter(deps, runId);
   const sleep = deps.sleep ?? defaultSleep;
@@ -222,7 +230,7 @@ async function poll(deps: SettleRenderDeps, runId: string, attempt: number): Pro
       // Count it and let the deadline decide.
     }
     if (read !== null) {
-      if (isRenderTerminal(read.status)) return finish(deps, emit, runId, attempt, read);
+      if (isRenderTerminal(read.status)) return finish(deps, emit, runId, submitted, read);
       if (read.status !== last) {
         last = read.status;
         await emit({ type: "render.polled", status: read.status, reads });
@@ -233,6 +241,7 @@ async function poll(deps: SettleRenderDeps, runId: string, attempt: number): Pro
       // The task id stays in `render.submitted`: the clip may still complete and still bill.
       await settleFailed(
         emit,
+        { attempt, estimatedMicroUsd: submitted.estimatedMicroUsd },
         "unknown",
         `task ${taskId} was still unfinished after ${Math.round(POLL_DEADLINE_MS / 1000)}s of polling; it may still complete and bill`,
       );
@@ -263,18 +272,29 @@ export async function settleDirectorRender(
 }
 
 async function resumeRun(deps: SettleRenderDeps, runId: string): Promise<void> {
-  const events = await deps.store.events(runId);
-  if (events.length === 0) return;
-  const attempt = nextRenderAttempt(events);
-  if (submitting.has(keyOf(runId, attempt))) return;
+  const seen = await deps.store.events(runId);
+  if (seen.length === 0) return;
+  const attempt = nextRenderAttempt(seen);
   if (!(await deps.store.hasRenderClaim(runId, attempt))) return;
+  // Checked AFTER the claim is seen: a submit marks itself in flight before it claims, so a
+  // claim with no mark here belongs to a submit that has already returned (or died).
+  if (submitting.has(keyOf(runId, attempt))) return;
+  // Re-read: that submit may have logged `render.submitted` or a settlement meanwhile.
+  const events = await deps.store.events(runId);
+  if (nextRenderAttempt(events) !== attempt) return;
 
   if (events.some((event) => event.type === "render.submitted" && event.attempt === attempt)) {
     await settleDirectorRender(deps, { runId, attempt });
     return;
   }
+  // What was asked for is unknown; the length approved at gate A is the best evidence.
+  const { seconds } = reduceDirectorEvents(events);
+  if (seconds === null) {
+    throw new Error(`render attempt ${attempt} is claimed but the run has no approved length`);
+  }
   await settleFailed(
     emitter(deps, runId),
+    { attempt, estimatedMicroUsd: estimateMicroUsd(DIRECTOR_VIDEO_SIZE, seconds) },
     "unknown",
     `render attempt ${attempt} was claimed but no task id was ever recorded, so its outcome is unknown and it must not be resubmitted`,
   );
