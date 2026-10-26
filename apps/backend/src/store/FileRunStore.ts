@@ -146,13 +146,17 @@ export class FileRunStore implements RunStore {
     return result.data;
   }
 
-  // Write to a temp file in the same directory, then rename over the target.
-  // rename() is atomic on POSIX and Windows for same-volume paths, so a crash
-  // mid-write can never leave a partially-written manifest/pass file that a
-  // later read would parse as valid (or invalid) JSON.
   private async writeJsonAtomic(target: string, payload: unknown): Promise<void> {
-    const tmp = `${target}.${randomUUID()}.tmp`;
-    await writeFile(tmp, JSON.stringify(payload, null, 2), "utf8");
-    await rename(tmp, target);
+    await writeJsonAtomic(target, payload);
   }
+}
+
+// Write to a temp file in the same directory, then rename over the target.
+// rename() is atomic on POSIX and Windows for same-volume paths, so a crash
+// mid-write can never leave a partially-written manifest/pass file that a
+// later read would parse as valid (or invalid) JSON.
+export async function writeJsonAtomic(target: string, payload: unknown): Promise<void> {
+  const tmp = `${target}.${randomUUID()}.tmp`;
+  await writeFile(tmp, JSON.stringify(payload, null, 2), "utf8");
+  await rename(tmp, target);
 }

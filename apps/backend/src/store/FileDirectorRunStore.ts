@@ -1,0 +1,174 @@
+import { appendFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import path from "node:path";
+import {
+  reduceDirectorEvents,
+  type DirectorEvent,
+  type DirectorEventBody,
+  type DirectorNodeId,
+  type DirectorRunSummary,
+  type GateAAnswers,
+} from "@ai-director/contract";
+import type { DirectorRunStore } from "./DirectorRunStore.js";
+import { writeJsonAtomic } from "./FileRunStore.js";
+
+const REF = /^(nodes|assets)\/[\w.-]+$/;
+const NAME = /^[\w.-]+$/;
+const RUN_ID = /^[\w.-]+$/;
+
+export class FileDirectorRunStore implements DirectorRunStore {
+  /** Tail of each run's append chain: the next append waits for it. */
+  private readonly chains = new Map<string, Promise<unknown>>();
+
+  constructor(private readonly root: string) {}
+
+  private dir(runId: string): string {
+    if (!RUN_ID.test(runId) || runId === "." || runId === "..") {
+      throw new Error(`FileDirectorRunStore: invalid run id "${runId}"`);
+    }
+    return path.join(this.root, runId);
+  }
+
+  private resolveRef(runId: string, ref: string): string {
+    if (!REF.test(ref) || ref.slice(ref.indexOf("/") + 1).startsWith("..")) {
+      throw new Error(`FileDirectorRunStore: invalid ref "${ref}"`);
+    }
+    return path.join(this.dir(runId), ref);
+  }
+
+  async createRun(brief: string): Promise<string> {
+    const runId = `run-${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID().slice(0, 8)}`;
+    const dir = this.dir(runId);
+    await mkdir(path.join(dir, "nodes"), { recursive: true });
+    await mkdir(path.join(dir, "assets"), { recursive: true });
+    await writeJsonAtomic(path.join(dir, "manifest.json"), {
+      runId,
+      brief,
+      startedAt: new Date().toISOString(),
+    });
+    await this.append(runId, { type: "run.started", brief });
+    return runId;
+  }
+
+  append(runId: string, body: DirectorEventBody): Promise<DirectorEvent> {
+    const previous = this.chains.get(runId) ?? Promise.resolve();
+    const next = previous
+      .catch(() => undefined)
+      .then(async () => {
+        const existing = await this.events(runId);
+        const last = existing.length > 0 ? existing[existing.length - 1]!.seq : 0;
+        const event = { ...body, runId, seq: last + 1, at: new Date().toISOString() } as DirectorEvent;
+        await appendFile(path.join(this.dir(runId), "events.jsonl"), `${JSON.stringify(event)}\n`, "utf8");
+        return event;
+      });
+    this.chains.set(runId, next);
+    return next;
+  }
+
+  async events(runId: string, afterSeq = 0): Promise<DirectorEvent[]> {
+    let raw: string;
+    try {
+      raw = await readFile(path.join(this.dir(runId), "events.jsonl"), "utf8");
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw err;
+    }
+    return raw
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line) as DirectorEvent)
+      .filter((event) => event.seq > afterSeq);
+  }
+
+  async writeOutput(
+    runId: string,
+    node: DirectorNodeId,
+    attempt: number,
+    payload: unknown,
+  ): Promise<string> {
+    const ref = `nodes/${node}.${attempt}.json`;
+    await mkdir(path.join(this.dir(runId), "nodes"), { recursive: true });
+    await writeJsonAtomic(this.resolveRef(runId, ref), payload);
+    return ref;
+  }
+
+  async readOutput<T>(runId: string, ref: string): Promise<T> {
+    return JSON.parse(await readFile(this.resolveRef(runId, ref), "utf8")) as T;
+  }
+
+  async saveAsset(runId: string, name: string, bytes: Buffer): Promise<string> {
+    const ref = `assets/${name}`;
+    if (!NAME.test(name)) throw new Error(`FileDirectorRunStore: invalid asset name "${name}"`);
+    const target = this.resolveRef(runId, ref);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, bytes);
+    return ref;
+  }
+
+  async readAsset(runId: string, ref: string): Promise<Buffer> {
+    if (!ref.startsWith("assets/")) throw new Error(`FileDirectorRunStore: invalid asset ref "${ref}"`);
+    return readFile(this.resolveRef(runId, ref));
+  }
+
+  async writeAnswers(runId: string, answers: GateAAnswers): Promise<void> {
+    // "wx" makes the second write fail with EEXIST instead of overwriting.
+    await writeFile(path.join(this.dir(runId), "answers.json"), JSON.stringify(answers, null, 2), {
+      encoding: "utf8",
+      flag: "wx",
+    });
+  }
+
+  async readAnswers(runId: string): Promise<GateAAnswers | null> {
+    try {
+      return JSON.parse(await readFile(path.join(this.dir(runId), "answers.json"), "utf8")) as GateAAnswers;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw err;
+    }
+  }
+
+  async claimRender(runId: string, attempt: number): Promise<"claimed" | "already_claimed"> {
+    const claim = path.join(this.dir(runId), `render.${attempt}.claim`);
+    try {
+      // "wx" is the whole mechanism: create-if-absent, atomically, or EEXIST.
+      await writeFile(claim, new Date().toISOString(), { flag: "wx" });
+      return "claimed";
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "EEXIST") return "already_claimed";
+      throw err;
+    }
+  }
+
+  async listIds(): Promise<string[]> {
+    try {
+      const entries = await readdir(this.root, { withFileTypes: true });
+      return entries.filter((e) => e.isDirectory()).map((e) => e.name);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw err;
+    }
+  }
+
+  async listRuns(): Promise<DirectorRunSummary[]> {
+    const results = await Promise.allSettled(
+      (await this.listIds()).map(async (id): Promise<DirectorRunSummary> => {
+        const view = reduceDirectorEvents(await this.events(id));
+        if (view.id === "") throw new Error(`run "${id}" has no events`);
+        const settled = view.render;
+        return {
+          id: view.id,
+          brief: view.brief,
+          status: view.status,
+          waitingAt: view.waitingAt,
+          seconds: view.seconds,
+          textMicroUsd: view.textMicroUsd,
+          startedAt: view.startedAt,
+          billedMicroUsd: settled?.billing === "billed" ? settled.actualMicroUsd : null,
+        };
+      }),
+    );
+    return results
+      .flatMap((r) => (r.status === "fulfilled" ? [r.value] : []))
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  }
+}
