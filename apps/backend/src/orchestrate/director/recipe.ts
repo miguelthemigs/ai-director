@@ -22,6 +22,24 @@ export type NodeContext = {
   answers: () => Promise<GateAAnswers>;
 };
 export type NodeResult = { output: unknown; summary: string; calls: CallLog[] };
+
+/** The calls a node made before it threw, keyed by the thrown object. */
+const spentBeforeThrow = new WeakMap<object, CallLog[]>();
+
+/**
+ * Attaches the calls a node made to the error it is about to throw, so `node.failed` can log
+ * their spend. Returns the same error (a non-object is wrapped in an Error first).
+ */
+export function withCalls(error: unknown, calls: CallLog[]): unknown {
+  const carrier = typeof error === "object" && error !== null ? error : new Error(String(error));
+  spentBeforeThrow.set(carrier, calls);
+  return carrier;
+}
+
+/** The calls attached by {@link withCalls}, or none. */
+export function callsOf(error: unknown): CallLog[] {
+  return typeof error === "object" && error !== null ? (spentBeforeThrow.get(error) ?? []) : [];
+}
 export type NodeSpec = {
   id: DirectorNodeId;
   after: Array<DirectorNodeId | GateId>;

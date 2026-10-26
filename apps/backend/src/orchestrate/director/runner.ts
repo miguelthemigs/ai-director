@@ -12,7 +12,7 @@ import {
   type GateId,
 } from "@ai-director/contract";
 import type { DirectorRunStore } from "../../store/DirectorRunStore.js";
-import type { NodeContext, NodeSpec } from "./recipe.js";
+import { callsOf, type NodeContext, type NodeSpec } from "./recipe.js";
 import { route } from "./router.js";
 
 export type RunnerDeps = { store: DirectorRunStore; recipe: NodeSpec[]; publish?: (ev: DirectorEvent) => void };
@@ -204,7 +204,7 @@ async function startNode(
       return { node: spec.id };
     } catch (error) {
       try {
-        await emit({ type: "node.failed", node: spec.id, attempt, error: message(error) });
+        await emit({ type: "node.failed", node: spec.id, attempt, error: message(error), calls: callsOf(error) });
         return { node: spec.id };
       } catch (fault) {
         return { node: spec.id, fault };

@@ -55,6 +55,8 @@ const INTERROGATED = {
 };
 
 type Overrides = {
+  /** Answers the Interrogator; defaults to INTERROGATED. */
+  interrogate?: () => unknown;
   /** Answers a patch request; defaults to the board plan. */
   patch?: () => unknown;
   plan?: () => unknown;
@@ -74,7 +76,7 @@ function fakeTransport(rubricIds: string[], overrides: Overrides = {}) {
     });
     if (schema === InterrogatorOutputSchema) {
       seen.push("interrogate");
-      return answer(INTERROGATED);
+      return answer(overrides.interrogate ? overrides.interrogate() : INTERROGATED);
     }
     if (schema === DirectorPlanSchema) {
       if (system === buildDirectorPatchSystemPrompt()) {
@@ -208,6 +210,23 @@ describe("buildDirectorAgents through the runner", () => {
     expect(made.seedDescription).toBe("a woman in her thirties in a linen shirt");
     expect(text).toHaveBeenCalledTimes(1);
     expect(character).toMatchObject({ avatarId: made.id, passed: true, description: "A woman, dark bob, linen shirt." });
+  });
+
+  it("an agent that throws after its model call still logs that call on node.failed", async () => {
+    const { deps, store } = await setup({ interrogate: () => ({ ...INTERROGATED, tone: " " }) });
+    const runId = await startDirectorRun(deps, "cool ad for my sparkling water");
+    await driveDirectorRun(deps, runId);
+
+    const events = await store.events(runId);
+    const failed = events.find((e) => e.type === "node.failed");
+    expect(failed).toMatchObject({
+      node: "interrogator",
+      error: "interrogator left tone blank",
+      calls: [expect.objectContaining({ model: "claude-opus-5", promptVersion: "v1", inputTokens: 100, outputTokens: 50 })],
+    });
+    const view = reduceDirectorEvents(events);
+    expect(view.status).toBe("failed");
+    expect(view.textMicroUsd).toBe(100 * 5 + 50 * 25);
   });
 
   it("a patch that changes the assets keeps the previous plan, so the run ends stopped, not failed", async () => {

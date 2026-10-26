@@ -12,10 +12,12 @@ import {
 import { FileDirectorRunStore } from "../../../src/store/FileDirectorRunStore.js";
 import {
   buildRecipe,
+  withCalls,
   type DirectorAgents,
   type NodeContext,
   type NodeResult,
 } from "../../../src/orchestrate/director/recipe.js";
+import { meter } from "../../../src/orchestrate/director/metered.js";
 import {
   GateConflictError,
   driveDirectorRun,
@@ -352,6 +354,42 @@ describe("Director runner", () => {
     expect((await viewOf(deps, runId)).status).toBe("failed");
   });
 
+  it("a node that throws after a metered call logs that call's spend on node.failed", async () => {
+    const usage = { inputTokens: 1_000, outputTokens: 100 };
+    const { agents } = fakeAgents({
+      interrogator: async () => {
+        const metered = meter(async () => ({ parsed_output: {}, model: "claude-opus-5", usage }), "v1");
+        await metered.transport({ system: "s", user: "u", schema: {} as never });
+        throw withCalls(new Error("interrogator left tone blank"), metered.calls());
+      },
+    });
+    const deps = depsFor(await newRoot(), agents);
+    const runId = await startDirectorRun(deps, "a brief");
+    await driveDirectorRun(deps, runId);
+
+    const failed = (await deps.store.events(runId)).find((e) => e.type === "node.failed");
+    expect(failed).toMatchObject({
+      node: "interrogator",
+      error: "interrogator left tone blank",
+      calls: [expect.objectContaining({ model: "claude-opus-5", inputTokens: 1_000, microUsd: 7_500 })],
+    });
+    const view = await viewOf(deps, runId);
+    expect(view.status).toBe("failed");
+    expect(view.textMicroUsd).toBe(7_500);
+  });
+
+  it("a node that throws without calls logs node.failed with an empty calls list", async () => {
+    const { agents } = fakeAgents({
+      interrogator: async () => {
+        throw new Error("plain");
+      },
+    });
+    const deps = depsFor(await newRoot(), agents);
+    const runId = await startDirectorRun(deps, "a brief");
+    await driveDirectorRun(deps, runId);
+    expect((await deps.store.events(runId)).find((e) => e.type === "node.failed")).toMatchObject({ calls: [] });
+  });
+
   it("a branch that throws lets its siblings finish, then fails the run", async () => {
     const productFailed = deferred<void>();
     const { agents, calls } = fakeAgents({
@@ -403,7 +441,7 @@ describe("Director runner", () => {
     const runId = await loggedToGateB(deps.store);
     await deps.store.append(runId, { type: "node.started", node: "product", attempt: 1, patchShots: null });
     await deps.store.append(runId, { type: "node.started", node: "location", attempt: 1, patchShots: null });
-    await deps.store.append(runId, { type: "node.failed", node: "product", attempt: 1, error: "no product photo" });
+    await deps.store.append(runId, { type: "node.failed", node: "product", attempt: 1, error: "no product photo", calls: [] });
 
     await resumeAllDirectorRuns(deps);
 
@@ -424,7 +462,7 @@ describe("Director runner", () => {
     const deps = depsFor(await newRoot(), agents);
     const runId = await deps.store.createRun("a brief");
     await deps.store.append(runId, { type: "node.started", node: "interrogator", attempt: 1, patchShots: null });
-    await deps.store.append(runId, { type: "node.failed", node: "interrogator", attempt: 1, error: "boom" });
+    await deps.store.append(runId, { type: "node.failed", node: "interrogator", attempt: 1, error: "boom", calls: [] });
 
     await driveDirectorRun(deps, runId);
 

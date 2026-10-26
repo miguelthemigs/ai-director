@@ -193,9 +193,10 @@ export class FileDirectorRunStore implements DirectorRunStore {
     const ids = await this.listIds();
     const results = await Promise.allSettled(
       ids.map(async (id): Promise<DirectorRunSummary> => {
-        const view = reduceDirectorEvents(await this.events(id));
+        const events = await this.events(id);
+        const view = reduceDirectorEvents(events);
         if (view.id === "") throw new Error(`run "${id}" has no events`);
-        const settled = view.render;
+        const everBilled = events.some((event) => event.type === "render.settled" && event.billing === "billed");
         return {
           id: view.id,
           brief: view.brief,
@@ -204,7 +205,7 @@ export class FileDirectorRunStore implements DirectorRunStore {
           seconds: view.seconds,
           textMicroUsd: view.textMicroUsd,
           startedAt: view.startedAt,
-          billedMicroUsd: settled?.billing === "billed" ? settled.actualMicroUsd : null,
+          billedMicroUsd: everBilled ? view.billedMicroUsd : null,
         };
       }),
     );

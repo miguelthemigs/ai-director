@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   plannedSeconds,
   type AssetKind,
+  type CallLog,
   type Camera,
   type CharacterOutcome,
   type CheckOutcome,
@@ -27,7 +28,7 @@ import { coachDescription, type CoachDeps } from "../coach.js";
 import { assembleSeedancePrompt } from "./assemble.js";
 import { runPlanChecks, runPromptChecks } from "./checks.js";
 import { meter } from "./metered.js";
-import type { DirectorAgents, NodeResult } from "./recipe.js";
+import { withCalls, type DirectorAgents, type NodeResult } from "./recipe.js";
 
 export type DirectorAgentDeps = {
   transport: ParseTransport;
@@ -63,11 +64,21 @@ function checksSummary(outcomes: CheckOutcome[]): string {
   return `${passed} of ${outcomes.length} checks passed`;
 }
 
+/** Runs a metered node body; if it throws, the calls it made so far go with the error. */
+async function spending(metered: { calls: () => CallLog[] }, work: () => Promise<NodeResult>): Promise<NodeResult> {
+  try {
+    return await work();
+  } catch (error) {
+    throw withCalls(error, metered.calls());
+  }
+}
+
 const listed = (shots: number[]): string => `${shots.length === 1 ? "shot" : "shots"} ${shots.join(", ")}`;
 
 /**
  * The real body of every recipe node but `render`. Each model call goes through `meter`, so
- * the node's `calls` say which model served it, its tokens and its cost. The image, text and
+ * the node's `calls` say which model served it, its tokens and its cost — on `node.failed` too,
+ * when the node throws after a call (see `spending`). The image, text and
  * vision transports are not `ParseTransport`s and are not metered here.
  */
 export function buildDirectorAgents(deps: DirectorAgentDeps): DirectorAgents {
@@ -76,43 +87,47 @@ export function buildDirectorAgents(deps: DirectorAgentDeps): DirectorAgents {
   return {
     async interrogator(ctx): Promise<NodeResult> {
       const metered = meter(deps.transport, INTERROGATOR_PROMPT_VERSION);
-      const brief = await interrogate({ transport: metered.transport }, { brief: ctx.view.brief });
-      return { output: brief, summary: `brief filled for ${brief.productKind}`, calls: metered.calls() };
+      return spending(metered, async () => {
+        const brief = await interrogate({ transport: metered.transport }, { brief: ctx.view.brief });
+        return { output: brief, summary: `brief filled for ${brief.productKind}`, calls: metered.calls() };
+      });
     },
 
     async director(ctx): Promise<NodeResult> {
       const metered = meter(deps.transport, DIRECTOR_PROMPT_VERSION);
-      const brief = await ctx.read<FilledBrief>("interrogator");
-      const answers = await ctx.answers();
-      if (ctx.patch === null) {
-        const plan = await direct({ transport: metered.transport }, { brief, answers });
-        return {
-          output: plan,
-          summary: `${plan.shots.length} shots, ${plannedSeconds(plan)} s planned`,
-          calls: metered.calls(),
-        };
-      }
-      const previous = await ctx.read<Plan>("director");
-      try {
-        const plan = await patchPlan(
-          { transport: metered.transport },
-          { plan: previous, failures: ctx.patch.failures, brief, answers },
-        );
-        return {
-          output: plan,
-          summary: `patched for ${ctx.patch.checkIds.join(", ")}`,
-          calls: metered.calls(),
-        };
-      } catch (error) {
-        if (!(error instanceof PlanPatchError)) throw error;
-        // The previous plan goes back to the checks unchanged, so they fail again and the
-        // router counts the retry: a refused patch ends the run `stopped`, never `failed`.
-        return {
-          output: previous,
-          summary: `patch refused (${error.message}); the previous plan is kept`,
-          calls: metered.calls(),
-        };
-      }
+      return spending(metered, async () => {
+        const brief = await ctx.read<FilledBrief>("interrogator");
+        const answers = await ctx.answers();
+        if (ctx.patch === null) {
+          const plan = await direct({ transport: metered.transport }, { brief, answers });
+          return {
+            output: plan,
+            summary: `${plan.shots.length} shots, ${plannedSeconds(plan)} s planned`,
+            calls: metered.calls(),
+          };
+        }
+        const previous = await ctx.read<Plan>("director");
+        try {
+          const plan = await patchPlan(
+            { transport: metered.transport },
+            { plan: previous, failures: ctx.patch.failures, brief, answers },
+          );
+          return {
+            output: plan,
+            summary: `patched for ${ctx.patch.checkIds.join(", ")}`,
+            calls: metered.calls(),
+          };
+        } catch (error) {
+          if (!(error instanceof PlanPatchError)) throw error;
+          // The previous plan goes back to the checks unchanged, so they fail again and the
+          // router counts the retry: a refused patch ends the run `stopped`, never `failed`.
+          return {
+            output: previous,
+            summary: `patch refused (${error.message}); the previous plan is kept`,
+            calls: metered.calls(),
+          };
+        }
+      });
     },
 
     async planChecks(ctx): Promise<NodeResult> {
@@ -167,31 +182,35 @@ export function buildDirectorAgents(deps: DirectorAgentDeps): DirectorAgents {
         deps.coach.transport,
         `rubric-${deps.coach.rubric.version}/repairer-v2`,
       );
-      const outcome: CharacterOutcome = await coachDescription(
-        { ...deps.coach, transport: metered.transport },
-        { avatarId, runId: randomUUID() },
-      );
-      return {
-        output: outcome,
-        summary: `${made}avatar ${avatarId}: coach ended ${outcome.status}`,
-        calls: metered.calls(),
-      };
+      return spending(metered, async () => {
+        const outcome: CharacterOutcome = await coachDescription(
+          { ...deps.coach, transport: metered.transport },
+          { avatarId, runId: randomUUID() },
+        );
+        return {
+          output: outcome,
+          summary: `${made}avatar ${avatarId}: coach ended ${outcome.status}`,
+          calls: metered.calls(),
+        };
+      });
     },
 
     async cinematographer(ctx): Promise<NodeResult> {
       const metered = meter(deps.transport, CINEMATOGRAPHER_PROMPT_VERSION);
-      const plan = await ctx.read<Plan>("director");
-      if (ctx.patch === null) {
-        const answers = await ctx.answers();
-        const cameras = await shootAll({ transport: metered.transport }, { plan, seconds: answers.seconds });
-        return { output: cameras, summary: `${cameras.length} cameras`, calls: metered.calls() };
-      }
-      const previous = await ctx.read<Camera[]>("cinematographer");
-      const cameras = await reshoot(
-        { transport: metered.transport },
-        { plan, cameras: previous, shots: ctx.patch.shots, failures: ctx.patch.failures },
-      );
-      return { output: cameras, summary: `reshot ${listed(ctx.patch.shots)}`, calls: metered.calls() };
+      return spending(metered, async () => {
+        const plan = await ctx.read<Plan>("director");
+        if (ctx.patch === null) {
+          const answers = await ctx.answers();
+          const cameras = await shootAll({ transport: metered.transport }, { plan, seconds: answers.seconds });
+          return { output: cameras, summary: `${cameras.length} cameras`, calls: metered.calls() };
+        }
+        const previous = await ctx.read<Camera[]>("cinematographer");
+        const cameras = await reshoot(
+          { transport: metered.transport },
+          { plan, cameras: previous, shots: ctx.patch.shots, failures: ctx.patch.failures },
+        );
+        return { output: cameras, summary: `reshot ${listed(ctx.patch.shots)}`, calls: metered.calls() };
+      });
     },
 
     async assembler(ctx): Promise<NodeResult> {

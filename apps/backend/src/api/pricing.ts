@@ -19,13 +19,20 @@ export const MICRO_USD_PER_IMAGE: Record<string, number> = {
   "gemini-3-pro-image": 134_000,
 };
 
-/** Cost of one text call in micro-USD, or null when the model has no recorded rate (never 0). */
+/** A served id can carry a release date (`claude-opus-5-20261001`); it is priced as its model. */
+const DATE_SUFFIX = /-\d{8}$/;
+
+/**
+ * Cost of one text call in micro-USD, or null when the model has no recorded rate (never 0).
+ * A trailing `-YYYYMMDD` is ignored for the lookup only; the caller keeps logging the served id.
+ */
 export function tokenMicroUsd(
   model: string,
   usage: { inputTokens: number; outputTokens: number },
 ): number | null {
-  const input = MICRO_USD_PER_INPUT_TOKEN[model];
-  const output = MICRO_USD_PER_OUTPUT_TOKEN[model];
+  const priced = model.replace(DATE_SUFFIX, "");
+  const input = MICRO_USD_PER_INPUT_TOKEN[priced];
+  const output = MICRO_USD_PER_OUTPUT_TOKEN[priced];
   if (input === undefined || output === undefined) return null;
   return usage.inputTokens * input + usage.outputTokens * output;
 }

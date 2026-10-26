@@ -2,6 +2,7 @@ import {
   DIRECTOR_NODE_IDS,
   DIRECTOR_RECIPE_EDGES,
   GATE_IDS,
+  type CallLog,
   type DirectorEvent,
   type DirectorNodeId,
   type DirectorNodeView,
@@ -31,12 +32,22 @@ const emptyView = (): DirectorRunView => ({
   retries: { director: 0, cinematographer: 0 },
   checks: { plan: [], prompt: [] },
   textMicroUsd: 0,
+  unpricedCalls: 0,
+  billedMicroUsd: 0,
+  unknownBillingAttempts: 0,
   render: null,
   reason: null,
   lastSeq: 0,
   startedAt: "",
   finishedAt: null,
 });
+
+function addCalls(view: DirectorRunView, calls: CallLog[]): void {
+  for (const call of calls) {
+    if (call.microUsd === null) view.unpricedCalls += 1;
+    else view.textMicroUsd += call.microUsd;
+  }
+}
 
 const BLOCKING_FINISHES = new Set(["stopped", "failed", "rejected", "render_failed"]);
 const CHECK_NODES = new Set<string>(["planChecks", "promptChecks"]);
@@ -109,10 +120,11 @@ export function applyDirectorEvent(view: DirectorRunView, event: DirectorEvent):
         outputRef: event.outputRef,
         error: null,
       });
-      next.textMicroUsd += event.calls.reduce((sum, call) => sum + (call.microUsd ?? 0), 0);
+      addCalls(next, event.calls);
       break;
     case "node.failed":
       patchNode(event.node, { status: "failed", error: event.error });
+      addCalls(next, event.calls);
       break;
     case "node.abandoned":
       patchNode(event.node, { status: "queued" });
@@ -169,6 +181,9 @@ export function applyDirectorEvent(view: DirectorRunView, event: DirectorEvent):
         error: ok ? null : event.failure,
       });
       next.status = ok ? "rendered" : "render_failed";
+      // Summed across attempts: "render again" replaces `render`, never the money already spent.
+      if (event.billing === "billed") next.billedMicroUsd += event.actualMicroUsd ?? 0;
+      if (event.billing === "unknown") next.unknownBillingAttempts += 1;
       break;
     }
     case "run.finished":

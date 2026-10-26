@@ -102,6 +102,32 @@ describe("FileDirectorRunStore", () => {
     expect(await store.listIds()).toEqual(expect.arrayContaining([first, second]));
   });
 
+  it("listRuns keeps a billed attempt 1 after a not-billed render again", async () => {
+    const { store } = await newStore();
+    const id = await store.createRun("b");
+    await store.append(id, { type: "render.submitted", attempt: 1, taskId: "t1", estimatedMicroUsd: 3_470_000 });
+    await store.append(id, {
+      type: "render.settled", attempt: 1, estimatedMicroUsd: 3_470_000, status: "failed",
+      billing: "billed", actualMicroUsd: 1_200_000, failure: "moderated",
+    });
+    await store.append(id, { type: "run.finished", status: "render_failed", reason: "moderated" });
+    await store.append(id, {
+      type: "render.settled", attempt: 2, estimatedMicroUsd: 3_470_000, status: "failed",
+      billing: "not_billed", actualMicroUsd: null, failure: "refused",
+    });
+    expect((await store.listRuns())[0]).toMatchObject({ id, billedMicroUsd: 1_200_000 });
+  });
+
+  it("listRuns shows 0, not null, for a billed attempt whose cost was not reported", async () => {
+    const { store } = await newStore();
+    const id = await store.createRun("b");
+    await store.append(id, {
+      type: "render.settled", attempt: 1, estimatedMicroUsd: 1, status: "succeeded",
+      billing: "billed", actualMicroUsd: null, failure: null,
+    });
+    expect((await store.listRuns())[0]).toMatchObject({ id, billedMicroUsd: 0 });
+  });
+
   it("survives a torn final line: events, append and listRuns keep working", async () => {
     const { store, root } = await newStore();
     const id = await store.createRun("b");

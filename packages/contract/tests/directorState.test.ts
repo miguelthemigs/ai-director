@@ -78,7 +78,7 @@ describe("reduceDirectorEvents", () => {
     expect(completed.nodes.director).toMatchObject({
       status: "done", summary: "s", outputRef: "nodes/director.1.json",
     });
-    const failed = log({ type: "node.failed", node: "director", attempt: 1, error: "boom" });
+    const failed = log({ type: "node.failed", node: "director", attempt: 1, error: "boom", calls: [] });
     expect(failed.nodes.director).toMatchObject({ status: "failed", error: "boom" });
     const abandoned = log(
       { type: "node.started", node: "director", attempt: 1, patchShots: null },
@@ -93,6 +93,24 @@ describe("reduceDirectorEvents", () => {
       { ...done("cinematographer"), calls: [call(5)] },
     );
     expect(v.textMicroUsd).toBe(130);
+  });
+
+  it("node.failed adds the spend of the calls it made before it threw", () => {
+    const v = log(
+      { ...done("interrogator"), calls: [call(10)] },
+      { type: "node.failed", node: "director", attempt: 1, error: "boom", calls: [call(200), call(null)] },
+    );
+    expect(v.textMicroUsd).toBe(210);
+    expect(v.unpricedCalls).toBe(1);
+  });
+
+  it("counts every call whose cost is unknown, completed or failed", () => {
+    const v = log(
+      { ...done("director"), calls: [call(null), call(5), call(null)] },
+      { type: "node.failed", node: "cinematographer", attempt: 1, error: "x", calls: [call(null)] },
+    );
+    expect(v.unpricedCalls).toBe(3);
+    expect(reduceDirectorEvents([start]).unpricedCalls).toBe(0);
   });
 
   it("checks.completed stores outcomes under plan or prompt", () => {
@@ -258,6 +276,37 @@ describe("reduceDirectorEvents", () => {
     expect(v.nodes.render).toMatchObject({ status: "failed", attempt: 2, error: "bad size" });
     expect(JSON.stringify(attemptOne)).toBe(snapshot);
     expect(attemptOne).toMatchObject({ attempt: 1, billing: "billed", actualMicroUsd: 1_200_000 });
+  });
+
+  it("render cost accumulates across attempts: a billed attempt 1 survives render again", () => {
+    const v = log(
+      submitted,
+      {
+        type: "render.settled", attempt: 1, estimatedMicroUsd: 3_470_000, status: "failed",
+        billing: "billed", actualMicroUsd: 1_200_000, failure: "moderated",
+      },
+      { type: "run.finished", status: "render_failed", reason: "moderated" },
+      { type: "render.submitted", attempt: 2, taskId: "t2", estimatedMicroUsd: 3_470_000 },
+      {
+        type: "render.settled", attempt: 2, estimatedMicroUsd: 3_470_000, status: "failed",
+        billing: "not_billed", actualMicroUsd: null, failure: "refused",
+      },
+    );
+    expect(v.render).toMatchObject({ attempt: 2, billing: "not_billed" });
+    expect(v.billedMicroUsd).toBe(1_200_000);
+    expect(v.unknownBillingAttempts).toBe(0);
+  });
+
+  it("billed costs add up and unknown-billing attempts are counted", () => {
+    const settle = (attempt: number, billing: "billed" | "unknown", actualMicroUsd: number | null) => ({
+      type: "render.settled", attempt, estimatedMicroUsd: 1, status: "failed", billing, actualMicroUsd, failure: "f",
+    }) as const;
+    const v = log(settle(1, "billed", 500), settle(2, "unknown", null), settle(3, "billed", 700));
+    expect(v.billedMicroUsd).toBe(1_200);
+    expect(v.unknownBillingAttempts).toBe(1);
+    const fresh = reduceDirectorEvents([start]);
+    expect(fresh.billedMicroUsd).toBe(0);
+    expect(fresh.unknownBillingAttempts).toBe(0);
   });
 
   it("applyDirectorEvent never mutates its input and returns a new object", () => {

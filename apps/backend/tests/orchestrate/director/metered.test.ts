@@ -24,6 +24,15 @@ describe("meter", () => {
     await m.transport(args);
     expect(m.calls()[0]?.model).toBe("claude-sonnet-5");
   });
+  it("a date-suffixed served id is priced, and logged as the id that served it", async () => {
+    const fake: ParseTransport = async () => ({ parsed_output: {}, usage, model: "claude-opus-5-20261001" });
+    const m = meter(fake, "v1", () => 0);
+    await m.transport(args);
+    expect(m.calls()[0]).toMatchObject({
+      model: "claude-opus-5-20261001",
+      microUsd: tokenMicroUsd("claude-opus-5", usage),
+    });
+  });
   it("a transport that reports nothing logs unknown model and null tokens and cost", async () => {
     const m = meter(async () => ({ parsed_output: {} }), "v1", () => 0);
     await m.transport(args);

@@ -152,7 +152,14 @@ export type DirectorEventBody =
       calls: CallLog[];
       latencyMs: number;
     }
-  | { type: "node.failed"; node: DirectorNodeId; attempt: number; error: string }
+  | {
+      type: "node.failed";
+      node: DirectorNodeId;
+      attempt: number;
+      error: string;
+      /** The model calls the node made before it threw: they may have spent money too. */
+      calls: CallLog[];
+    }
   | { type: "node.abandoned"; node: DirectorNodeId; attempt: number }
   | { type: "checks.completed"; node: "planChecks" | "promptChecks"; outcomes: CheckOutcome[] }
   | {
@@ -204,6 +211,13 @@ export type DirectorRunView = {
   retries: Record<CheckOwner, number>;
   checks: { plan: CheckOutcome[]; prompt: CheckOutcome[] };
   textMicroUsd: number;
+  /** Text calls whose cost is unknown (no usage, or a model with no recorded rate): not in textMicroUsd. */
+  unpricedCalls: number;
+  /** The actual cost of every render attempt settled `billed`, summed across attempts. */
+  billedMicroUsd: number;
+  /** Render attempts settled with billing `unknown`: they may have cost money, not in billedMicroUsd. */
+  unknownBillingAttempts: number;
+  /** The latest render attempt only; the totals above cover every attempt. */
   render: {
     attempt: number;
     status: RenderStatus;
@@ -220,7 +234,10 @@ export type DirectorRunView = {
 export type DirectorRunSummary = Pick<
   DirectorRunView,
   "id" | "brief" | "status" | "waitingAt" | "seconds" | "textMicroUsd" | "startedAt"
-> & { billedMicroUsd: number | null };
+> & {
+  /** The view's billedMicroUsd, or null when no attempt was ever settled `billed`. */
+  billedMicroUsd: number | null;
+};
 
 /** The recipe as a graph: nodes and gates, in the order the Architecture screen draws them. */
 export const DIRECTOR_RECIPE_EDGES: ReadonlyArray<{
