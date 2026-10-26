@@ -5,3 +5,4 @@ export * from "./pipeline.js";
 export * from "./versions.js";
 export * from "./video.js";
 export * from "./fixtures.js";
+export * from "./director.js";
