@@ -211,6 +211,8 @@ describe("reduceDirectorEvents", () => {
     expect(v.nodes.render).toMatchObject({ status: "running", attempt: 2, error: null });
     expect(v.render).toMatchObject({ attempt: 2, status: "queued", failure: null, actualMicroUsd: null });
     expect(v.status).toBe("rendering");
+    expect(v.reason).toBeNull();
+    expect(v.finishedAt).toBeNull();
   });
 
   it("applyDirectorEvent never mutates its input and returns a new object", () => {

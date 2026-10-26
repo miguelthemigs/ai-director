@@ -126,6 +126,8 @@ export function applyDirectorEvent(view: DirectorRunView, event: DirectorEvent):
       break;
     case "render.submitted":
       next.status = "rendering";
+      next.reason = null;
+      next.finishedAt = null;
       patchNode("render", { status: "running", attempt: event.attempt, error: null });
       next.render = {
         attempt: event.attempt,
