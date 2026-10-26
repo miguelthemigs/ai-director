@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyDirectorEvent,
+  type CheckOutcome,
   reduceDirectorEvents,
   type DirectorEvent,
   type DirectorEventBody,
@@ -95,9 +96,9 @@ describe("reduceDirectorEvents", () => {
   });
 
   it("checks.completed stores outcomes under plan or prompt", () => {
-    const o = [{ id: "length_fits", passed: true, owner: "director", detail: null, shots: [] }] as const;
+    const o: CheckOutcome[] = [{ id: "length_fits", passed: true, owner: "director", detail: null, shots: [] }];
     const v = log(
-      { type: "checks.completed", node: "planChecks", outcomes: [...o] },
+      { type: "checks.completed", node: "planChecks", outcomes: o },
       { type: "checks.completed", node: "promptChecks", outcomes: [] },
     );
     expect(v.checks.plan).toHaveLength(1);
