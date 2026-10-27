@@ -13,7 +13,6 @@ import { RunEventBus } from "../orchestrate/events.js";
 import { buildDirectorAgents } from "../orchestrate/director/agents.js";
 import { DirectorEventHub } from "../orchestrate/director/hub.js";
 import { buildRecipe } from "../orchestrate/director/recipe.js";
-import { createUploadThingHost } from "../images/referenceHost.js";
 import { buildRetryVerbatim } from "../orchestrate/coach.js";
 import { runToCompletion } from "../orchestrate/runToCompletion.js";
 import { FileAvatarStore } from "../store/AvatarStore.js";
@@ -153,11 +152,11 @@ async function main(): Promise<void> {
       : {}),
   };
 
-  // The AI Director: wired only when all three of its keys are present (each of its agents,
-  // pictures and hosted references needs one), and absent is a 503 on every `/director` route.
+  // The AI Director: wired only when both of its keys are present (its agents need one, its
+  // pictures the other), and absent is a 503 on every `/director` route.
   // Rendering additionally needs OPENROUTER_API_KEY; without it a run plans but cannot render.
   let director: DirectorRouteDeps | undefined;
-  if (hasAnthropic && hasGoogle && process.env.UPLOADTHING_TOKEN) {
+  if (hasAnthropic && hasGoogle) {
     const directorStore = new FileDirectorRunStore(DIRECTOR_RUNS_DIR);
     // One hub: every event the runner and the render append is published to it, and
     // `GET /director/runs/:id/events` subscribes to it.
@@ -166,7 +165,6 @@ async function main(): Promise<void> {
     const agents = buildDirectorAgents({
       transport: createAnthropicTransport(),
       images,
-      host: createUploadThingHost(),
       store: directorStore,
       coach: { transport: createAnthropicTransport(), avatars: avatarStore, runs: store, rubric },
       character: {

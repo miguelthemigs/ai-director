@@ -19,7 +19,6 @@ import { DirectorPlanSchema } from "../../../src/agents/director/schema.js";
 import { EvaluatorGroupOutputSchema } from "../../../src/agents/evaluator/schema.js";
 import { InterrogatorOutputSchema } from "../../../src/agents/interrogator/schema.js";
 import type { ImageTransport } from "../../../src/avatar/generateSheet.js";
-import type { ReferenceHost } from "../../../src/images/referenceHost.js";
 import { buildDirectorAgents } from "../../../src/orchestrate/director/agents.js";
 import { buildRecipe, type NodeContext } from "../../../src/orchestrate/director/recipe.js";
 import {
@@ -114,19 +113,17 @@ async function setup(overrides: Overrides = {}) {
   const avatars = new FileAvatarStore(path.join(root, "avatars"));
   const runs = new FileRunStore(path.join(root, "runs"));
   const images = vi.fn<ImageTransport>(async () => ({ imageBase64: PIXEL, mediaType: "image/png" }));
-  const host: ReferenceHost = { publish: vi.fn(async (_b, name) => ({ url: `https://app.ufs.sh/f/${name}` })) };
   const text = vi.fn(async () => ({ text: "A woman in her thirties, dark bob." }));
   const vision = vi.fn(async () => ({ text: "A woman, dark bob, linen shirt." }));
   const agents = buildDirectorAgents({
     transport,
     images,
-    host,
     store,
     coach: { transport, avatars, runs, rubric },
     character: { text, images, vision, avatars },
   });
   const deps: RunnerDeps = { store, recipe: buildRecipe(agents) };
-  return { deps, store, avatars, agents, images, host, text, vision, seen };
+  return { deps, store, avatars, agents, images, text, vision, seen };
 }
 
 async function describedAvatar(avatars: FileAvatarStore): Promise<string> {
@@ -323,8 +320,8 @@ describe("buildDirectorAgents node bodies", () => {
       slot: 2,
       handle: "@kitchen",
       kind: "location",
-      url: "https://app.ufs.sh/f/k.png",
       asset: "assets/location-kitchen.png",
+      mediaType: "image/png",
     };
     const character: CharacterOutcome = {
       avatarId: "a",

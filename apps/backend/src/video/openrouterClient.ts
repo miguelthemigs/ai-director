@@ -23,9 +23,10 @@ import type { RenderStatus } from "@ai-director/contract";
  * store.
  *
  * ── References: products and locations only ─────────────────────────────────────────
- * `input_references` exists for the AI Director (decision 5 of the backend plan, the
- * Mentic way from `lib/video-lab/render-ugc.ts`): public HTTPS images hosted on
- * UploadThing, named in the prompt by position. It carries a PRODUCT or a LOCATION
+ * `input_references` exists for the AI Director: images read from the run folder and sent
+ * inline as base64 data URLs (nothing is hosted), named in the prompt by position.
+ * OpenRouter documents only HTTPS URLs for this field; inline data is unproven until the
+ * owner's first live render (see docs/decision-log.md). It carries a PRODUCT or a LOCATION
  * picture and never a face. Mentic's nine probe calls on 2026-08-25 established that a
  * human likeness in an input image is refused at full latency on every render, so the
  * character travels as text and only `ReferenceImage`s — typed `product | location` in the
@@ -82,8 +83,8 @@ export type VideoSubmitRequest = {
   duration: number;
   size: string;
   generate_audio: boolean;
-  /** Product and location pictures only, never a face (see the header). UploadThing URLs,
-   *  checked by the caller before submit. Absent on a Compare request. */
+  /** Product and location pictures only, never a face (see the header). Base64 data URLs
+   *  read from the run folder by the caller. Absent on a Compare request. */
   input_references?: Array<{ type: "image_url"; image_url: { url: string } }>;
 };
 

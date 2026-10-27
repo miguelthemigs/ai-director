@@ -30,8 +30,8 @@ export type AppDeps = {
    *  OPENROUTER_API_KEY grades and repairs exactly as before, it simply cannot render, and
    *  `POST /compare` says so with a 503 rather than failing somewhere deeper. */
   compare?: CompareRouteDeps;
-  /** The AI Director. Optional, and absent is a real state: without ANTHROPIC_API_KEY,
-   *  GOOGLE_AI_KEY and UPLOADTHING_TOKEN every `/director` route answers 503 saying so. */
+  /** The AI Director. Optional, and absent is a real state: without ANTHROPIC_API_KEY
+   *  or GOOGLE_AI_KEY every `/director` route answers 503 saying so. */
   director?: DirectorRouteDeps;
   /** Fastify's request/error logger. Off by default so the test suite stays quiet, and ON
    *  in the real server: the error handler below deliberately redacts a 500's message to

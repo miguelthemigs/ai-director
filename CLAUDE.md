@@ -37,8 +37,9 @@ character-description Evaluator and Repairer, three screens, and the evidence th
   and the UI must never show a success state for the last two.
 - Rubric and prompt files are append-only. A change ships as a new version file.
 - Motion is tied to real state changes only. No ambient or looping animation anywhere.
-- Never commit a key. Secrets live in `.env`; `.env.example` documents them. The Director adds
-  `UPLOADTHING_TOKEN` (public URLs for product and location reference images).
+- Never commit a key. Secrets live in `.env`; `.env.example` documents them.
+- Pictures and media stay local, in `data/`, like the avatar sheets. No external host or object
+  store: the Director's reference pictures go to Seedance inline, read from the run folder.
 - Only two paths submit a video: the Gate C render approval
   (`POST /director/runs/:id/gates/C` with `decision: "render"`), and `/render/again`, which works
   only on a run that ended `render_failed`; both are an owner's press. Never a live API call in a

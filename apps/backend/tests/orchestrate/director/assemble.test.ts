@@ -10,8 +10,8 @@ import {
 import { boardCameras, boardPlan } from "./planFixture.js";
 
 const references = (): ReferenceImage[] => [
-  { slot: 1, handle: "@product", kind: "product", url: "https://x/p.png", asset: "product.png" },
-  { slot: 2, handle: "@kitchen", kind: "location", url: "https://x/k.png", asset: "kitchen.png" },
+  { slot: 1, handle: "@product", kind: "product", asset: "product.png", mediaType: "image/png" },
+  { slot: 2, handle: "@kitchen", kind: "location", asset: "kitchen.png", mediaType: "image/png" },
 ];
 const character = (description = "Maya, thirties, dark curly hair, linen shirt"): CharacterOutcome => ({
   avatarId: "maya",

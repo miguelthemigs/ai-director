@@ -1,5 +1,16 @@
 # Decision log
 
+## 2026-10-27 — Director: reference pictures stay local, no UploadThing
+
+Reverses the hosting half of "product and location pictures are reference images" below. The
+pictures are kept only in the run folder (`data/director-runs/<id>/assets/`), like the avatar
+sheets, and the render reads them from there and sends each one inside the request as a base64
+data URL. UploadThing, its package and `UPLOADTHING_TOKEN` are gone. The plan had copied Mentic's
+setup; the owner wants media stored locally, with no outside host. Unproven: OpenRouter documents
+only HTTPS URLs for `input_references`, so whether Seedance accepts inline pictures is known only
+after the owner's first live render. A picture missing from the run folder is refused before
+anything is sent, and the attempt settles `not_billed`.
+
 ## 2026-10-26 — Director: gate order
 
 Plan approval (Gate B) now comes before anything is generated: answers (A), Director, plan checks,

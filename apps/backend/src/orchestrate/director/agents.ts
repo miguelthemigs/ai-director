@@ -22,7 +22,6 @@ import type { ImageTransport } from "../../avatar/generateSheet.js";
 import { makeCharacter, type MakeCharacterDeps } from "../../avatar/makeCharacter.js";
 import type { SupportedMediaType } from "../../describe/describeImage.js";
 import { makeLocationPicture, makeProductPicture } from "../../images/makeReference.js";
-import type { ReferenceHost } from "../../images/referenceHost.js";
 import type { DirectorRunStore } from "../../store/DirectorRunStore.js";
 import { coachDescription, type CoachDeps } from "../coach.js";
 import { assembleSeedancePrompt } from "./assemble.js";
@@ -33,7 +32,6 @@ import { withCalls, type DirectorAgents, type NodeResult } from "./recipe.js";
 export type DirectorAgentDeps = {
   transport: ParseTransport;
   images: ImageTransport;
-  host: ReferenceHost;
   store: DirectorRunStore;
   coach: CoachDeps;
   character: MakeCharacterDeps;
@@ -82,7 +80,7 @@ const listed = (shots: number[]): string => `${shots.length === 1 ? "shot" : "sh
  * vision transports are not `ParseTransport`s and are not metered here.
  */
 export function buildDirectorAgents(deps: DirectorAgentDeps): DirectorAgents {
-  const pictures = { images: deps.images, host: deps.host, store: deps.store };
+  const pictures = { images: deps.images, store: deps.store };
 
   return {
     async interrogator(ctx): Promise<NodeResult> {

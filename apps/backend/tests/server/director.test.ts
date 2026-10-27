@@ -227,7 +227,7 @@ describe("Director routes", () => {
       const res = await app.inject({ method, url, payload: method === "POST" ? {} : undefined });
       expect(res.statusCode).toBe(503);
       expect(res.json()).toEqual({
-        error: "the Director needs ANTHROPIC_API_KEY, GOOGLE_AI_KEY and UPLOADTHING_TOKEN",
+        error: "the Director needs ANTHROPIC_API_KEY and GOOGLE_AI_KEY",
       });
     }
   });

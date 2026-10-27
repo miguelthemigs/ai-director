@@ -1,14 +1,13 @@
 import type { ReferenceImage } from "@ai-director/contract";
 import { DEFAULT_IMAGE_MODEL, type ImageTransport, type TransportImage } from "../avatar/generateSheet.js";
 import type { DirectorRunStore } from "../store/DirectorRunStore.js";
-import type { ReferenceHost } from "./referenceHost.js";
 import { locationPlateBrief, productShotBrief } from "./prompts/v1.js";
 
-type Deps = { images: ImageTransport; host: ReferenceHost; store: DirectorRunStore };
+type Deps = { images: ImageTransport; store: DirectorRunStore };
 
 const EXTENSION: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
 
-/** Render, keep on disk (the committed artefact), then host it for OpenRouter to fetch. */
+/** Render and keep it on disk in the run folder, like an avatar sheet. Nothing is hosted. */
 async function render(
   deps: Deps,
   args: { runId: string; handle: string; kind: ReferenceImage["kind"]; slot: number; prompt: string; aspectRatio: string; referenceImages?: TransportImage[] },
@@ -23,8 +22,7 @@ async function render(
   // A plan handle is `@mug`; the store's asset names allow no `@`, so the file drops it.
   const name = `${args.kind}-${args.handle.replace(/^@/, "")}.${EXTENSION[mediaType] ?? "png"}`;
   const asset = await deps.store.saveAsset(args.runId, name, bytes);
-  const { url } = await deps.host.publish(bytes, name, mediaType);
-  return { slot: args.slot, handle: args.handle, kind: args.kind, url, asset };
+  return { slot: args.slot, handle: args.handle, kind: args.kind, asset, mediaType };
 }
 
 export function makeProductPicture(

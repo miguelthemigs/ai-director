@@ -485,4 +485,6 @@ beside it and never replaces it.
 
 **What is not proven.** The Director is tested with fakes only; no picture or clip was generated
 while building it. A run's `textMicroUsd` counts model text calls only, not pictures, the character
-or vision.
+or vision. The product and location pictures never leave this machine except inside the
+render request, as base64 data URLs; OpenRouter documents only HTTPS URLs there, so a live render is
+what proves Seedance accepts them.

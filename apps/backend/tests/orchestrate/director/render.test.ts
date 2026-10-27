@@ -39,6 +39,8 @@ async function setup(video: VideoTransport) {
   const store = new FileDirectorRunStore(root);
   const published: DirectorEvent[] = [];
   const runId = await store.createRun("a sparkling water ad");
+  await store.saveAsset(runId, "can.png", CAN);
+  await store.saveAsset(runId, "kitchen.jpg", KITCHEN);
   const log = vi.fn<(line: string) => void>();
   const deps = { store, video, publish: (ev: DirectorEvent) => published.push(ev), sleep: NO_SLEEP, log };
   return { root, store, runId, deps, published, log };
@@ -46,13 +48,16 @@ async function setup(video: VideoTransport) {
 
 const NO_SLEEP = async () => undefined;
 
+const CAN = Buffer.from("can-bytes");
+const KITCHEN = Buffer.from("kitchen-bytes");
+
 const PROMPT: AssembledPrompt = {
   text: "The first reference image is @can. The second reference image is @kitchen. Shot 1: ...",
   sha256: "c".repeat(64),
   // Deliberately out of slot order: the request must follow the slots, not the array.
   references: [
-    { slot: 2, handle: "@kitchen", kind: "location", url: "https://abc.ufs.sh/f/kitchen.png", asset: "assets/kitchen.png" },
-    { slot: 1, handle: "@can", kind: "product", url: "https://utfs.io/f/can.png", asset: "assets/can.png" },
+    { slot: 2, handle: "@kitchen", kind: "location", asset: "assets/kitchen.jpg", mediaType: "image/jpeg" },
+    { slot: 1, handle: "@can", kind: "product", asset: "assets/can.png", mediaType: "image/png" },
   ],
 };
 
@@ -78,7 +83,7 @@ const ofType = <T extends DirectorEvent["type"]>(events: DirectorEvent[], type: 
   events.filter((e): e is Extract<DirectorEvent, { type: T }> => e.type === type);
 
 describe("submitDirectorRender", () => {
-  it("sends one Seedance request with the references in slot order and logs render.submitted", async () => {
+  it("sends one Seedance request with the references inline, in slot order, and logs render.submitted", async () => {
     const video = fakeVideo();
     const { store, runId, deps, published } = await setup(video);
 
@@ -93,8 +98,8 @@ describe("submitDirectorRender", () => {
       size: DIRECTOR_VIDEO_SIZE,
       generate_audio: true,
       input_references: [
-        { type: "image_url", image_url: { url: "https://utfs.io/f/can.png" } },
-        { type: "image_url", image_url: { url: "https://abc.ufs.sh/f/kitchen.png" } },
+        { type: "image_url", image_url: { url: `data:image/png;base64,${CAN.toString("base64")}` } },
+        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${KITCHEN.toString("base64")}` } },
       ],
     });
     const submitted = ofType(await store.events(runId), "render.submitted");
@@ -199,15 +204,14 @@ describe("submitDirectorRender", () => {
   });
 
   it.each([
-    ["a foreign host", "https://example.com/can.png"],
-    ["plain http", "http://utfs.io/f/can.png"],
-    ["a lookalike host", "https://ufs.sh.evil.com/can.png"],
-  ])("a reference on %s never reaches submit and settles not_billed", async (_label, url) => {
+    ["missing from the run folder", "assets/gone.png"],
+    ["outside the run folder", "../escape.png"],
+  ])("a reference %s never reaches submit and settles not_billed", async (_label, asset) => {
     const video = fakeVideo();
     const { store, runId, deps } = await setup(video);
     const prompt: AssembledPrompt = {
       ...PROMPT,
-      references: [PROMPT.references[1]!, { ...PROMPT.references[0]!, url }],
+      references: [PROMPT.references[1]!, { ...PROMPT.references[0]!, asset }],
     };
 
     expect(await submitDirectorRender(deps, { runId, attempt: 1, prompt, seconds: 4 })).toBe("submit_failed");
@@ -554,6 +558,8 @@ describe("resumeDirectorRenders", () => {
     const video = fakeVideo();
     const { store, runId, deps } = await setup(video);
     const other = await store.createRun("another brief");
+    await store.saveAsset(other, "can.png", CAN);
+    await store.saveAsset(other, "kitchen.jpg", KITCHEN);
     await submitDirectorRender(deps, { runId: other, attempt: 1, prompt: PROMPT, seconds: 4 });
     await settleDirectorRender(deps, { runId: other, attempt: 1 });
     const before = [(await store.events(runId)).length, (await store.events(other)).length];

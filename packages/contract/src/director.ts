@@ -75,8 +75,9 @@ export type ReferenceImage = {
   slot: number;
   handle: string;
   kind: "product" | "location";
-  url: string;
+  /** `assets/<file>` in the run folder: the only copy. Sent to Seedance inline, never hosted. */
   asset: string;
+  mediaType: string;
 };
 export type CharacterOutcome = {
   avatarId: string;

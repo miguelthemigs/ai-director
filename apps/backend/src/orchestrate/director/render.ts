@@ -11,7 +11,6 @@ import {
   reduceDirectorEvents,
 } from "@ai-director/contract";
 import { POLL_DEADLINE_MS, POLL_INTERVAL_MS } from "../../compare/runComparison.js";
-import { isUploadThingUrl } from "../../images/referenceHost.js";
 import type { DirectorRunStore } from "../../store/DirectorRunStore.js";
 import {
   submitProvablyUnbilled,
@@ -164,15 +163,24 @@ export async function submitDirectorRender(
     const settledAs = { attempt, estimatedMicroUsd: estimateMicroUsd(DIRECTOR_VIDEO_SIZE, seconds) };
     const references = [...prompt.references].sort((a, b) => a.slot - b.slot);
 
-    // OpenRouter fetches each reference by URL. Only UploadThing's hosts are ones this repo
-    // put there, so anything else is refused here, before any request leaves the process.
-    const foreign = references.filter((reference) => !isUploadThingUrl(reference.url));
-    if (foreign.length > 0) {
+    // Each reference is read from the run folder and sent inline as a data URL: the pictures
+    // live only on this machine, like the avatar sheets, and are never hosted anywhere.
+    const inline: string[] = [];
+    const unreadable: string[] = [];
+    for (const reference of references) {
+      try {
+        const bytes = await deps.store.readAsset(runId, reference.asset);
+        inline.push(`data:${reference.mediaType};base64,${bytes.toString("base64")}`);
+      } catch {
+        unreadable.push(reference.handle);
+      }
+    }
+    if (unreadable.length > 0) {
       await settleFailed(
         emit,
         settledAs,
         "not_billed",
-        `reference ${foreign.map((r) => r.handle).join(", ")} is not an UploadThing URL, so nothing was sent to OpenRouter`,
+        `reference ${unreadable.join(", ")} could not be read from the run folder, so nothing was sent to OpenRouter`,
       );
       return "submit_failed";
     }
@@ -185,10 +193,7 @@ export async function submitDirectorRender(
       generate_audio: true,
       ...(references.length > 0
         ? {
-            input_references: references.map((reference) => ({
-              type: "image_url" as const,
-              image_url: { url: reference.url },
-            })),
+            input_references: inline.map((url) => ({ type: "image_url" as const, image_url: { url } })),
           }
         : {}),
     };

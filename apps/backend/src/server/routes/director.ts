@@ -53,7 +53,7 @@ export type DirectorRouteDeps = {
   hub: DirectorEventHub;
 };
 
-const NOT_CONFIGURED = "the Director needs ANTHROPIC_API_KEY, GOOGLE_AI_KEY and UPLOADTHING_TOKEN";
+const NOT_CONFIGURED = "the Director needs ANTHROPIC_API_KEY and GOOGLE_AI_KEY";
 const NO_VIDEO = "rendering needs OPENROUTER_API_KEY, and every render through it costs money";
 const MAX_PHOTO_BYTES = 6 * 1024 * 1024;
 const KEEPALIVE_MS = 15_000;
