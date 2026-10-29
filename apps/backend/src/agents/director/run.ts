@@ -32,7 +32,7 @@ const MENTION = /@[A-Za-z0-9_]+/g;
  * case, so this only makes the prompt say the handle one way. A mention of anything that
  * is not declared is left exactly as written, for `handles_match` to report.
  */
-function lowerCaseHandles(plan: Plan): Plan {
+export function lowerCaseHandles(plan: Plan): Plan {
   const declared = new Set(plan.assets.map((asset) => asset.handle.toLowerCase()));
   const lower = (text: string) =>
     text.replace(MENTION, (mention) => (declared.has(mention.toLowerCase()) ? mention.toLowerCase() : mention));
@@ -56,7 +56,7 @@ const ASSET_KINDS: AssetKind[] = ["product", "location", "character"];
  * checks (`orchestrate/director/checks.ts`), which send the plan back for a patch
  * instead of failing the run.
  */
-function assertPlanShape(plan: Plan): void {
+export function assertPlanShape(plan: Plan): void {
   const problems: string[] = [];
   if (plan.styleLine.trim() === "") problems.push("the style line is blank");
   if (plan.scene.trim() === "") problems.push("the scene is blank");
@@ -87,7 +87,7 @@ function assertPlanShape(plan: Plan): void {
   if (problems.length > 0) throw new Error(`director plan is malformed: ${problems.join("; ")}`);
 }
 
-async function askForPlan(transport: ParseTransport, system: string, user: string): Promise<Plan> {
+export async function askForPlan(transport: ParseTransport, system: string, user: string): Promise<Plan> {
   const { parsed_output } = await transport({ system, user, schema: DirectorPlanSchema });
   if (parsed_output === null || parsed_output === undefined) {
     throw new Error("director parse failed");
@@ -105,7 +105,7 @@ export async function direct(
   return plan;
 }
 
-function assetChanges(before: Plan, after: Plan): string[] {
+export function planAssetChanges(before: Plan, after: Plan): string[] {
   const changes: string[] = [];
   const count = Math.max(before.assets.length, after.assets.length);
   for (let index = 0; index < count; index += 1) {
@@ -141,7 +141,7 @@ export async function patchPlan(
     buildDirectorPatchSystemPrompt(),
     renderDirectorPatchRequest(args),
   );
-  const changes = assetChanges(args.plan, patched);
+  const changes = planAssetChanges(args.plan, patched);
   if (changes.length > 0) throw new PlanPatchError(changes);
   assertPlanShape(patched);
   return patched;

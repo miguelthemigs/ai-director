@@ -8,6 +8,28 @@ import {
 } from "./prompt-v1.js";
 import { CinematographerOutputSchema } from "./schema.js";
 
+/**
+ * The prompts a shoot and a reshoot send. v1 is the default, so the Director app is
+ * unchanged; the architecture lab passes v2 (`prompt-v2.ts`).
+ */
+export type CinematographerPrompts = {
+  system: string;
+  reshootSystem: string;
+  renderShoot: typeof renderShootRequest;
+  renderReshoot: typeof renderReshootRequest;
+};
+
+const V1: CinematographerPrompts = {
+  get system() {
+    return buildCinematographerSystemPrompt();
+  },
+  get reshootSystem() {
+    return buildCinematographerReshootSystemPrompt();
+  },
+  renderShoot: renderShootRequest,
+  renderReshoot: renderReshootRequest,
+};
+
 async function askForCameras(transport: ParseTransport, system: string, user: string): Promise<Camera[]> {
   const { parsed_output } = await transport({ system, user, schema: CinematographerOutputSchema });
   if (parsed_output === null || parsed_output === undefined) {
@@ -33,10 +55,9 @@ function assertLenses(cameras: Camera[]): Camera[] {
 export async function shootAll(
   deps: { transport: ParseTransport },
   args: { plan: Plan; seconds: number },
+  prompts: CinematographerPrompts = V1,
 ): Promise<Camera[]> {
-  return assertLenses(
-    await askForCameras(deps.transport, buildCinematographerSystemPrompt(), renderShootRequest(args)),
-  );
+  return assertLenses(await askForCameras(deps.transport, prompts.system, prompts.renderShoot(args)));
 }
 
 /**
@@ -53,13 +74,14 @@ export async function shootAll(
 export async function reshoot(
   deps: { transport: ParseTransport },
   args: { plan: Plan; cameras: Camera[]; shots: number[]; failures: CheckOutcome[] },
+  prompts: CinematographerPrompts = V1,
 ): Promise<Camera[]> {
   const listed = new Set(args.shots);
   const kept = args.cameras.filter((camera) => !listed.has(camera.shot));
   const targets = [...listed]
     .filter((shot) => Number.isInteger(shot) && shot >= 1 && shot <= args.plan.shots.length)
     .sort((a, b) => a - b);
-  const fresh = targets.length === 0 ? [] : await askForReplacements(deps.transport, args, kept, targets);
+  const fresh = targets.length === 0 ? [] : await askForReplacements(deps.transport, args, kept, targets, prompts);
   return [...kept, ...fresh].sort((a, b) => a.shot - b.shot);
 }
 
@@ -68,14 +90,15 @@ async function askForReplacements(
   args: { plan: Plan; cameras: Camera[]; failures: CheckOutcome[] },
   kept: Camera[],
   targets: number[],
+  prompts: CinematographerPrompts,
 ): Promise<Camera[]> {
   // The model sees the cameras that stay and the ones being replaced, never a camera
   // for a shot the plan does not have (that one is simply dropped).
   const shown = args.cameras.filter((camera) => kept.includes(camera) || targets.includes(camera.shot));
   const fresh = await askForCameras(
     transport,
-    buildCinematographerReshootSystemPrompt(),
-    renderReshootRequest({ plan: args.plan, cameras: shown, shots: targets, failures: args.failures }),
+    prompts.reshootSystem,
+    prompts.renderReshoot({ plan: args.plan, cameras: shown, shots: targets, failures: args.failures }),
   );
 
   const asked = fresh.filter((camera) => targets.includes(camera.shot));
