@@ -254,6 +254,27 @@ async function validate(env: LabEnv, run: LabRun, step: LabStep, json: string): 
 }
 
 /**
+ * Counts one invalid output for a step. The third in a row ends the run `failed`. The
+ * recipe calls this too when a model answer is refused before it reaches `labSave`, so
+ * every architecture is held to the same count.
+ */
+export async function labRefuse(env: LabEnv, run: LabRun, step: LabStep, reason: string, by: string): Promise<LabRun> {
+  const inARow = run.refusedInARow[step] + 1;
+  let next: LabRun = {
+    ...run,
+    refusedInARow: { ...run.refusedInARow, [step]: inARow },
+    refusedTotal: { ...run.refusedTotal, [step]: run.refusedTotal[step] + 1 },
+  };
+  await writeRun(env.root, next);
+  await trace(env, run.id, { actor: by, kind: "refused", text: `${step} refused: ${reason}` });
+  if (inARow >= MAX_REFUSALS_IN_A_ROW) {
+    next = await finishRun(env, next, "failed", `${MAX_REFUSALS_IN_A_ROW} invalid ${step} saves in a row`);
+    await trace(env, run.id, { actor: "lab", kind: "fail", text: next.reason! });
+  }
+  return next;
+}
+
+/**
  * Validates and saves one agent output. A refusal is counted (the third in a row for a step
  * fails the run); a valid plan or camera set past the owner's retries stops the run.
  */
@@ -271,18 +292,7 @@ export async function labSave(
     validated = await validate(env, run, step, json);
   } catch (error) {
     const refusal = asRefusal(error);
-    const inARow = run.refusedInARow[step] + 1;
-    let next: LabRun = {
-      ...run,
-      refusedInARow: { ...run.refusedInARow, [step]: inARow },
-      refusedTotal: { ...run.refusedTotal, [step]: run.refusedTotal[step] + 1 },
-    };
-    await writeRun(env.root, next);
-    await trace(env, runId, { actor: by, kind: "refused", text: `${step} refused: ${refusal.message}` });
-    if (inARow >= MAX_REFUSALS_IN_A_ROW) {
-      next = await finishRun(env, next, "failed", `${MAX_REFUSALS_IN_A_ROW} invalid ${step} saves in a row`);
-      await trace(env, runId, { actor: "lab", kind: "fail", text: next.reason! });
-    }
+    await labRefuse(env, run, step, refusal.message, by);
     throw refusal;
   }
 
