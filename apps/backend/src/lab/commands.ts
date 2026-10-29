@@ -1,0 +1,322 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { MAX_RETRIES_PER_OWNER, type Camera, type Plan } from "@ai-director/contract";
+import { CinematographerOutputSchema } from "../agents/cinematographer/schema.js";
+import type { AvatarChoice } from "../agents/interrogator/prompt-v2.js";
+import { validateFill, validateQuestions } from "../agents/interrogator/runV2.js";
+import { assertPlanShape, lowerCaseHandles, planAssetChanges } from "../agents/director/run.js";
+import { DirectorPlanSchema } from "../agents/director/schema.js";
+import { FileAvatarStore } from "../store/AvatarStore.js";
+import {
+  LabError,
+  appendTrace,
+  createRun,
+  readJson,
+  readRun,
+  writeJson,
+  writeRun,
+} from "./runStore.js";
+import { scrapeUrl, type ScrapeResult } from "./scrape.js";
+import type { CameraSet, LabAnswers, LabArch, LabBrief, LabQuestion, LabRun, LabStep } from "./types.js";
+
+/**
+ * The lab's toolbox. Every architecture (the recipe in code, the coordinator's subagents,
+ * the swarm's teammates) saves, checks and assembles through these functions, so every
+ * rule lives here, in code, once: what a valid output is, how many tries an owner gets,
+ * when a run stops or fails. A refusal is a `LabError` whose message tells the agent why.
+ */
+export type LabEnv = { root: string; avatarsDir: string; now?: () => Date; fetchImpl?: typeof fetch };
+
+/** Three refused saves in a row for the same step end the run `failed`. */
+export const MAX_REFUSALS_IN_A_ROW = 3;
+
+const now = (env: LabEnv): Date => env.now?.() ?? new Date();
+
+async function trace(env: LabEnv, runId: string, line: Parameters<typeof appendTrace>[2]): Promise<void> {
+  await appendTrace(env.root, runId, line, now(env));
+}
+
+async function runningRun(env: LabEnv, runId: string): Promise<LabRun> {
+  const run = await readRun(env.root, runId);
+  if (run.status !== "running") throw new LabError(`run is ${run.status}`);
+  return run;
+}
+
+/** Ends a run: `stopped`, `failed` or `done`, with the reason and the time. */
+export async function finishRun(
+  env: LabEnv,
+  run: LabRun,
+  status: "stopped" | "failed" | "done",
+  reason: string | null,
+): Promise<LabRun> {
+  const finished: LabRun = { ...run, status, reason, finishedAt: now(env).toISOString() };
+  await writeRun(env.root, finished);
+  return finished;
+}
+
+export async function labNew(
+  env: LabEnv,
+  args: { arch: LabArch; brief: string; url: string | null },
+): Promise<{ runId: string; scrape: ScrapeResult | null }> {
+  if (args.brief.trim() === "") throw new LabError("the brief is blank");
+  const run = await createRun(env.root, { ...args, now: now(env) });
+  await trace(env, run.id, { actor: "owner", kind: "new", text: `${args.arch}: ${args.brief}` });
+  const scrape = args.url === null ? null : await labScrape(env, run.id, args.url);
+  return { runId: run.id, scrape };
+}
+
+export async function labScrape(env: LabEnv, runId: string, url: string): Promise<ScrapeResult> {
+  await readRun(env.root, runId);
+  const scrape = await scrapeUrl(url, env.fetchImpl ?? fetch);
+  await writeJson(env.root, runId, "scrape.json", scrape);
+  const summary = scrape.ok ? `${scrape.text.length} characters of text` : `failed: ${scrape.error}`;
+  await trace(env, runId, { actor: "lab", kind: "scrape", text: `${url}: ${summary}` });
+  return scrape;
+}
+
+export async function labAvatars(env: LabEnv): Promise<AvatarChoice[]> {
+  const records = await new FileAvatarStore(env.avatarsDir).list();
+  return records
+    .filter((record) => (record.description ?? "").trim() !== "")
+    .map((record) => ({ avatarId: record.id, description: record.description! }));
+}
+
+export async function latestPlan(env: LabEnv, run: LabRun): Promise<Plan | null> {
+  return run.attempts.plan === 0 ? null : readJson<Plan>(env.root, run.id, `plan.${run.attempts.plan}.json`);
+}
+
+export async function latestCameras(env: LabEnv, run: LabRun): Promise<CameraSet | null> {
+  return run.attempts.cameras === 0 ? null : readJson<CameraSet>(env.root, run.id, `cameras.${run.attempts.cameras}.json`);
+}
+
+/** The whole run at a glance, or one of its files. */
+export async function labShow(env: LabEnv, runId: string, file?: string): Promise<unknown> {
+  const run = await readRun(env.root, runId);
+  if (file !== undefined) {
+    if (file.endsWith(".json")) {
+      const value = await readJson(env.root, runId, file);
+      if (value === null) throw new LabError(`no file ${file} in run ${runId}`);
+      return value;
+    }
+    if (!/^[\w.-]+$/.test(file)) throw new LabError(`not a run file: ${file}`);
+    try {
+      return await readFile(path.join(env.root, runId, file), "utf8");
+    } catch {
+      throw new LabError(`no file ${file} in run ${runId}`);
+    }
+  }
+  return {
+    run,
+    scrape: await readJson(env.root, runId, "scrape.json"),
+    questions: await readJson(env.root, runId, "questions.json"),
+    answers: await readJson(env.root, runId, "answers.json"),
+    brief: await readJson(env.root, runId, "brief.json"),
+    latestPlan: await latestPlan(env, run),
+    latestCameras: await latestCameras(env, run),
+    lastChecks: run.lastChecks,
+  };
+}
+
+export async function labLog(
+  env: LabEnv,
+  runId: string,
+  args: { from: string; to: string; text: string },
+): Promise<{ ok: true }> {
+  await readRun(env.root, runId);
+  await trace(env, runId, { actor: args.from, kind: "message", to: args.to, text: args.text });
+  return { ok: true };
+}
+
+/** One JSON value and nothing else: an agent that wraps it in a fence or a sentence is refused, never half-parsed. */
+export function parseAgentJson(text: string): unknown {
+  try {
+    return JSON.parse(text.trim());
+  } catch {
+    const start = text.trim().slice(0, 40).replace(/\s+/g, " ");
+    throw new LabError(`not a single JSON value (no code fence, no text around it); it starts with: ${start}`);
+  }
+}
+
+function schemaError(what: string, issues: Array<{ path: PropertyKey[]; message: string }>): LabError {
+  const first = issues[0];
+  const where = first && first.path.length > 0 ? ` at ${first.path.join(".")}` : "";
+  return new LabError(`${what} does not match the schema${where}: ${first?.message ?? "invalid"}`);
+}
+
+/** A thrown shape error from the agents' own validation becomes a refusal with its message. */
+function asRefusal(error: unknown): LabError {
+  return error instanceof LabError ? error : new LabError(error instanceof Error ? error.message : String(error));
+}
+
+function validateAnswers(raw: unknown, questions: LabQuestion[]): LabAnswers {
+  if (typeof raw !== "object" || raw === null || !Array.isArray((raw as LabAnswers).answers)) {
+    throw new LabError('answers must be { "answers": [{ "id": ..., "answer": ... }] }');
+  }
+  const answers = (raw as LabAnswers).answers;
+  for (const item of answers) {
+    if (typeof item?.id !== "string" || typeof item?.answer !== "string" || item.answer.trim() === "") {
+      throw new LabError("every answer needs an id and a non-blank answer (\"you decide\" is fine)");
+    }
+  }
+  const ids = answers.map((item) => item.id);
+  for (const question of questions) {
+    const count = ids.filter((id) => id === question.id).length;
+    if (count !== 1) throw new LabError(`question ${question.id} must be answered exactly once, got ${count}`);
+  }
+  const unknown = ids.filter((id) => !questions.some((question) => question.id === id));
+  if (unknown.length > 0) throw new LabError(`answers to questions that were not asked: ${unknown.join(", ")}`);
+  return { answers: answers.map(({ id, answer }) => ({ id, answer })) };
+}
+
+function validateCameras(raw: unknown): Camera[] {
+  const parsed = CinematographerOutputSchema.safeParse(raw);
+  if (!parsed.success) throw schemaError("the cameras", parsed.error.issues);
+  for (const camera of parsed.data.cameras) {
+    if (!Number.isFinite(camera.lensMm) || camera.lensMm <= 0) {
+      throw new LabError(`shot ${camera.shot} has a lens of ${camera.lensMm} mm`);
+    }
+  }
+  return parsed.data.cameras;
+}
+
+/** A reshoot keeps every camera outside the shots the check sent back, exactly. */
+function assertReshoot(previous: Camera[], next: Camera[], shots: number[]): void {
+  const listed = new Set(shots);
+  const key = (camera: Camera) => JSON.stringify(camera);
+  const changed = new Set<number>();
+  const before = previous.filter((camera) => !listed.has(camera.shot));
+  const after = next.filter((camera) => !listed.has(camera.shot));
+  for (const camera of before) if (!after.some((c) => key(c) === key(camera))) changed.add(camera.shot);
+  for (const camera of after) if (!before.some((c) => key(c) === key(camera))) changed.add(camera.shot);
+  if (changed.size > 0) {
+    throw new LabError(
+      `a reshoot may change only shot ${shots.join(", ")}; shot ${[...changed].sort((a, b) => a - b).join(", ")} changed`,
+    );
+  }
+  for (const shot of shots) {
+    const count = next.filter((camera) => camera.shot === shot).length;
+    if (count !== 1) throw new LabError(`a reshoot needs exactly one camera for shot ${shot}, got ${count}`);
+  }
+}
+
+type Validated =
+  | { step: "questions"; value: LabQuestion[] }
+  | { step: "answers"; value: LabAnswers }
+  | { step: "brief"; value: LabBrief }
+  | { step: "plan"; value: Plan }
+  | { step: "cameras"; value: Camera[] };
+
+async function validate(env: LabEnv, run: LabRun, step: LabStep, json: string): Promise<Validated> {
+  if ((step === "questions" || step === "answers" || step === "brief") && run.attempts.plan > 0) {
+    throw new LabError("the brief is fixed once a plan exists");
+  }
+  const raw = parseAgentJson(json);
+  switch (step) {
+    case "questions":
+      return { step, value: validateQuestions(raw) };
+    case "answers": {
+      const questions = await readJson<LabQuestion[]>(env.root, run.id, "questions.json");
+      if (questions === null) throw new LabError("no questions saved yet");
+      return { step, value: validateAnswers(raw, questions) };
+    }
+    case "brief": {
+      if ((await readJson(env.root, run.id, "answers.json")) === null) throw new LabError("no answers saved yet");
+      return { step, value: validateFill(raw, { brief: run.brief, avatars: await labAvatars(env) }) };
+    }
+    case "plan": {
+      if ((await readJson(env.root, run.id, "brief.json")) === null) throw new LabError("no brief saved yet");
+      const parsed = DirectorPlanSchema.safeParse(raw);
+      if (!parsed.success) throw schemaError("the plan", parsed.error.issues);
+      const plan = lowerCaseHandles(parsed.data);
+      assertPlanShape(plan);
+      const previous = await latestPlan(env, run);
+      if (previous !== null) {
+        const changes = planAssetChanges(previous, plan);
+        if (changes.length > 0) throw new LabError(`a new plan may change only asset descriptions: ${changes.join("; ")}`);
+      }
+      return { step, value: plan };
+    }
+    case "cameras": {
+      if (run.attempts.plan === 0) throw new LabError("no plan saved yet");
+      const cameras = validateCameras(raw);
+      const previous = await latestCameras(env, run);
+      const pending = run.pendingReshoot;
+      if (pending !== null && previous !== null && pending.forCameras === run.attempts.cameras && previous.forPlan === run.attempts.plan) {
+        assertReshoot(previous.cameras, cameras, pending.shots);
+      }
+      return { step, value: cameras };
+    }
+  }
+}
+
+/**
+ * Validates and saves one agent output. A refusal is counted (the third in a row for a step
+ * fails the run); a valid plan or camera set past the owner's retries stops the run.
+ */
+export async function labSave(
+  env: LabEnv,
+  runId: string,
+  step: LabStep,
+  json: string,
+  by: string,
+): Promise<{ ok: true; file: string; attempt?: number }> {
+  const run = await runningRun(env, runId);
+
+  let validated: Validated;
+  try {
+    validated = await validate(env, run, step, json);
+  } catch (error) {
+    const refusal = asRefusal(error);
+    const inARow = run.refusedInARow[step] + 1;
+    let next: LabRun = {
+      ...run,
+      refusedInARow: { ...run.refusedInARow, [step]: inARow },
+      refusedTotal: { ...run.refusedTotal, [step]: run.refusedTotal[step] + 1 },
+    };
+    await writeRun(env.root, next);
+    await trace(env, runId, { actor: by, kind: "refused", text: `${step} refused: ${refusal.message}` });
+    if (inARow >= MAX_REFUSALS_IN_A_ROW) {
+      next = await finishRun(env, next, "failed", `${MAX_REFUSALS_IN_A_ROW} invalid ${step} saves in a row`);
+      await trace(env, runId, { actor: "lab", kind: "fail", text: next.reason! });
+    }
+    throw refusal;
+  }
+
+  const cleared: LabRun = { ...run, refusedInARow: { ...run.refusedInARow, [step]: 0 } };
+  switch (validated.step) {
+    case "questions":
+    case "answers":
+    case "brief": {
+      const file = `${validated.step}.json`;
+      await writeJson(env.root, runId, file, validated.value);
+      await writeRun(env.root, cleared);
+      await trace(env, runId, { actor: by, kind: "save", text: `${validated.step} saved` });
+      return { ok: true, file };
+    }
+    case "plan":
+    case "cameras": {
+      const owner = validated.step === "plan" ? "director" : "cinematographer";
+      const key = validated.step;
+      const attempt = run.attempts[key] + 1;
+      if (attempt - 1 > MAX_RETRIES_PER_OWNER) {
+        const reason = `${owner} out of retries`;
+        await finishRun(env, cleared, "stopped", reason);
+        await trace(env, runId, { actor: "lab", kind: "stop", text: reason });
+        throw new LabError(reason);
+      }
+      const file = `${key}.${attempt}.json`;
+      const value: Plan | CameraSet =
+        validated.step === "plan" ? validated.value : { forPlan: run.attempts.plan, cameras: validated.value };
+      await writeJson(env.root, runId, file, value);
+      const next: LabRun = {
+        ...cleared,
+        attempts: { ...run.attempts, [key]: attempt },
+        lastChecks: validated.step === "plan" ? { plan: null, shots: null } : { ...run.lastChecks, shots: null },
+        pendingReshoot: null,
+      };
+      await writeRun(env.root, next);
+      await trace(env, runId, { actor: by, kind: "save", text: `${key} ${attempt} saved` });
+      return { ok: true, file, attempt };
+    }
+  }
+}
