@@ -5,11 +5,22 @@ import { describe, expect, it } from "vitest";
 const SKILL = readFileSync(path.join(import.meta.dirname, "../../../../.claude/skills/direct/SKILL.md"), "utf8");
 
 describe("/direct", () => {
-  it("starts the Opus 5.5 leads at high effort", () => {
-    expect(SKILL).toContain("claude --model claude-opus-5-5 --effort high");
-    expect(SKILL).toContain("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --model claude-opus-5-5 --effort high --teammate-mode tmux");
-    expect(SKILL).toContain("/effort status");
-    expect(SKILL.split("---")[1]).toContain("effort: high");
+  it("needs no start command: the skill itself runs the lead on Opus 5.5 at high effort", () => {
+    const frontmatter = SKILL.split("---")[1]!;
+    expect(frontmatter).toContain("model: claude-opus-5-5");
+    expect(frontmatter).toContain("effort: high");
+    expect(SKILL).not.toContain("claude --model");
+    expect(SKILL).not.toContain("--teammate-mode");
+  });
+
+  it("switches the swarm on in the project settings, so a plain session can run it", () => {
+    const settings = JSON.parse(readFileSync(path.join(import.meta.dirname, "../../../../.claude/settings.json"), "utf8"));
+    expect(settings.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS).toBe("1");
+  });
+
+  it("gives every swarm teammate the lead's real name instead of guessing it", () => {
+    expect(SKILL).toContain("~/.claude/teams/session-");
+    expect(SKILL).toContain("The lead's name is");
   });
 
   it("names the three agent types and the way to give up", () => {

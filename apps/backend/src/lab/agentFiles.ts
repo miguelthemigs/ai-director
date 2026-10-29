@@ -62,7 +62,7 @@ function swarm(lines: string[]): string {
   return [
     "## If you are a teammate in a swarm",
     "",
-    "Your teammates are `interrogator`, `director` and `cinematographer`; the `lead` only passes messages between the team and the owner and never gives orders. Hand work on yourself with SendMessage. Log every message you send as well:",
+    "Your teammates are `interrogator`, `director` and `cinematographer`; the `lead` only passes messages between the team and the owner and never gives orders. The lead's name is in your spawn prompt: whenever these rules say `lead`, send to that exact name. Hand work on yourself with SendMessage. Log every message you send as well:",
     "",
     "```bash",
     `${LAB} log <runId> --from <you> --to <them> "<what you said>"`,

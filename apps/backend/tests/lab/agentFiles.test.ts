@@ -32,6 +32,12 @@ describe("the generated agent files", () => {
     }
   });
 
+  it("tell swarm teammates to message the lead by the name in their spawn prompt", () => {
+    for (const text of Object.values(files)) {
+      expect(text).toContain("The lead's name is in your spawn prompt");
+    }
+  });
+
   it.each(Object.keys(files))("%s on disk matches what the prompts generate (run npm run -s lab -- export-agents)", (name) => {
     const onDisk = readFileSync(path.join(REPO, ".claude", "agents", `${name}.md`), "utf8");
     expect(onDisk).toBe(files[name as keyof typeof files]);

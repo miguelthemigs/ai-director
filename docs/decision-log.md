@@ -1,5 +1,18 @@
 # Decision log
 
+## 2026-10-29 — Lab: no start commands; the swarm runs in one terminal
+
+The owner's decision: they say which architecture in chat and never type a start command. `/direct`
+now carries `model: claude-opus-5-5` and `effort: high` in its frontmatter, so any session runs the
+lead on Opus 5.5 at high effort, and `.claude/settings.json` turns agent teams on for this project.
+The swarm's teammates run in-process, in the same terminal, watched from the agent panel. This
+replaces split panes: per the Claude Code docs, an in-process teammate applies its agent file's
+`effort` (a split-pane one ignores it) and appends the file's body to its system prompt rather than
+replacing it, so the rules still reach it. The lead reads its own team name from
+`~/.claude/teams/session-<id>/config.json` and gives it to each teammate, which settles the
+unverified `lead` name. Cost: with teams on, a subagent that Claude names becomes a teammate in any
+session in this repo; `/direct`'s coordinator never names one.
+
 ## 2026-10-29 — Architecture lab: one toolbox owns the rules, three wirings
 
 For the teacher's system-design exercise, the same three agents (Interrogator, Director,

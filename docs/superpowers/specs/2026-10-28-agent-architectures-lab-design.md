@@ -243,13 +243,10 @@ The specialists are the same model everywhere: the recipe's API transport
 `model: claude-sonnet-5-5` with `effort: high` in each generated Claude Code agent file.
 
 **Every Opus 5.5 lead runs at high effort** (owner's decision, 2026-10-29). Opus 5.5 defaults to
-`medium` in Claude Code, so this has to be set, not assumed. The coordinator and swarm sessions are
-started with the effort on the command line, which outranks saved settings:
-`claude --model claude-opus-5-5 --effort high` for the coordinator, and
-`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --model claude-opus-5-5 --effort high --teammate-mode tmux`
-for the swarm. `/direct` also carries `effort: high` in its own frontmatter as a second guard, and
-tells the owner to confirm with `/effort status` before a run. Split-pane teammates inherit the
-lead's effort, so the swarm's Sonnet teammates run at `high` too, matching the other two. Do not
+`medium` in Claude Code, so this has to be set, not assumed. *Amended 2026-10-29 (owner: no start commands):* `/direct`
+carries `model: claude-opus-5-5` and `effort: high` in its frontmatter, so the lead runs that way in
+any session. In-process teammates apply their agent file's `effort: high`, so the swarm's Sonnet
+teammates run at `high` too, matching the other two. Do not
 set `CLAUDE_CODE_EFFORT_LEVEL`: it would override the agent files' own `effort`.
 
 The
@@ -316,12 +313,11 @@ examines.
 
 ### 4.7 Swarm: peers handing off
 
-Run in a Claude Code session started with agent teams on, only for this:
-`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --teammate-mode tmux` inside iTerm2 or tmux, so
-every teammate gets its own pane. *My call*: not turned on in the project settings, because with
-it on, Claude Code turns ordinary named subagents into teammates, which would change the
-coordinator runs. `/direct` checks the variable and, if it is missing, tells the owner how to
-start such a session.
+*Amended 2026-10-29 (owner: no start commands):* agent teams are on in `.claude/settings.json`,
+and the teammates run in-process, in the same terminal, watched from the agent panel. With teams
+on, a named subagent becomes a teammate, so the coordinator never names its subagents. `/direct`
+checks the variable and, if a session started before the setting existed, asks the owner to reopen
+Claude Code once.
 
 The lead spawns three teammates from the same three agent files and gives the Interrogator the
 run id. The lead then only relays between the owner and the team (Claude Code always has a lead,

@@ -157,11 +157,12 @@ lines = replaceOnce(lines, (l) =&gt; l.includes(V1_PICTURE_SENTENCE),
   <div class="card">
     <h2>How to test it yourself</h2>
     <table>
-      <tr><th>Team</th><th>Start Claude Code with</th><th>Then type</th></tr>
-      <tr><td>Sequential</td><td><code>claude</code> (needs <code>ANTHROPIC_API_KEY</code> in <code>.env</code>)</td><td><code>/direct</code></td></tr>
-      <tr><td>Coordinator</td><td><code>claude --model claude-opus-5-5 --effort high</code></td><td><code>/direct</code></td></tr>
-      <tr><td>Swarm</td><td>in iTerm2 or tmux:<br><code>CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --model claude-opus-5-5 --effort high --teammate-mode tmux</code></td><td><code>/direct</code></td></tr>
+      <tr><th>Team</th><th>Just say, in Claude Code</th><th>What runs</th></tr>
+      <tr><td>Sequential</td><td>"sequential, an ad for Apple"</td><td>the recipe, through the API (needs <code>ANTHROPIC_API_KEY</code> in <code>.env</code>)</td></tr>
+      <tr><td>Coordinator</td><td>"coordinator, an ad for Apple"</td><td>Opus 5.5 lead, three Sonnet 5.5 subagents</td></tr>
+      <tr><td>Swarm</td><td>"swarm, an ad for Apple"</td><td>Opus 5.5 doorman, three Sonnet 5.5 teammates in the same terminal</td></tr>
     </table>
+    <p class="note">No start command. The <code>/direct</code> skill sets Opus 5.5 at high effort itself, and <code>.claude/settings.json</code> turns the swarm on. Watch a teammate with the arrow keys in the agent panel, then Enter.</p>
     <p class="note">After a run: <code>npm run -s lab -- compare</code> shows every run side by side. Each run's files are in <code>data/lab-runs/&lt;id&gt;/</code>: <code>shotlist.md</code>, <code>prompt.txt</code>, <code>trace.jsonl</code> (who did what) and <code>metrics.json</code>.</p>
   </div>
 
