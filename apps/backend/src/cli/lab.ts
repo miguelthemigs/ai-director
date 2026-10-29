@@ -1,5 +1,6 @@
 import type { ParseTransport } from "../api/client.js";
 import { createAnthropicTransport } from "../api/client.js";
+import { writeAgentFiles } from "../lab/agentFiles.js";
 import { labCollect } from "../lab/collect.js";
 import {
   labAssemble,
@@ -127,6 +128,8 @@ async function dispatch(argv: string[], io: LabIo): Promise<unknown> {
       const run = await sequentialFinish(deps, runId);
       return { run, metrics: await labReport(env, runId) };
     }
+    case "export-agents":
+      return writeAgentFiles();
     default:
       throw new UsageError(command === undefined ? "no command" : `unknown command ${command}`);
   }
