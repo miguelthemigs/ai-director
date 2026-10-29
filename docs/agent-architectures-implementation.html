@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How the Teams Are Built</title>
+<style>
+  @page { size: A4; margin: 16mm 16mm 14mm; }
+  :root {
+    --ink: #1d1d1f; --soft: #5b5b66; --line: #d9d9e0; --paper: #ffffff;
+    --you: #f4b740; --ask: #7aa7e6; --plan: #8bc79a; --cam: #e59a8c;
+    --code: #b9b9c6; --boss: #9b86d9; --out: #f0e6c8; --codebg: #f5f5f8;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: var(--ink);
+         background: var(--paper); margin: 0; font-size: 11pt; line-height: 1.45; }
+  h1 { font-size: 22pt; margin: 0 0 2mm; letter-spacing: -0.3px; }
+  h2 { font-size: 14.5pt; margin: 0 0 1.5mm; }
+  .sub { color: var(--soft); margin: 0 0 5mm; }
+  .page { display: contents; }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 3.5mm 5mm; margin-bottom: 4.5mm;
+          break-inside: avoid; }
+  .card > p { margin: 1mm 0 2mm; }
+  .tag { display: inline-block; font-size: 9pt; color: var(--soft); border: 1px solid var(--line);
+         border-radius: 20px; padding: 0 8px; margin-left: 6px; vertical-align: middle; font-weight: 400; }
+  pre { background: var(--codebg); border-radius: 8px; padding: 3mm 4mm; margin: 2mm 0 1mm;
+        font: 8.6pt/1.5 "SF Mono", Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+  code { font: 9.4pt "SF Mono", Menlo, Consolas, monospace; background: var(--codebg); padding: 0 3px; border-radius: 3px; }
+  pre code { background: none; padding: 0; font: inherit; }
+  .file { font: 8.6pt "SF Mono", Menlo, Consolas, monospace; color: var(--soft); }
+  svg { display: block; width: 100%; height: auto; margin: 2mm 0 1mm; }
+  svg text { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; }
+  table { width: 100%; border-collapse: collapse; font-size: 10pt; margin-top: 1mm; }
+  th, td { text-align: left; padding: 1.8mm 2mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 9pt; color: var(--soft); font-weight: 600; }
+  td:first-child { white-space: nowrap; }
+  ul { margin: 1mm 0 0; padding-left: 5mm; } li { margin-bottom: 1mm; }
+  .note { color: var(--soft); font-size: 9.5pt; }
+</style>
+</head>
+<body>
+
+<!-- PAGE 1 -->
+<section class="page">
+  <h1>How the three teams are built</h1>
+  <p class="sub">The implementation, in plain words, with the real code. Companion to "Three ways to run the same team". 29 October 2026.</p>
+
+  <div class="card">
+    <h2>The big idea: one toolbox, three ways to use it</h2>
+    <p>The three teams don't each get their own rules. They all use <b>one toolbox</b>, a small command line called <code>lab</code>, and every rule lives inside it. So when a team does better, it's because of how it's wired, not because it got easier rules.</p>
+    <svg viewBox="0 0 700 150" role="img" aria-label="Sequential, coordinator and swarm all call the same lab toolbox, which writes the same run folder">
+      <defs><marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5b5b66"/></marker></defs>
+      <g font-size="12" text-anchor="middle">
+        <rect x="10" y="8" width="170" height="36" rx="8" fill="var(--plan)"/><text x="95" y="30">Sequential (code)</text>
+        <rect x="10" y="56" width="170" height="36" rx="8" fill="var(--boss)"/><text x="95" y="78">Coordinator (boss AI)</text>
+        <rect x="10" y="104" width="170" height="36" rx="8" fill="var(--ask)"/><text x="95" y="126">Swarm (teammates)</text>
+        <rect x="270" y="40" width="190" height="70" rx="10" fill="var(--code)"/><text x="365" y="68" font-weight="600">lab toolbox</text><text x="365" y="86" font-size="10.5">save · check · assemble · stop</text>
+        <rect x="540" y="45" width="150" height="60" rx="10" fill="var(--out)" stroke="#c9b67a"/><text x="615" y="70">run folder</text><text x="615" y="88" font-size="10.5">data/lab-runs/&lt;id&gt;/</text>
+      </g>
+      <g stroke="#5b5b66" stroke-width="1.6" marker-end="url(#m)" fill="none">
+        <path d="M182,26 C230,26 230,60 268,62"/><line x1="182" y1="74" x2="268" y2="75"/><path d="M182,122 C230,122 230,90 268,88"/>
+        <line x1="462" y1="75" x2="538" y2="75"/>
+      </g>
+    </svg>
+  </div>
+
+  <div class="card">
+    <h2>The toolbox commands</h2>
+    <table>
+      <tr><th>Command</th><th>What it does</th></tr>
+      <tr><td><code>lab new</code></td><td>Starts a run, and reads the website if you gave one</td></tr>
+      <tr><td><code>lab save</code></td><td>The only way to hand in work. Checks it's valid before keeping it</td></tr>
+      <tr><td><code>lab check</code></td><td>Runs the Ruler (the code checks) and says <b>pass</b>, <b>redo</b> or <b>stop</b></td></tr>
+      <tr><td><code>lab assemble</code></td><td>The Glue. Only works once every check has passed</td></tr>
+      <tr><td><code>lab stop</code></td><td>Gives up on a run. A stopped run is never a success</td></tr>
+      <tr><td><code>lab report</code> · <code>compare</code></td><td>Time, tokens, fixes needed, and every run side by side</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>The rules live in code, not in a prompt</h2>
+    <p>An AI can ignore an instruction, but it can't get past code. Here's the part of <code>lab save</code> that enforces "two tries to fix it":</p>
+    <div class="file">apps/backend/src/lab/commands.ts</div>
+<pre><code>const attempt = run.attempts[key] + 1;
+if (attempt - 1 &gt; MAX_RETRIES_PER_OWNER) {        // MAX_RETRIES_PER_OWNER = 2
+  const reason = `${owner} out of retries`;
+  await finishRun(env, cleared, "stopped", reason);  // the run ends "stopped"
+  throw new LabError(reason);                        // and the agent is told why
+}</code></pre>
+    <p class="note">And there's one more rule: three invalid saves in a row (bad JSON, the wrong shape, a plan that renames things) end the run as "failed".</p>
+  </div>
+</section>
+
+<!-- PAGE 2 -->
+<section class="page">
+  <div class="card">
+    <h2>1. Sequential: the order is a loop in code</h2>
+    <p>Code calls the Director, runs the Ruler, and either moves on, asks for a fix, or stops. The AI never decides what happens next.</p>
+    <div class="file">apps/backend/src/lab/sequential.ts</div>
+<pre><code>for (;;) {
+  // the AI writes a plan; code saves it through the toolbox
+  await produce(deps, runId, "plan", "director", askTheDirector);
+  // code checks it: pass, redo or stop
+  const check = await labCheck(env, runId, "plan", "lab");
+  if (check.route.kind === "pass") break;            // next: the Cinematographer
+  if (check.route.kind === "stop") return final();   // out of tries
+  print(`[route] redo director: ${check.route.checkIds.join(", ")}`);
+}</code></pre>
+    <p class="note">You watch it as one line per step: <code>[director] plan 1</code>, <code>[checks] plan: 4 of 5 passed</code>, <code>[route] redo director: length_fits</code>.</p>
+  </div>
+
+  <div class="card">
+    <h2>2. Coordinator: the helpers are files</h2>
+    <p>Each helper is a Claude Code agent file. Code writes these files from the same instructions the sequential team uses, so the helpers are identical in all three teams.</p>
+    <div class="file">.claude/agents/lab-director.md (generated)</div>
+<pre><code>---
+name: lab-director
+tools: Bash, Read, SendMessage
+model: claude-sonnet-5-5
+effort: high
+---
+## If you were called as a subagent (the coordinator)
+Do your part, then return two lines: what you saved and what the check printed.
+The lead decides what happens next.</code></pre>
+    <p class="note">The boss is your Claude Code session, on Opus 5.5 at high effort. <code>/direct</code> gives it the goal and the rules, but not the order. Choosing the order is its job.</p>
+  </div>
+
+  <div class="card">
+    <h2>3. Swarm: the helpers pass the ball themselves</h2>
+    <p>The same three files, started as teammates. Each one checks its own work and messages the next. The lead only passes your answers along.</p>
+    <div class="file">.claude/skills/direct/SKILL.md (the swarm part)</div>
+<pre><code>You run on Opus 5.5 at high effort, but you are only the doorman:
+you pass messages between the owner and the team.
+You never plan, route, order or fix anyone's work.</code></pre>
+    <div class="file">.claude/agents/lab-cinematographer.md (the swarm part)</div>
+<pre><code>- When the shot checks pass, run `npm run -s lab -- assemble &lt;runId&gt;`
+  and tell the `lead` "done: &lt;runId&gt;".
+- You may ask `director` about a shot before you shoot it.</code></pre>
+  </div>
+</section>
+
+<!-- PAGE 3 -->
+<section class="page">
+  <div class="card">
+    <h2>Same instructions everywhere</h2>
+    <p>The new prompt versions are made by changing exact lines of the old ones. If an old line ever moves, the code stops with an error, so a prompt can't quietly drift. The Director's only change: with no photo, it may now describe how the product looks.</p>
+    <div class="file">apps/backend/src/agents/director/prompt-v2.ts</div>
+<pre><code>let lines = buildDirectorSystemPrompt().split("\n");   // v1, untouched
+// the product line: "describe only its kind" becomes "say what a camera sees"
+lines = replaceOnce(lines, (l) =&gt; l.startsWith(V1_PRODUCT_LINE_START),
+                    () =&gt; V2_PRODUCT_LINE);
+// the location line loses "painted as a picture"
+lines = replaceOnce(lines, (l) =&gt; l.includes(V1_PICTURE_SENTENCE),
+                    (l) =&gt; l.replace(V1_PICTURE_SENTENCE, ""));</code></pre>
+    <p class="note">A test checks that the agent files on disk still match these prompts exactly.</p>
+  </div>
+
+  <div class="card">
+    <h2>How to test it yourself</h2>
+    <table>
+      <tr><th>Team</th><th>Start Claude Code with</th><th>Then type</th></tr>
+      <tr><td>Sequential</td><td><code>claude</code> (needs <code>ANTHROPIC_API_KEY</code> in <code>.env</code>)</td><td><code>/direct</code></td></tr>
+      <tr><td>Coordinator</td><td><code>claude --model claude-opus-5-5 --effort high</code></td><td><code>/direct</code></td></tr>
+      <tr><td>Swarm</td><td>in iTerm2 or tmux:<br><code>CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --model claude-opus-5-5 --effort high --teammate-mode tmux</code></td><td><code>/direct</code></td></tr>
+    </table>
+    <p class="note">After a run: <code>npm run -s lab -- compare</code> shows every run side by side. Each run's files are in <code>data/lab-runs/&lt;id&gt;/</code>: <code>shotlist.md</code>, <code>prompt.txt</code>, <code>trace.jsonl</code> (who did what) and <code>metrics.json</code>.</p>
+  </div>
+
+  <div class="card">
+    <h2>What is proven, and what isn't yet</h2>
+    <ul>
+      <li><b>Proven:</b> every rule in the toolbox, the sequential loop (pass, fix-then-pass, stop, fail), the scraper and the generated agent files, all with tests that use fake AI answers. The whole project suite passes.</li>
+      <li><b>Not proven yet:</b> how the real models behave. No paid AI call was made while building this. Your nine test runs (3 ideas × 3 teams) are the experiment, and the report for your teacher gets written from them.</li>
+      <li><b>Never:</b> no pictures and no video. Nothing here can call a generation API.</li>
+    </ul>
+  </div>
+</section>
+
+</body>
+</html>

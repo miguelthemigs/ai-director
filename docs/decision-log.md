@@ -1,5 +1,33 @@
 # Decision log
 
+## 2026-10-29 — Architecture lab: one toolbox owns the rules, three wirings
+
+For the teacher's system-design exercise, the same three agents (Interrogator, Director,
+Cinematographer) are wired three ways: a fixed recipe in code (sequential), one lead agent calling
+them as subagents (coordinator), and teammates handing work to each other (swarm). Only the wiring
+changes. Every architecture saves, checks and assembles through one CLI, `npm run -s lab`, so the
+validation, the code checks, two retries per agent, the third-refusal-fails rule and the assembly
+gate are the same code for all three; the Claude Code agent files are generated from the same v2
+prompt files the recipe sends. The run is text only: no product, location or avatar picture and no
+video; it ends at a checked shot list and prompt. Claude Code always has one lead, so the swarm's
+lead is a doorman that only relays the owner's answers; a leaderless swarm is not possible there,
+and the teaching document says so. The swarm runs in split panes because an in-process teammate's
+system prompt differs from a subagent's. Built and tested with fakes only; no live run was made.
+Design: `docs/superpowers/specs/2026-10-28-agent-architectures-lab-design.md`.
+
+## 2026-10-29 — Lab models: Sonnet 5.5 specialists, Opus 5.5 leads, all at high effort
+
+The owner's decision, scoped to the lab only. The three specialists run on `claude-sonnet-5-5` in
+all three architectures (the recipe's API transport and the generated agent files), so a
+difference between architectures is not a difference in model. The coordinator's lead and the
+swarm's relaying lead are the Claude Code session on `claude-opus-5-5`, mirroring Anthropic's
+research system (an Opus lead, Sonnet workers); every coordinator number carries that caveat.
+Everything runs at effort `high`; Opus 5.5 defaults to medium in Claude Code, so the sessions are
+started with `--effort high`. This is an exception to the rule that the agents use
+`claude-opus-5`: the Director app and Prompt Coach keep `claude-opus-5`, and `DEFAULT_MODEL` is
+unchanged. `claude-sonnet-5-5` has no recorded rate in `api/pricing.ts`, so lab runs report tokens,
+not dollars.
+
 ## 2026-10-27 — Director: reference pictures stay local, no UploadThing
 
 Reverses the hosting half of "product and location pictures are reference images" below. The

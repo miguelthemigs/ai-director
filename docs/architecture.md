@@ -488,3 +488,13 @@ while building it. A run's `textMicroUsd` counts model text calls only, not pict
 or vision. The product and location pictures never leave this machine except inside the
 render request, as base64 data URLs; OpenRouter documents only HTTPS URLs there, so a live render is
 what proves Seedance accepts them.
+
+## 8. The architecture lab
+
+Added 2026-10-29, for a system-design exercise: the Director's three agents wired three ways
+(sequential recipe, coordinator, swarm), text only, compared on the same briefs. The toolbox is
+`apps/backend/src/lab/` and `npm run -s lab -- <command>`; the generated agent files are
+`.claude/agents/lab-*.md`; `/direct` (`.claude/skills/direct/SKILL.md`) runs one brief; runs land in
+`data/lab-runs/`. Design: `docs/superpowers/specs/2026-10-28-agent-architectures-lab-design.md`;
+plain-words explainers: `docs/agent-architectures-simple.pdf` and
+`docs/agent-architectures-implementation.pdf`.
