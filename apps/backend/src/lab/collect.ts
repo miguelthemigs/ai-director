@@ -171,8 +171,14 @@ export async function labCollect(
     const main = path.join(projectsDir, `${session}.jsonl`);
     let lines: RawLine[];
     try {
+      // A session that never mentions the run is someone else's; collecting it would put
+      // unrelated work (and its tokens) into this run's committed transcript.
+      if (!(await readFile(main, "utf8")).includes(runId)) {
+        throw new LabError(`session ${session} never mentions run ${runId}`);
+      }
       lines = await readRawLines(main);
-    } catch {
+    } catch (error) {
+      if (error instanceof LabError) throw error;
       throw new LabError(`no Claude Code session ${session} in ${projectsDir}`);
     }
     const named = lines.find((line) => typeof line.agentName === "string")?.agentName;

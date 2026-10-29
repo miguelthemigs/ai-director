@@ -55,7 +55,7 @@ function sharedRules(name: string, steps: string): string {
 const COORDINATOR = [
   "## If you were called as a subagent (the coordinator)",
   "",
-  "Do your part, then return two lines: what you saved and what the check printed. The lead decides what happens next. Do not call any other agent.",
+  "Do what the lead asked: save once, run the check once, and return two lines: what you saved and what the check printed. Do not fix it on your own when the check says `redo`: the lead decides whether you try again, and what to change. Do not call any other agent.",
 ].join("\n");
 
 function swarm(lines: string[]): string {
@@ -77,7 +77,7 @@ function checkRules(step: "plan" | "shots", who: string, redo: string): string {
   return [
     `2. After each save, run \`${LAB} check <runId> ${step} --by ${who}\`. It prints the outcomes and a route:`,
     "   - `pass`: your part is done.",
-    `   - \`redo\`: ${redo}`,
+    `   - \`redo\`: in a swarm, ${redo} As a subagent, return the outcome instead (see below).`,
     "   - `stop`: your retries are used up; stop and report why.",
   ].join("\n");
 }
@@ -100,7 +100,8 @@ function interrogator(): string {
     `1. Read the brief and the website text with \`${LAB} show <runId>\`, and the saved people with \`${LAB} avatars\`.`,
     '2. Save your questions as step `questions`: `{ "questions": [ { "id", "topic", "question", "ifYouDecide" } ] }`.',
     "3. Once the owner's answers are saved (`answers.json`), save the filled brief as step `brief`: `{ productKind, product, audience, tone, setting, character, seconds, mustNotAppear, avatarId }`.",
-    `   If the owner gave a website as an answer, read it first with \`${LAB} scrape <runId> <url>\`.`,
+    `   If the owner gave a website as an answer, read it first with \`${LAB} scrape <runId> <url>\`. If the owner answered "you decide" to the website question, read the URL you suggested in its \`ifYouDecide\` the same way.`,
+    "   With no questions at all, save the brief straight away.",
     "",
     COORDINATOR,
     "",
@@ -167,7 +168,7 @@ function cinematographer(): string {
     "",
     "## Your steps",
     "",
-    '1. Read the latest plan. Save the cameras as step `cameras`: `{ "cameras": [ { shot, framing, lensMm, move, light } ] }`.',
+    '1. Read the latest plan and its number (`run.attempts.plan` in `lab show`). Save the cameras as step `cameras`: `{ "forPlan": <that number>, "cameras": [ { shot, framing, lensMm, move, light } ] }`, shots numbered from 1. If the plan changed meanwhile, the save is refused: read the new plan and shoot again.',
     checkRules(
       "shots",
       "cinematographer",

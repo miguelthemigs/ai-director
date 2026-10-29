@@ -103,14 +103,14 @@ describe("labSave: cameras", () => {
   it("refuses cameras before any plan", async () => {
     const env = await newLabEnv();
     const id = await runWithBrief(env);
-    await expect(save(env, id, "cameras", { cameras: boardCameras() }, "cinematographer")).rejects.toThrow(/no plan/);
+    await expect(save(env, id, "cameras", { forPlan: 1, cameras: boardCameras() }, "cinematographer")).rejects.toThrow(/no plan/);
   });
 
   it("remembers which plan a camera set was made for", async () => {
     const env = await newLabEnv();
     const id = await runWithBrief(env);
     await save(env, id, "plan", boardPlan());
-    await save(env, id, "cameras", { cameras: boardCameras() }, "cinematographer");
+    await save(env, id, "cameras", { forPlan: 1, cameras: boardCameras() }, "cinematographer");
     expect(await readJson<CameraSet>(env.root, id, "cameras.1.json")).toEqual({ forPlan: 1, cameras: boardCameras() });
   });
 
@@ -118,22 +118,22 @@ describe("labSave: cameras", () => {
     const env = await newLabEnv();
     const id = await runWithBrief(env);
     await save(env, id, "plan", boardPlan());
-    await save(env, id, "cameras", { cameras: boardCameras() }, "cinematographer");
+    await save(env, id, "cameras", { forPlan: 1, cameras: boardCameras() }, "cinematographer");
     const run = await readRun(env.root, id);
     await writeRun(env.root, { ...run, pendingReshoot: { forCameras: 1, shots: [2] } });
 
     const touchesShot1 = boardCameras().map((c) => (c.shot === 1 ? { ...c, light: "sun from behind" } : c));
-    await expect(save(env, id, "cameras", { cameras: touchesShot1 }, "cinematographer")).rejects.toThrow(/shot 1/);
+    await expect(save(env, id, "cameras", { forPlan: 1, cameras: touchesShot1 }, "cinematographer")).rejects.toThrow(/shot 1/);
 
     const onlyShot2 = boardCameras().map((c) => (c.shot === 2 ? { ...c, light: "sun from behind" } : c));
-    await expect(save(env, id, "cameras", { cameras: onlyShot2 }, "cinematographer")).resolves.toMatchObject({ attempt: 2 });
+    await expect(save(env, id, "cameras", { forPlan: 1, cameras: onlyShot2 }, "cinematographer")).resolves.toMatchObject({ attempt: 2 });
   });
 
   it("clears shot checks and any reshoot when a new plan arrives", async () => {
     const env = await newLabEnv();
     const id = await runWithBrief(env);
     await save(env, id, "plan", boardPlan());
-    await save(env, id, "cameras", { cameras: boardCameras() }, "cinematographer");
+    await save(env, id, "cameras", { forPlan: 1, cameras: boardCameras() }, "cinematographer");
     const run = await readRun(env.root, id);
     await writeRun(env.root, {
       ...run,

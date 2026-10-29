@@ -1,4 +1,4 @@
-import { access, appendFile, mkdir, readFile } from "node:fs/promises";
+import { access, appendFile, mkdir, readFile, rmdir, stat } from "node:fs/promises";
 import path from "node:path";
 import type { CallLog } from "@ai-director/contract";
 import { writeJsonAtomic } from "../store/FileRunStore.js";
@@ -139,4 +139,41 @@ export async function appendCalls(root: string, id: string, calls: CallLog[]): P
 
 export async function readCalls(root: string, id: string): Promise<CallLog[]> {
   return readLines<CallLog>(root, id, "calls.jsonl");
+}
+
+const LOCK_WAIT_MS = 20;
+const LOCK_GIVE_UP_MS = 15_000;
+/** A lock older than this was left by a process that died mid-command; it is broken. */
+const LOCK_STALE_MS = 60_000;
+
+/**
+ * One command at a time per run. Swarm teammates are separate processes that read
+ * `run.json`, await, and write it back whole; without this, one's write would silently
+ * undo another's (a saved plan the run no longer counts). `mkdir` is atomic, so the
+ * lock is a directory in the run folder.
+ */
+export async function withRunLock<T>(root: string, id: string, work: () => Promise<T>): Promise<T> {
+  const lock = path.join(runDir(root, id), ".lock");
+  const started = Date.now();
+  for (;;) {
+    try {
+      await mkdir(lock);
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new LabError(`no run ${id}`);
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      const age = await stat(lock).then((s) => Date.now() - s.mtimeMs, () => 0);
+      if (age > LOCK_STALE_MS) {
+        await rmdir(lock).catch(() => undefined);
+        continue;
+      }
+      if (Date.now() - started > LOCK_GIVE_UP_MS) throw new LabError(`run ${id} is busy; try again`);
+      await new Promise((resolve) => setTimeout(resolve, LOCK_WAIT_MS));
+    }
+  }
+  try {
+    return await work();
+  } finally {
+    await rmdir(lock).catch(() => undefined);
+  }
 }

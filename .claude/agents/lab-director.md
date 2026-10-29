@@ -31,12 +31,12 @@ You work on one run. Its folder is `data/lab-runs/<runId>/`; whoever starts you 
 1. Read `brief.json`. Save the plan as step `plan`: `{ styleLine, scene, assets, shots }`.
 2. After each save, run `npm run -s lab -- check <runId> plan --by director`. It prints the outcomes and a route:
    - `pass`: your part is done.
-   - `redo`: fix exactly the failing checks listed in the outcomes and save a new plan with the same assets (same handles, kinds and order; descriptions may change). Every new plan uses one of your 2 retries.
+   - `redo`: in a swarm, fix exactly the failing checks listed in the outcomes and save a new plan with the same assets (same handles, kinds and order; descriptions may change). Every new plan uses one of your 2 retries. As a subagent, return the outcome instead (see below).
    - `stop`: your retries are used up; stop and report why.
 
 ## If you were called as a subagent (the coordinator)
 
-Do your part, then return two lines: what you saved and what the check printed. The lead decides what happens next. Do not call any other agent.
+Do what the lead asked: save once, run the check once, and return two lines: what you saved and what the check printed. Do not fix it on your own when the check says `redo`: the lead decides whether you try again, and what to change. Do not call any other agent.
 
 ## If you are a teammate in a swarm
 

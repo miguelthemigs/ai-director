@@ -7,6 +7,7 @@ import { validateFill, validateQuestions } from "../agents/interrogator/runV2.js
 import { assertPlanShape, lowerCaseHandles, planAssetChanges } from "../agents/director/run.js";
 import { DirectorPlanSchema } from "../agents/director/schema.js";
 import { runPlanChecks, runPromptChecks } from "../orchestrate/director/checks.js";
+import { AssemblyInvariantError } from "../orchestrate/director/assemble.js";
 import { route, type Route } from "../orchestrate/director/router.js";
 import { FileAvatarStore } from "../store/AvatarStore.js";
 import { writeTextAtomic } from "../store/FileRunStore.js";
@@ -17,6 +18,7 @@ import {
   createRun,
   readJson,
   readRun,
+  withRunLock,
   writeJson,
   writeRun,
 } from "./runStore.js";
@@ -172,10 +174,13 @@ function validateAnswers(raw: unknown, questions: LabQuestion[]): LabAnswers {
   return { answers: answers.map(({ id, answer }) => ({ id, answer })) };
 }
 
-function validateCameras(raw: unknown): Camera[] {
+function validateCameras(raw: unknown, shotCount: number): Camera[] {
   const parsed = CinematographerOutputSchema.safeParse(raw);
   if (!parsed.success) throw schemaError("the cameras", parsed.error.issues);
   for (const camera of parsed.data.cameras) {
+    if (!Number.isInteger(camera.shot) || camera.shot < 1 || camera.shot > shotCount) {
+      throw new LabError(`shot ${camera.shot} is not in the plan (shots 1-${shotCount})`);
+    }
     if (!Number.isFinite(camera.lensMm) || camera.lensMm <= 0) {
       throw new LabError(`shot ${camera.shot} has a lens of ${camera.lensMm} mm`);
     }
@@ -184,7 +189,7 @@ function validateCameras(raw: unknown): Camera[] {
 }
 
 /** A reshoot keeps every camera outside the shots the check sent back, exactly. */
-function assertReshoot(previous: Camera[], next: Camera[], shots: number[]): void {
+function assertReshoot(previous: Camera[], next: Camera[], shots: number[], shotCount: number): void {
   const listed = new Set(shots);
   const key = (camera: Camera) => JSON.stringify(camera);
   const changed = new Set<number>();
@@ -197,7 +202,8 @@ function assertReshoot(previous: Camera[], next: Camera[], shots: number[]): voi
       `a reshoot may change only shot ${shots.join(", ")}; shot ${[...changed].sort((a, b) => a - b).join(", ")} changed`,
     );
   }
-  for (const shot of shots) {
+  // A listed shot the plan does not have cannot get a camera (save refuses it); it is dropped.
+  for (const shot of shots.filter((n) => n >= 1 && n <= shotCount)) {
     const count = next.filter((camera) => camera.shot === shot).length;
     if (count !== 1) throw new LabError(`a reshoot needs exactly one camera for shot ${shot}, got ${count}`);
   }
@@ -224,7 +230,12 @@ async function validate(env: LabEnv, run: LabRun, step: LabStep, json: string): 
       return { step, value: validateAnswers(raw, questions) };
     }
     case "brief": {
-      if ((await readJson(env.root, run.id, "answers.json")) === null) throw new LabError("no answers saved yet");
+      const questions = await readJson<LabQuestion[]>(env.root, run.id, "questions.json");
+      if (questions === null) throw new LabError("no questions saved yet");
+      // With no questions there is nothing to answer: the brief may be filled at once.
+      if (questions.length > 0 && (await readJson(env.root, run.id, "answers.json")) === null) {
+        throw new LabError("no answers saved yet");
+      }
       return { step, value: validateFill(raw, { brief: run.brief, avatars: await labAvatars(env) }) };
     }
     case "plan": {
@@ -241,12 +252,22 @@ async function validate(env: LabEnv, run: LabRun, step: LabStep, json: string): 
       return { step, value: plan };
     }
     case "cameras": {
-      if (run.attempts.plan === 0) throw new LabError("no plan saved yet");
-      const cameras = validateCameras(raw);
+      const plan = await latestPlan(env, run);
+      if (plan === null) throw new LabError("no plan saved yet");
+      // The saver says which plan it shot, so cameras made from a plan that was revised
+      // meanwhile (a swarm's Director working alongside) are refused, not relabelled.
+      const forPlan = (raw as { forPlan?: unknown } | null)?.forPlan;
+      if (typeof forPlan !== "number") {
+        throw new LabError('cameras need "forPlan": the plan attempt you shot (lab show prints run.attempts.plan)');
+      }
+      if (forPlan !== run.attempts.plan) {
+        throw new LabError(`these cameras are for plan ${forPlan}, the latest plan is ${run.attempts.plan}: read it and shoot again`);
+      }
+      const cameras = validateCameras(raw, plan.shots.length);
       const previous = await latestCameras(env, run);
       const pending = run.pendingReshoot;
       if (pending !== null && previous !== null && pending.forCameras === run.attempts.cameras && previous.forPlan === run.attempts.plan) {
-        assertReshoot(previous.cameras, cameras, pending.shots);
+        assertReshoot(previous.cameras, cameras, pending.shots, plan.shots.length);
       }
       return { step, value: cameras };
     }
@@ -258,7 +279,20 @@ async function validate(env: LabEnv, run: LabRun, step: LabStep, json: string): 
  * recipe calls this too when a model answer is refused before it reaches `labSave`, so
  * every architecture is held to the same count.
  */
-export async function labRefuse(env: LabEnv, run: LabRun, step: LabStep, reason: string, by: string): Promise<LabRun> {
+export async function labRefuse(env: LabEnv, runId: string, step: LabStep, reason: string, by: string): Promise<LabRun> {
+  return withRunLock(env.root, runId, async () => refuse(env, await runningRun(env, runId), step, reason, by));
+}
+
+/** Ends a run `failed` for a cause that is not an invalid output (a model call that failed). */
+export async function labFail(env: LabEnv, runId: string, reason: string, by: string): Promise<LabRun> {
+  return withRunLock(env.root, runId, async () => {
+    const run = await finishRun(env, await runningRun(env, runId), "failed", reason);
+    await trace(env, runId, { actor: by, kind: "fail", text: reason });
+    return run;
+  });
+}
+
+async function refuse(env: LabEnv, run: LabRun, step: LabStep, reason: string, by: string): Promise<LabRun> {
   const inARow = run.refusedInARow[step] + 1;
   let next: LabRun = {
     ...run,
@@ -285,6 +319,16 @@ export async function labSave(
   json: string,
   by: string,
 ): Promise<{ ok: true; file: string; attempt?: number }> {
+  return withRunLock(env.root, runId, () => save(env, runId, step, json, by));
+}
+
+async function save(
+  env: LabEnv,
+  runId: string,
+  step: LabStep,
+  json: string,
+  by: string,
+): Promise<{ ok: true; file: string; attempt?: number }> {
   const run = await runningRun(env, runId);
 
   let validated: Validated;
@@ -292,7 +336,7 @@ export async function labSave(
     validated = await validate(env, run, step, json);
   } catch (error) {
     const refusal = asRefusal(error);
-    await labRefuse(env, run, step, refusal.message, by);
+    await refuse(env, run, step, refusal.message, by);
     throw refusal;
   }
 
@@ -353,6 +397,15 @@ export async function labCheck(
   which: "plan" | "shots",
   by: string,
 ): Promise<{ passed: boolean; outcomes: CheckOutcome[]; route: Route }> {
+  return withRunLock(env.root, runId, () => check(env, runId, which, by));
+}
+
+async function check(
+  env: LabEnv,
+  runId: string,
+  which: "plan" | "shots",
+  by: string,
+): Promise<{ passed: boolean; outcomes: CheckOutcome[]; route: Route }> {
   const run = await runningRun(env, runId);
   const brief = await readJson<LabBrief>(env.root, runId, "brief.json");
   if (brief === null) throw new LabError("no brief saved yet");
@@ -407,6 +460,14 @@ export async function labAssemble(
   runId: string,
   by: string,
 ): Promise<{ status: "done"; promptFile: string; shotListFile: string; chars: number }> {
+  return withRunLock(env.root, runId, () => assemble(env, runId, by));
+}
+
+async function assemble(
+  env: LabEnv,
+  runId: string,
+  by: string,
+): Promise<{ status: "done"; promptFile: string; shotListFile: string; chars: number }> {
   const run = await runningRun(env, runId);
   const planCheck = run.lastChecks.plan;
   if (planCheck === null || planCheck.attempt !== run.attempts.plan || !planCheck.passed) {
@@ -425,7 +486,17 @@ export async function labAssemble(
   const plan = (await latestPlan(env, run))!;
   const character = plan.assets.find((asset) => asset.kind === "character");
   const characterText = brief.avatar?.description ?? character?.description ?? "";
-  const { text } = assembleTextPrompt({ plan, cameras: set.cameras, characterText });
+  let text: string;
+  try {
+    ({ text } = assembleTextPrompt({ plan, cameras: set.cameras, characterText }));
+  } catch (error) {
+    if (!(error instanceof AssemblyInvariantError)) throw error;
+    // A broken invariant is a defect, never routed back to an agent: the run fails with it.
+    const reason = `assembly failed: ${error.message}`;
+    await finishRun(env, run, "failed", reason);
+    await trace(env, runId, { actor: "lab", kind: "fail", text: reason });
+    throw new LabError(reason);
+  }
   await writeTextAtomic(path.join(env.root, runId, "prompt.txt"), text);
   await writeTextAtomic(
     path.join(env.root, runId, "shotlist.md"),
@@ -438,9 +509,11 @@ export async function labAssemble(
 
 /** Gives up on a run: it ends `stopped`, never a success. */
 export async function labStop(env: LabEnv, runId: string, reason: string, by: string): Promise<{ status: "stopped" }> {
-  const run = await runningRun(env, runId);
-  if (reason.trim() === "") throw new LabError("say why the run is stopping");
-  await finishRun(env, run, "stopped", reason);
-  await trace(env, runId, { actor: by, kind: "stop", text: reason });
-  return { status: "stopped" };
+  return withRunLock(env.root, runId, async () => {
+    const run = await runningRun(env, runId);
+    if (reason.trim() === "") throw new LabError("say why the run is stopping");
+    await finishRun(env, run, "stopped", reason);
+    await trace(env, runId, { actor: by, kind: "stop", text: reason });
+    return { status: "stopped" as const };
+  });
 }

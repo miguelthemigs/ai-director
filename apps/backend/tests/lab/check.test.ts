@@ -10,8 +10,8 @@ import { AVATAR_DESCRIPTION, AVATAR_ID, cleanLabEnvs, newLabEnv, runWithBrief } 
 afterEach(cleanLabEnvs);
 
 const savePlan = (env: LabEnv, id: string, plan: Plan = boardPlan()) => labSave(env, id, "plan", JSON.stringify(plan), "director");
-const saveCameras = (env: LabEnv, id: string, cameras = boardCameras()) =>
-  labSave(env, id, "cameras", JSON.stringify({ cameras }), "cinematographer");
+const saveCameras = (env: LabEnv, id: string, cameras = boardCameras(), forPlan = 1) =>
+  labSave(env, id, "cameras", JSON.stringify({ forPlan, cameras }), "cinematographer");
 
 /** Two normal shots: 6 s for a 15 s ad. */
 function shortPlan(): Plan {

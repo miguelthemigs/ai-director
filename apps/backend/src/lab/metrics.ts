@@ -3,7 +3,7 @@ import path from "node:path";
 import type { CallLog } from "@ai-director/contract";
 import type { TranscriptLine } from "./collect.js";
 import type { LabEnv } from "./commands.js";
-import { LabError, readCalls, readJson, readRun, writeJson, writeRun } from "./runStore.js";
+import { LabError, readCalls, readJson, readRun, withRunLock, writeJson, writeRun } from "./runStore.js";
 import type { CheckRecord, LabArch, LabStatus, LabStep } from "./types.js";
 
 /**
@@ -160,7 +160,9 @@ export async function labCompare(env: LabEnv, runIds: string[]): Promise<string>
 
 export async function labRate(env: LabEnv, runId: string, score: number, note: string): Promise<{ ok: true }> {
   if (!Number.isInteger(score) || score < 1 || score > 5) throw new LabError("a rating is a whole number from 1 to 5");
-  const run = await readRun(env.root, runId);
-  await writeRun(env.root, { ...run, rating: { score, note } });
-  return { ok: true };
+  return withRunLock(env.root, runId, async () => {
+    const run = await readRun(env.root, runId);
+    await writeRun(env.root, { ...run, rating: { score, note } });
+    return { ok: true as const };
+  });
 }

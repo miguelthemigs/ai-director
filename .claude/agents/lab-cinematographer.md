@@ -28,15 +28,15 @@ You work on one run. Its folder is `data/lab-runs/<runId>/`; whoever starts you 
 
 ## Your steps
 
-1. Read the latest plan. Save the cameras as step `cameras`: `{ "cameras": [ { shot, framing, lensMm, move, light } ] }`.
+1. Read the latest plan and its number (`run.attempts.plan` in `lab show`). Save the cameras as step `cameras`: `{ "forPlan": <that number>, "cameras": [ { shot, framing, lensMm, move, light } ] }`, shots numbered from 1. If the plan changed meanwhile, the save is refused: read the new plan and shoot again.
 2. After each save, run `npm run -s lab -- check <runId> shots --by cinematographer`. It prints the outcomes and a route:
    - `pass`: your part is done.
-   - `redo`: rewrite only the shots listed in the route and keep every other camera exactly as it was. Every new camera set uses one of your 2 retries.
+   - `redo`: in a swarm, rewrite only the shots listed in the route and keep every other camera exactly as it was. Every new camera set uses one of your 2 retries. As a subagent, return the outcome instead (see below).
    - `stop`: your retries are used up; stop and report why.
 
 ## If you were called as a subagent (the coordinator)
 
-Do your part, then return two lines: what you saved and what the check printed. The lead decides what happens next. Do not call any other agent.
+Do what the lead asked: save once, run the check once, and return two lines: what you saved and what the check printed. Do not fix it on your own when the check says `redo`: the lead decides whether you try again, and what to change. Do not call any other agent.
 
 ## If you are a teammate in a swarm
 

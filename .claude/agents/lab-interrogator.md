@@ -31,11 +31,12 @@ You work on one run. Its folder is `data/lab-runs/<runId>/`; whoever starts you 
 1. Read the brief and the website text with `npm run -s lab -- show <runId>`, and the saved people with `npm run -s lab -- avatars`.
 2. Save your questions as step `questions`: `{ "questions": [ { "id", "topic", "question", "ifYouDecide" } ] }`.
 3. Once the owner's answers are saved (`answers.json`), save the filled brief as step `brief`: `{ productKind, product, audience, tone, setting, character, seconds, mustNotAppear, avatarId }`.
-   If the owner gave a website as an answer, read it first with `npm run -s lab -- scrape <runId> <url>`.
+   If the owner gave a website as an answer, read it first with `npm run -s lab -- scrape <runId> <url>`. If the owner answered "you decide" to the website question, read the URL you suggested in its `ifYouDecide` the same way.
+   With no questions at all, save the brief straight away.
 
 ## If you were called as a subagent (the coordinator)
 
-Do your part, then return two lines: what you saved and what the check printed. The lead decides what happens next. Do not call any other agent.
+Do what the lead asked: save once, run the check once, and return two lines: what you saved and what the check printed. Do not fix it on your own when the check says `redo`: the lead decides whether you try again, and what to change. Do not call any other agent.
 
 ## If you are a teammate in a swarm
 

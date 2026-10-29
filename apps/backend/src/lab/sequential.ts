@@ -15,6 +15,7 @@ import {
   labAssemble,
   labAvatars,
   labCheck,
+  labFail,
   labRefuse,
   labSave,
   labScrape,
@@ -45,6 +46,14 @@ async function sequentialRun(deps: SequentialDeps, runId: string): Promise<LabRu
   return run;
 }
 
+/** The model call itself failed (rate limit, network, auth): not an invalid answer. */
+class ModelCallError extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = "ModelCallError";
+  }
+}
+
 /** One model call, metered; its calls go to `calls.jsonl` whether it succeeds or throws. */
 async function metered<T>(
   deps: SequentialDeps,
@@ -53,8 +62,15 @@ async function metered<T>(
   call: (transport: ParseTransport) => Promise<T>,
 ): Promise<T> {
   const m = meter(deps.transport, `${agent}/v2`);
+  const guarded: ParseTransport = async (args) => {
+    try {
+      return await m.transport(args);
+    } catch (error) {
+      throw new ModelCallError(error);
+    }
+  };
   try {
-    return await call(m.transport);
+    return await call(guarded);
   } finally {
     await appendCalls(deps.env.root, runId, m.calls());
   }
@@ -78,8 +94,14 @@ async function produce(
       value = await metered(deps, runId, agent, generate);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
+      if (error instanceof ModelCallError) {
+        // Not the model's answer being wrong: the run fails with the real cause, uncounted.
+        deps.print(`[failed] ${step}: the model call failed: ${reason}`);
+        await labFail(deps.env, runId, `the model call failed: ${reason}`, agent);
+        return false;
+      }
       deps.print(`[refused] ${step}: ${reason}`);
-      const run = await labRefuse(deps.env, await readRun(deps.env.root, runId), step, reason, agent);
+      const run = await labRefuse(deps.env, runId, step, reason, agent);
       if (run.status !== "running") return false;
       continue;
     }
@@ -189,6 +211,7 @@ export async function sequentialFinish(deps: SequentialDeps, runId: string): Pro
     const previous = await latestCameras(env, run);
     const pending = run.pendingReshoot;
     const saved = await produce(deps, runId, "cameras", "cinematographer", async (transport) => ({
+      forPlan: run.attempts.plan,
       cameras:
         previous === null || pending === null
           ? await shootAll({ transport }, { plan, seconds: brief.seconds }, CINEMATOGRAPHER_PROMPTS_V2)

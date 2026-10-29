@@ -42,7 +42,7 @@ Keep the printed `runId`. Tell the owner the run folder: `data/lab-runs/<runId>/
 Say first: "In this architecture I only pass messages; the code decides every step."
 
 1. `npm run -s lab -- sequential ask <runId>` prints the Interrogator's questions.
-2. Ask them with AskUserQuestion, one question each, the first option labelled "You decide: <ifYouDecide>". Save the answers exactly as given (`you decide` for that option):
+2. Ask them with AskUserQuestion: at most 4 questions per AskUserQuestion call (there can be up to 6, so use two calls), each with a short first option labelled "You decide" whose description is the question's `ifYouDecide`, plus one or two concrete alternatives; the owner can always type their own answer. Save the answers exactly as given (`you decide` for that option):
    ```bash
    npm run -s lab -- save <runId> answers --by owner <<'JSON'
    {"answers": [{"id": "q1", "answer": "..."}]}
@@ -58,7 +58,7 @@ calling three specialists as subagents: `lab-interrogator`, `lab-director`, `lab
 
 - **You decide** whom to call, in what order, with what instructions, whether to re-call one after a failed check and what to tell it, and when to give up (`npm run -s lab -- stop <runId> --by lead "<why>"`). Nobody gives you the order; choosing it is the point of this architecture.
 - Every subagent starts empty: give it the run id and what you want. It can read the run itself (`lab show`).
-- **Only you talk to the owner.** When the Interrogator has saved questions, ask them with AskUserQuestion (first option "You decide: …") and save the answers with `--by owner`, then call the Interrogator again to fill the brief.
+- **Only you talk to the owner.** When the Interrogator has saved questions, ask them as in 3a step 2 (at most 4 per AskUserQuestion call, "You decide" first) and save the answers with `--by owner`, then call the Interrogator again to fill the brief. With no questions there is nothing to ask or save.
 - Never write an agent's output yourself, never run `lab save` for a plan, cameras, questions or brief, and never give a subagent a `name` (named subagents can message each other, which belongs to the swarm).
 - After each subagent returns, check the run with `npm run -s lab -- show <runId>` before deciding the next step.
 - `lab assemble` is yours to run once both checks pass: `npm run -s lab -- assemble <runId> --by lead`.
@@ -70,7 +70,7 @@ the owner and the team. You never plan, route, order or fix anyone's work.
 
 1. Spawn three teammates from the agent types `lab-interrogator`, `lab-director`, `lab-cinematographer`, named exactly `interrogator`, `director`, `cinematographer`. Give each the run id, the names of the other two, and one line: "You are a teammate in a swarm; follow your file's swarm rules."
 2. Send `interrogator` the brief: "Run <runId>: ask the owner's questions."
-3. When the Interrogator sends questions, ask the owner with AskUserQuestion (first option "You decide: …"), save the answers with `--by owner`, log it (`npm run -s lab -- log <runId> --from lead --to interrogator "answers saved"`), and tell `interrogator` the answers are saved.
+3. When the Interrogator sends questions, ask the owner as in 3a step 2 (at most 4 per AskUserQuestion call, "You decide" first), save the answers with `--by owner`, log it (`npm run -s lab -- log <runId> --from lead --to interrogator "answers saved"`), and tell `interrogator` the answers are saved.
 4. Then wait. The teammates hand off among themselves. You only relay anything one of them addresses to the owner, and wait for "done" or "stopped".
 5. Tell the owner not to message teammates directly during the run (watch them in their panes instead).
 
@@ -79,9 +79,9 @@ the owner and the team. You never plan, route, order or fix anyone's work.
 1. `npm run -s lab -- report <runId>`.
 2. If the run is `done`, show `npm run -s lab -- show <runId> shotlist.md`.
 3. If it is `stopped`, `failed`, or still running, say so in the first line with the reason, and **never call it a success**.
-4. Coordinator and swarm: collect the transcripts. This session's id is the newest file in `~/.claude/projects/$(pwd | tr / -)/` (`ls -t ~/.claude/projects/$(pwd | tr / -)/*.jsonl | head -5`); in a swarm, the teammates' sessions are the other files written since the run started. Then:
+4. Coordinator and swarm: collect the transcripts. This session's id is in `$CLAUDE_CODE_SESSION_ID` (`echo $CLAUDE_CODE_SESSION_ID`). In a swarm, the teammates' sessions are the transcript files that mention this run: `grep -l <runId> ~/.claude/projects/$(pwd | tr / -)/*.jsonl`. `lab collect` refuses any session that never mentions the run, so another Claude Code window open on this project is never swept in. Then:
    ```bash
-   npm run -s lab -- collect <runId> <this-session-id> [<teammate-session-id> ...]
+   npm run -s lab -- collect <runId> $CLAUDE_CODE_SESSION_ID [<teammate-session-id> ...]
    ```
    Remind the owner to read `data/lab-runs/<runId>/transcript.jsonl` before committing it.
 5. Offer `npm run -s lab -- rate <runId> <1-5> "<note>"`, and `npm run -s lab -- compare` to see every run side by side.
