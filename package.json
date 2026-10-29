@@ -15,6 +15,7 @@
     "score": "tsx apps/backend/src/cli/score.ts",
     "compare": "tsx apps/backend/src/cli/compare.ts",
     "agree": "tsx apps/backend/src/cli/agree.ts",
+    "lab": "tsx apps/backend/src/cli/lab.ts",
     "dev:server": "tsx watch apps/backend/src/server/server.ts"
   },
   "dependencies": {
