@@ -1,12 +1,16 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { MAX_RETRIES_PER_OWNER, type Camera, type Plan } from "@ai-director/contract";
+import { MAX_RETRIES_PER_OWNER, type Camera, type CheckOutcome, type Plan } from "@ai-director/contract";
 import { CinematographerOutputSchema } from "../agents/cinematographer/schema.js";
 import type { AvatarChoice } from "../agents/interrogator/prompt-v2.js";
 import { validateFill, validateQuestions } from "../agents/interrogator/runV2.js";
 import { assertPlanShape, lowerCaseHandles, planAssetChanges } from "../agents/director/run.js";
 import { DirectorPlanSchema } from "../agents/director/schema.js";
+import { runPlanChecks, runPromptChecks } from "../orchestrate/director/checks.js";
+import { route, type Route } from "../orchestrate/director/router.js";
 import { FileAvatarStore } from "../store/AvatarStore.js";
+import { writeTextAtomic } from "../store/FileRunStore.js";
+import { assembleTextPrompt, renderShotList } from "./assemble.js";
 import {
   LabError,
   appendTrace,
@@ -319,4 +323,114 @@ export async function labSave(
       return { ok: true, file, attempt };
     }
   }
+}
+
+function describeRoute(result: Route): string {
+  if (result.kind === "pass") return "pass";
+  if (result.kind === "stop") return `stop: ${result.reason}`;
+  const shots = result.shots.length > 0 ? `, shots ${result.shots.join(", ")}` : "";
+  return `redo ${result.owner} (${result.checkIds.join(", ")}${shots})`;
+}
+
+/**
+ * Runs the code checks on the latest plan or camera set and routes a failure with the same
+ * `route()` the Director app uses. Retries are counted when a new plan or camera set is
+ * saved, so the route here only reads them; a `stop` ends the run.
+ */
+export async function labCheck(
+  env: LabEnv,
+  runId: string,
+  which: "plan" | "shots",
+  by: string,
+): Promise<{ passed: boolean; outcomes: CheckOutcome[]; route: Route }> {
+  const run = await runningRun(env, runId);
+  const brief = await readJson<LabBrief>(env.root, runId, "brief.json");
+  if (brief === null) throw new LabError("no brief saved yet");
+  const plan = await latestPlan(env, run);
+  if (plan === null) throw new LabError("no plan saved yet");
+
+  let outcomes: CheckOutcome[];
+  let attempt: number;
+  if (which === "plan") {
+    outcomes = runPlanChecks(plan, brief.seconds, brief.mustNotAppear);
+    attempt = run.attempts.plan;
+  } else {
+    const set = await latestCameras(env, run);
+    if (set === null) throw new LabError("no cameras saved yet");
+    if (set.forPlan !== run.attempts.plan) {
+      throw new LabError(`cameras are stale: made for plan ${set.forPlan}, latest is ${run.attempts.plan}`);
+    }
+    outcomes = runPromptChecks(plan, set.cameras);
+    attempt = run.attempts.cameras;
+  }
+
+  const retries = { director: run.attempts.plan - 1, cinematographer: Math.max(0, run.attempts.cameras - 1) };
+  const result = route(outcomes, retries);
+  const passed = outcomes.every((outcome) => outcome.passed);
+  const record = { attempt, forPlan: run.attempts.plan, passed, outcomes };
+  await writeJson(env.root, runId, `checks.${which}.${attempt}.json`, record);
+
+  let next: LabRun = { ...run, lastChecks: { ...run.lastChecks, [which]: record } };
+  if (result.kind === "redo" && result.owner === "cinematographer") {
+    next = { ...next, pendingReshoot: { forCameras: run.attempts.cameras, shots: result.shots } };
+  }
+  await writeRun(env.root, next);
+  const count = outcomes.filter((outcome) => outcome.passed).length;
+  await trace(env, runId, {
+    actor: by,
+    kind: "check",
+    text: `${which} checks: ${count} of ${outcomes.length} passed -> ${describeRoute(result)}`,
+  });
+  if (result.kind === "stop") {
+    await finishRun(env, next, "stopped", result.reason);
+    await trace(env, runId, { actor: "lab", kind: "stop", text: result.reason });
+  }
+  return { passed, outcomes, route: result };
+}
+
+/**
+ * Glues the final prompt and the shot list, only once the latest plan and the cameras made
+ * for it have both passed their checks. The run is then `done`, the one success state.
+ */
+export async function labAssemble(
+  env: LabEnv,
+  runId: string,
+  by: string,
+): Promise<{ status: "done"; promptFile: string; shotListFile: string; chars: number }> {
+  const run = await runningRun(env, runId);
+  const planCheck = run.lastChecks.plan;
+  if (planCheck === null || planCheck.attempt !== run.attempts.plan || !planCheck.passed) {
+    throw new LabError(`plan checks have not passed on plan ${run.attempts.plan}`);
+  }
+  const set = await latestCameras(env, run);
+  if (set === null || set.forPlan !== run.attempts.plan) {
+    throw new LabError(`there are no cameras made for plan ${run.attempts.plan}`);
+  }
+  const shotCheck = run.lastChecks.shots;
+  if (shotCheck === null || shotCheck.attempt !== run.attempts.cameras || !shotCheck.passed) {
+    throw new LabError(`shot checks have not passed on camera set ${run.attempts.cameras}`);
+  }
+
+  const brief = (await readJson<LabBrief>(env.root, runId, "brief.json"))!;
+  const plan = (await latestPlan(env, run))!;
+  const character = plan.assets.find((asset) => asset.kind === "character");
+  const characterText = brief.avatar?.description ?? character?.description ?? "";
+  const { text } = assembleTextPrompt({ plan, cameras: set.cameras, characterText });
+  await writeTextAtomic(path.join(env.root, runId, "prompt.txt"), text);
+  await writeTextAtomic(
+    path.join(env.root, runId, "shotlist.md"),
+    renderShotList({ plan, cameras: set.cameras, characterText, brief }),
+  );
+  await finishRun(env, run, "done", null);
+  await trace(env, runId, { actor: by, kind: "assemble", text: `prompt assembled: ${text.length} characters` });
+  return { status: "done", promptFile: "prompt.txt", shotListFile: "shotlist.md", chars: text.length };
+}
+
+/** Gives up on a run: it ends `stopped`, never a success. */
+export async function labStop(env: LabEnv, runId: string, reason: string, by: string): Promise<{ status: "stopped" }> {
+  const run = await runningRun(env, runId);
+  if (reason.trim() === "") throw new LabError("say why the run is stopping");
+  await finishRun(env, run, "stopped", reason);
+  await trace(env, runId, { actor: by, kind: "stop", text: reason });
+  return { status: "stopped" };
 }
