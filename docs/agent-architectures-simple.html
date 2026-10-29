@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Three Ways to Run the Team</title>
+<style>
+  @page { size: A4; margin: 16mm 16mm 14mm; }
+  :root {
+    --ink: #1d1d1f; --soft: #5b5b66; --line: #d9d9e0; --paper: #ffffff;
+    --you: #f4b740; --ask: #7aa7e6; --plan: #8bc79a; --cam: #e59a8c;
+    --code: #b9b9c6; --boss: #9b86d9; --out: #f0e6c8;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: var(--ink);
+         background: var(--paper); margin: 0; font-size: 11.5pt; line-height: 1.45; }
+  h1 { font-size: 22pt; margin: 0 0 2mm; letter-spacing: -0.3px; }
+  h2 { font-size: 15pt; margin: 0 0 1.5mm; }
+  .sub { color: var(--soft); margin: 0 0 6mm; }
+  .page { page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 4mm 5mm; margin-bottom: 5mm;
+          break-inside: avoid; }
+  .tag { display: inline-block; font-size: 9pt; color: var(--soft); border: 1px solid var(--line);
+         border-radius: 20px; padding: 0 8px; margin-left: 6px; vertical-align: middle; font-weight: 400; }
+  .who { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5mm 6mm; margin-top: 3mm; }
+  .who div { display: flex; gap: 8px; align-items: flex-start; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; flex: none; margin-top: 4px; }
+  .pros { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-top: 2mm; font-size: 10.5pt; }
+  .pros p { margin: 0; }
+  .good b { color: #2f7a43; } .bad b { color: #a3402e; }
+  svg { display: block; width: 100%; height: auto; margin: 2mm 0 1mm; }
+  svg text { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; }
+  table { width: 100%; border-collapse: collapse; font-size: 10.5pt; margin-top: 2mm; }
+  th, td { text-align: left; padding: 2.2mm 2mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 9.5pt; color: var(--soft); font-weight: 600; }
+  ul { margin: 1mm 0 0; padding-left: 5mm; } li { margin-bottom: 1mm; }
+  .big { font-size: 13pt; }
+  .note { color: var(--soft); font-size: 10pt; }
+</style>
+</head>
+<body>
+
+<!-- PAGE 1 -->
+<section class="page">
+  <h1>Three ways to run the same team</h1>
+  <p class="sub">A short explainer for review before anything gets built. 29 October 2026.</p>
+
+  <div class="card">
+    <h2>The job</h2>
+    <p class="big">You say: <i>"Make me an ad for Apple."</i><br>
+    The team gives back a <b>shot list</b>: what happens in each shot, and where the camera and the light go.</p>
+    <p class="note">No pictures and no video are made. It stops at the written shots.</p>
+  </div>
+
+  <div class="card">
+    <h2>The team (the same in all three)</h2>
+    <div class="who">
+      <div><span class="dot" style="background:var(--ask)"></span><span><b>The Interrogator</b> (AI)<br>Reads your idea and the website, and asks about what's missing. You can always say "you decide".</span></div>
+      <div><span class="dot" style="background:var(--plan)"></span><span><b>The Director</b> (AI)<br>Writes the story: the place, the person, the product, and each shot.</span></div>
+      <div><span class="dot" style="background:var(--cam)"></span><span><b>The Cinematographer</b> (AI)<br>Picks the camera and the light for every shot.</span></div>
+      <div><span class="dot" style="background:var(--code)"></span><span><b>The Ruler and the Glue</b> (plain code, not AI)<br>The Ruler checks the rules. The Glue sticks everything into the final prompt.</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>The one question we are testing</h2>
+    <p class="big"><b>Who decides who works next?</b></p>
+    <ul>
+      <li><b>Sequential:</b> a fixed recipe written in code. Like a factory line.</li>
+      <li><b>Coordinator:</b> one boss AI tells the helpers what to do. Like a teacher with helpers.</li>
+      <li><b>Swarm:</b> the helpers pass the work to each other. Like passing a ball.</li>
+    </ul>
+    <p class="note">The same helpers, the same instructions, the same Ruler, and the same "two tries to fix it" rule in all three. Only the wiring changes, so any difference comes from the wiring.</p>
+  </div>
+</section>
+
+<!-- PAGE 2 -->
+<section class="page">
+  <div class="card">
+    <h2>1. Sequential: the factory line <span class="tag">what we have today</span></h2>
+    <svg viewBox="0 0 700 150" role="img" aria-label="You, Interrogator, Director, Ruler, Cinematographer, Ruler, Glue, Shot list in a fixed line">
+      <defs>
+        <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5b5b66"/></marker>
+        <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#a3402e"/></marker>
+      </defs>
+      <g font-size="12" text-anchor="middle">
+        <rect x="2" y="50" width="50" height="40" rx="8" fill="var(--you)"/><text x="27" y="74">You</text>
+        <rect x="76" y="50" width="84" height="40" rx="8" fill="var(--ask)"/><text x="118" y="74">Interrogator</text>
+        <rect x="184" y="50" width="66" height="40" rx="8" fill="var(--plan)"/><text x="217" y="74">Director</text>
+        <rect x="274" y="50" width="50" height="40" rx="8" fill="var(--code)"/><text x="299" y="74">Ruler</text>
+        <rect x="348" y="50" width="104" height="40" rx="8" fill="var(--cam)"/><text x="400" y="74">Cinematographer</text>
+        <rect x="476" y="50" width="50" height="40" rx="8" fill="var(--code)"/><text x="501" y="74">Ruler</text>
+        <rect x="550" y="50" width="46" height="40" rx="8" fill="var(--code)"/><text x="573" y="74">Glue</text>
+        <rect x="620" y="50" width="78" height="40" rx="8" fill="var(--out)" stroke="#c9b67a"/><text x="659" y="66">Shot</text><text x="659" y="83">list</text>
+      </g>
+      <g stroke="#5b5b66" stroke-width="1.6" marker-end="url(#a)">
+        <line x1="52" y1="70" x2="74" y2="70"/><line x1="160" y1="70" x2="182" y2="70"/>
+        <line x1="250" y1="70" x2="272" y2="70"/><line x1="324" y1="70" x2="346" y2="70"/>
+        <line x1="452" y1="70" x2="474" y2="70"/><line x1="526" y1="70" x2="548" y2="70"/>
+        <line x1="596" y1="70" x2="618" y2="70"/>
+      </g>
+      <g fill="none" stroke="#a3402e" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#r)">
+        <path d="M299,92 C299,125 217,125 217,94"/>
+        <path d="M501,92 C501,125 400,125 400,94"/>
+      </g>
+      <g font-size="10.5" fill="#a3402e" text-anchor="middle">
+        <text x="258" y="138">broken? fix it (max 2 times)</text>
+        <text x="450" y="138">broken? fix it (max 2 times)</text>
+      </g>
+      <g font-size="10.5" fill="#5b5b66" text-anchor="middle"><text x="118" y="38">asks you once</text><text x="350" y="22">The order is written in code. Nobody chooses.</text></g>
+    </svg>
+    <div class="pros">
+      <p class="good"><b>Good:</b> always the same steps. Cheap, fast and easy to debug.</p>
+      <p class="bad"><b>Bad:</b> it can't change plans. If a brief needs something new, the recipe doesn't know.</p>
+    </div>
+    <p class="note">Boss: the code. The helpers run on Sonnet 5.5 at high effort.</p>
+  </div>
+
+  <div class="card">
+    <h2>2. Coordinator: the teacher with helpers</h2>
+    <svg viewBox="0 0 700 175" role="img" aria-label="You talk to the boss; the boss calls each helper and the Ruler and Glue; helpers never talk to each other">
+      <defs>
+        <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5b5b66"/></marker>
+      </defs>
+      <g font-size="12" text-anchor="middle">
+        <rect x="20" y="20" width="80" height="40" rx="8" fill="var(--you)"/><text x="60" y="44">You</text>
+        <rect x="270" y="14" width="160" height="52" rx="10" fill="var(--boss)"/><text x="350" y="37" font-weight="600">The Boss</text><text x="350" y="54" font-size="10.5">Opus 5.5, decides everything</text>
+        <rect x="140" y="120" width="120" height="40" rx="8" fill="var(--ask)"/><text x="200" y="144">Interrogator</text>
+        <rect x="290" y="120" width="120" height="40" rx="8" fill="var(--plan)"/><text x="350" y="144">Director</text>
+        <rect x="440" y="120" width="120" height="40" rx="8" fill="var(--cam)"/><text x="500" y="144">Cinematographer</text>
+        <rect x="560" y="20" width="120" height="40" rx="8" fill="var(--code)"/><text x="620" y="44">Ruler + Glue</text>
+      </g>
+      <g stroke="#5b5b66" stroke-width="1.6" marker-end="url(#b)" marker-start="url(#b)">
+        <line x1="102" y1="40" x2="268" y2="40"/>
+        <line x1="432" y1="40" x2="558" y2="40"/>
+        <line x1="320" y1="68" x2="215" y2="118"/>
+        <line x1="350" y1="68" x2="350" y2="118"/>
+        <line x1="380" y1="68" x2="485" y2="118"/>
+      </g>
+      <g font-size="10.5" fill="#5b5b66" text-anchor="middle">
+        <text x="185" y="32">only the boss talks to you</text>
+        <text x="495" y="32">checks</text>
+        <text x="350" y="172">helpers report back to the boss, never to each other</text>
+      </g>
+    </svg>
+    <div class="pros">
+      <p class="good"><b>Good:</b> flexible. The boss can skip, repeat or change the order when a brief is strange.</p>
+      <p class="bad"><b>Bad:</b> costs more and is slower. A helper only knows what the boss tells it, and the boss can choose badly.</p>
+    </div>
+    <p class="note">Boss: Opus 5.5 at high effort. The helpers run on Sonnet 5.5 at high effort.</p>
+  </div>
+</section>
+
+<!-- PAGE 3 -->
+<section class="page">
+  <div class="card">
+    <h2>3. Swarm: passing the ball</h2>
+    <svg viewBox="0 0 700 165" role="img" aria-label="A doorman only passes your messages; Interrogator, Director and Cinematographer hand work to each other and can ask each other questions">
+      <defs>
+        <marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5b5b66"/></marker>
+        <marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2f6fb3"/></marker>
+      </defs>
+      <g font-size="12" text-anchor="middle">
+        <rect x="20" y="14" width="80" height="40" rx="8" fill="var(--you)"/><text x="60" y="38">You</text>
+        <rect x="135" y="10" width="200" height="48" rx="10" fill="var(--boss)" opacity="0.75"/><text x="235" y="31" font-weight="600">Doorman</text><text x="235" y="47" font-size="10.5">Opus 5.5, only passes messages</text>
+        <rect x="30" y="100" width="120" height="40" rx="8" fill="var(--ask)"/><text x="90" y="124">Interrogator</text>
+        <rect x="205" y="100" width="110" height="40" rx="8" fill="var(--plan)"/><text x="260" y="124">Director</text>
+        <rect x="370" y="100" width="125" height="40" rx="8" fill="var(--cam)"/><text x="432" y="124">Cinematographer</text>
+        <rect x="560" y="100" width="60" height="40" rx="8" fill="var(--code)"/><text x="590" y="124">Glue</text>
+        <rect x="390" y="14" width="100" height="40" rx="8" fill="var(--code)"/><text x="440" y="38">Ruler</text>
+        <rect x="640" y="100" width="58" height="40" rx="8" fill="var(--out)" stroke="#c9b67a"/><text x="669" y="116">Shot</text><text x="669" y="133">list</text>
+      </g>
+      <g stroke="#5b5b66" stroke-width="1.6">
+        <line x1="102" y1="34" x2="133" y2="34" marker-end="url(#c)" marker-start="url(#c)"/>
+        <line x1="185" y1="60" x2="110" y2="98" marker-end="url(#c)" marker-start="url(#c)"/>
+        <line x1="497" y1="120" x2="558" y2="120" marker-end="url(#c)"/>
+        <line x1="620" y1="120" x2="638" y2="120" marker-end="url(#c)"/>
+        <line x1="290" y1="98" x2="410" y2="56" stroke-dasharray="3 3" marker-end="url(#c)" marker-start="url(#c)"/>
+        <line x1="440" y1="98" x2="440" y2="56" stroke-dasharray="3 3" marker-end="url(#c)" marker-start="url(#c)"/>
+      </g>
+      <g stroke="#2f6fb3" stroke-width="2" marker-end="url(#d)">
+        <line x1="152" y1="115" x2="203" y2="115"/>
+        <line x1="317" y1="115" x2="368" y2="115"/>
+      </g>
+      <g stroke="#2f6fb3" stroke-width="1.3" stroke-dasharray="4 3" fill="none" marker-end="url(#d)">
+        <path d="M203,130 C185,150 170,150 152,130"/>
+        <path d="M368,130 C350,150 335,150 317,130"/>
+      </g>
+      <g font-size="10.5" text-anchor="middle">
+        <text x="178" y="160" fill="#2f6fb3">pass it on / ask back</text>
+        <text x="342" y="160" fill="#2f6fb3">pass it on / ask back</text>
+        <text x="500" y="38" fill="#5b5b66" text-anchor="start">each checks its own work</text>
+      </g>
+    </svg>
+    <div class="pros">
+      <p class="good"><b>Good:</b> helpers can ask each other directly, like the Cinematographer asking the Director where the window is.</p>
+      <p class="bad"><b>Bad:</b> nobody is really in charge, so the work can drift or loop. It's also the hardest to follow and costs the most.</p>
+    </div>
+    <p class="note">Claude Code always keeps one lead, so ours is a Doorman (Opus 5.5, high effort) who only passes your messages and never gives orders. The helpers run on Sonnet 5.5 at high effort. Best watched in iTerm2, one pane per helper.</p>
+  </div>
+
+  <div class="card">
+    <h2>Side by side</h2>
+    <table>
+      <tr><th></th><th>Sequential</th><th>Coordinator</th><th>Swarm</th></tr>
+      <tr><td><b>Who decides</b></td><td>The code</td><td>The boss AI</td><td>Each helper</td></tr>
+      <tr><td><b>Helpers talk to</b></td><td>Nobody (they hand over results)</td><td>Only the boss</td><td>Each other</td></tr>
+      <tr><td><b>Where you watch it</b></td><td>Claude Code, step by step</td><td>Claude Code, one row per helper</td><td>iTerm2, one pane per helper</td></tr>
+      <tr><td><b>My guess</b></td><td>Most reliable, cheapest</td><td>Worth it only for strange briefs</td><td>Most to learn from, most likely to drift</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>How you'll use it</h2>
+    <ul>
+      <li>Type <b>/direct</b> in Claude Code. Pick sequential, coordinator or swarm. Give your idea and, if you have one, a website.</li>
+      <li>Answer the Interrogator's questions once, or say "you decide". Then watch.</li>
+      <li>You get the shot list, plus numbers: time, tokens, how many fixes were needed, and whether it passed.</li>
+      <li>We run the same 3 ideas through all 3 teams (9 runs), then write the real report for your teacher.</li>
+    </ul>
+    <p class="note">A run only counts as a success if every check passed. A run that stopped is never shown as a win.</p>
+  </div>
+</section>
+
+</body>
+</html>
